@@ -7,16 +7,22 @@
 // the `dev` recipe's help for a while). An explicit [doc("…")] makes the help
 // declared, not inferred — this check keeps that true for every recipe.
 //
+// Config (read from signposts.yaml `rules.justfile-docs`):
+//   exempt: [name, …]   recipe names that don't require a [doc] (throwaway helpers).
+//
 // Usage:  node rules/check-justfile-docs.mjs <justfile> [...]   (exit 2)
 //         node rules/check-justfile-docs.mjs --test             (self-test)
 
 import { readFileSync } from 'node:fs';
+import { ruleConfig } from './_config.mjs';
 
 // Words that open a non-recipe construct at column 0.
 const RESERVED = new Set(['set', 'alias', 'export', 'import', 'mod', 'unexport']);
 
 // Pure: returns recipes with no [doc(…)] attribute, as { name, line } (1-based).
-export function undocumentedRecipes(text) {
+// `exempt` (from signposts.yaml) is a list of recipe names that don't need a doc.
+export function undocumentedRecipes(text, exempt = []) {
+  const ex = new Set(exempt);
   const lines = text.split('\n');
   const bad = [];
   for (let i = 0; i < lines.length; i++) {
@@ -24,7 +30,7 @@ export function undocumentedRecipes(text) {
     const m = line.match(/^(@?[A-Za-z_][A-Za-z0-9_-]*)(\s|:)/);
     if (!m) continue; // indented (body), comment, attribute, blank
     const name = m[1].replace(/^@/, '');
-    if (RESERVED.has(name)) continue;
+    if (RESERVED.has(name) || ex.has(name)) continue;
     const colon = line.indexOf(':');
     if (colon === -1 || line[colon + 1] === '=') continue; // not a recipe / an assignment
     // Walk up over the recipe's contiguous attribute lines ([private], [doc(…)], …).
@@ -40,11 +46,12 @@ export function undocumentedRecipes(text) {
 }
 
 function runFiles(files) {
+  const { exempt = [] } = ruleConfig('justfile-docs'); // reads signposts.yaml
   let failed = false;
   for (const f of files) {
     let text;
     try { text = readFileSync(f, 'utf8'); } catch { continue; }
-    const bad = undocumentedRecipes(text);
+    const bad = undocumentedRecipes(text, exempt);
     if (bad.length) {
       failed = true;
       process.stderr.write(
@@ -101,7 +108,15 @@ function selfTest() {
     found[0].name === 'build' && found[0].line === 2 &&
     found[1].name === 'bare-recipe' && found[1].line === 9;
 
-  const ok = legalOk && illegalOk;
+  // config-driven exempt (the signposts.yaml `rules.justfile-docs.exempt` slice):
+  // exempting both undocumented recipes clears the sample; exempting one leaves one.
+  const exemptAllOk = undocumentedRecipes(illegal, ['build', 'bare-recipe']).length === 0;
+  const exemptOneOk = (() => {
+    const f = undocumentedRecipes(illegal, ['build']);
+    return f.length === 1 && f[0].name === 'bare-recipe';
+  })();
+
+  const ok = legalOk && illegalOk && exemptAllOk && exemptOneOk;
   console.log(ok ? 'PASS check-justfile-docs' : 'FAIL check-justfile-docs');
   process.exit(ok ? 0 : 1);
 }

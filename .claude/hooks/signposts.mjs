@@ -66,7 +66,9 @@ process.exit(0)
 function loadMap(p) {
   try {
     const d = parseYaml(readFileSync(p, 'utf8')) || {}
-    const list = Array.isArray(d.signs) ? d.signs : Array.isArray(d) ? d : [] // tolerate a bare list too
+    // `advisory:` is the canonical section; `signs:` is the older name (still accepted);
+    // a bare top-level list is also tolerated.
+    const list = Array.isArray(d.advisory) ? d.advisory : Array.isArray(d.signs) ? d.signs : Array.isArray(d) ? d : []
     const signs = list.filter((e) => e && e.id)
     const drift = Number(d.config && d.config.drift_tokens) || THRESHOLD
     return { signs, drift }

@@ -1,16 +1,26 @@
-# signposts.yaml — the advisory map. The .claude/hooks/signposts.mjs PostToolUse hook
-# injects a sign's note the moment you touch a matching path or run a matching command,
-# and re-injects after ~config.drift_tokens of drift. Authored via /signposts.
+# signposts.yaml — the ONE config a bundle carries. Five sections, each with a single
+# consumer, so a rule never hard-codes its config and the CLI knows how to install:
 #
-# Advisory only for now: no `avoid:` blocks (those are the reactive gate, added when
-# this repo grows a real banned pattern). A line earns its place only if it's local,
-# not already caught by a check, and load-bearing up front. See
-# .claude/skills/signposts/SKILL.md.
+#   project:   bundle identity (read by `npx signposts` for listing / propagate).
+#   config:    engine runtime config (read by the signposts.mjs advisory hook).
+#   advisory:  the proactive signs — a note injected the moment you touch a matching
+#              path or run a matching command (read by signposts.mjs).
+#   rules:     per-rule parameters — a parameterised check reads its slice via
+#              rules/_config.mjs `ruleConfig('<name>')`. ast-grep rules don't appear
+#              here: their pattern IS their config.
+#   install:   files → destinations, devDeps, settings hooks, activation commands —
+#              read by `npx signposts` to scaffold + ACTIVATE this bundle (Phase 6).
+#
+# Authored via /signposts. Schema reference: rules/README.md › "signposts.yaml schema".
+
+project:
+  bundle: core
+  description: The signposts engine + work/signposts/review skills + the five review agents.
 
 config:
-  drift_tokens: 200000   # re-inject a sign after ~this many tokens of drift
+  drift_tokens: 200000      # re-inject a sign after ~this many tokens of drift
 
-signs:
+advisory:
   - id: skills
     globs: [".claude/skills/**"]
     text: |-
@@ -37,3 +47,28 @@ signs:
       `.work/` is the gitignored working-docs journal — never commit it into the code
       repo. Status is the `status` field in each task's `.props.yaml`; the folder at
       tasks/<type>/<area>/<name>/ never moves.
+
+rules:
+  justfile-docs:
+    exempt: []              # recipe names that don't require a [doc("…")] (throwaway helpers)
+
+install:
+  # Files this bundle drops into a target repo. `merge: true` means "weave into the
+  # existing file" (settings.json keys, justfile recipes), never clobber.
+  files:
+    - { from: ".claude/hooks/",   to: ".claude/hooks/" }
+    - { from: ".claude/agents/",  to: ".claude/agents/" }
+    - { from: ".claude/skills/",  to: ".claude/skills/" }
+    - { from: "rules/",           to: "rules/" }
+    - { from: "lefthook.yml",     to: "lefthook.yml" }
+    - { from: "sgconfig.yml",     to: "sgconfig.yml" }
+    - { from: "justfile",         to: "justfile",       merge: true }
+    - { from: "signposts.yaml",   to: "signposts.yaml", merge: true }
+    - { from: ".claude/settings.json", to: ".claude/settings.json", merge: true }
+  devDependencies:
+    "@ast-grep/cli": "^0.42.3"
+    "lefthook": "^2.1.8"
+    "yaml": "^2.8.3"
+  # Run, in order, after copying — this is what ARMS the gate (copy alone enforces nothing).
+  activate:
+    - "npm install"         # lefthook's postinstall writes .git/hooks/pre-commit

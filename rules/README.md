@@ -53,6 +53,34 @@ The matching engine for `signposts.yaml` (advisory notes + any future `avoid:` b
 `.claude/hooks/signposts-core.mjs` (pure, unit-tested by `--test`); `signposts.mjs` is the
 PostToolUse shell that injects notes; `signposts-test.mjs` is its integration test.
 
+## signposts.yaml schema
+
+A bundle carries **one** `signposts.yaml` — every config a rule, the engine, or the
+installer needs, each section with a single consumer:
+
+| Section | Consumer | Holds |
+|---|---|---|
+| `project:` | `npx signposts` | bundle identity (`bundle`, `description`) |
+| `config:` | `signposts.mjs` hook | engine runtime config (`drift_tokens`) |
+| `advisory:` | `signposts.mjs` hook | the proactive signs (glob/command matcher → note) |
+| `rules:` | a parameterised check | per-rule parameters, keyed by rule name |
+| `install:` | `npx signposts` | files → destinations, `devDependencies`, `activate` commands |
+
+**The rule-config contract.** A check receives the **files to scan as positional path
+args** (the lefthook contract: `node rules/check-x.mjs <file> …`). Its **config** comes
+from `signposts.yaml` via `rules/_config.mjs` → `ruleConfig('<rule-name>')`, which returns
+that rule's slice of `rules:` (or `{}` — so a rule with no config keeps its defaults). This
+is the one calling convention; a rule never parses `signposts.yaml` itself.
+
+Worked example — `check-justfile-docs` reads `rules.justfile-docs.exempt` (recipe names that
+don't need a `[doc]`): the files still arrive as args, only the exempt list comes from config.
+
+**ast-grep rules are exempt.** They're declarative — the YAML pattern *is* the config, and
+ast-grep can't read `signposts.yaml` at runtime — so pattern rules never appear under `rules:`.
+Only imperative checks (node / shell) read config. That's the resolution of the "one config
+every rule reads" question: *every imperative rule reads one config; declarative rules carry
+theirs as the pattern.*
+
 ## Adding a rule
 
 Author it with the **`/signposts`** skill. In short: write the check at the right shape, ship a
