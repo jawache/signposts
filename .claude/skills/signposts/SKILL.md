@@ -1,7 +1,7 @@
 ---
 name: signposts
-description: ALWAYS invoke when the user says "/signposts", "operationalise this", "make this a rule", "add a rule", "add a signpost", "enforce this", "document this decision", "update architecture.md", or wants to author / test / validate a rule or a signpost.
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(ls *), Bash(just test-rules*), Bash(ast-grep test*), Bash(node rules/*), Task
+description: ALWAYS invoke when the user says "/signposts", "/signposts audit", "audit this session", "operationalise this", "make this a rule", "add a rule", "add a signpost", "enforce this", "document this decision", "update architecture.md", or wants to author / test / validate a rule or a signpost.
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(ls *), Bash(just test-rules*), Bash(ast-grep test*), Bash(node rules/*), Bash(node .claude/skills/signposts/session-report.mjs *), Task
 ---
 
 # Signposts
@@ -55,9 +55,20 @@ The hard tier. **`rules/README.md` is the source of truth for *how*** — read i
 
 Append a 1–2 sentence entry to `architecture.md`'s `## Decisions`, in the house format: **Name** — what's true, one line. *Enforced:* the rule / signpost / recipe that backs it. Rationale lives in git history, not here. Skip this for routine work — it's for decisions a future-you might undo without remembering why.
 
+## Flow — audit the session (`/signposts audit`)
+
+The **detector** half of the loop: surface where the machinery let drift slip through *this* session, then dispose of each finding via the authoring flows above. Reads the session transcript, **not** a git diff — so it's runnable any time, with no active spec.
+
+1. **Gather facts.** `node .claude/skills/signposts/session-report.mjs` from the repo root — deterministic stats + a navigable drift index (hook fires/outcomes, justfile bypasses, signpost-coverage gaps, course-corrections) over the newest session transcript. `--around <line>` opens any cited spot.
+2. **Spawn coach** (Task) with that facts report. It reads the cited lines and returns candidate **`rules/` checks** + **`signposts.yaml`** entries — each a place the machinery let the agent go wrong. Coach writes nothing.
+3. **Dispose.** For each candidate worth keeping, build it properly via the flows above — a rule (prefer it when checkable), a signpost (advisory), or a recorded decision. Rejecting one is fine; say why.
+4. **Test** — `just test-rules` green for anything you added.
+
+When `/review` wraps a session it **chains this audit**, so the process verdict lands every time; run it standalone here whenever you want a mid-session check.
+
 ## Graduated enforcement
 
-A problem starts soft (a signpost — allow + nudge) and graduates hard (a rule — block) if it's persistently ignored. **coach** (the reviewer agent inside `/review`) is the *detector*: from session facts it flags "this leaked — it should be a rule" or "this signpost line". `/signposts` is the *disposer*: you take that proposal and build it properly here. Two ends of one loop — don't conflate the agent that finds with the skill that fixes.
+A problem starts soft (a signpost — allow + nudge) and graduates hard (a rule — block) if it's persistently ignored. **coach** is the *detector* — run by `/signposts audit` (above) over the session facts, it flags "this leaked — it should be a rule" or "this signpost line". `/signposts` is the *disposer*: you take that proposal and build it properly here. Two ends of **one** loop, now under **one** skill — `/review` chains the audit so the verdict still lands at wrap-up. Don't conflate the agent that finds with the skill that fixes.
 
 ## Hard rules
 

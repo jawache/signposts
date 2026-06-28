@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Harness facts + drift pointers for /review's `coach` agent.
+ * Signposts facts + drift pointers for the `coach` agent — the detector half of
+ * the /signposts loop (run by `/signposts audit`, chained from `/review`'s wrap-up).
  *
  * Deterministic measurement belongs in a script; judgement belongs in the agent
  * (same split as a `rules/` check vs the agent). Coach used to grep the raw
@@ -25,9 +26,9 @@
  * ./lefthook.yml, discovers the transcript from the cwd's project dir).
  *
  * Usage:
- *   node .claude/skills/review/session-report.mjs [--base <gitref>] [--transcript <path>] [--json]
- *   node .claude/skills/review/session-report.mjs --around <line> [--radius <n>]
- *   node .claude/skills/review/session-report.mjs --test
+ *   node .claude/skills/signposts/session-report.mjs [--base <gitref>] [--transcript <path>] [--json]
+ *   node .claude/skills/signposts/session-report.mjs --around <line> [--radius <n>]
+ *   node .claude/skills/signposts/session-report.mjs --test
  *
  * Couples to Claude Code's transcript shape (assistant.message.content[].tool_use,
  * user.message.content[].tool_result, user string/text = a typed prompt). If that
@@ -346,7 +347,7 @@ function renderMarkdown(a, events, meta) {
   const s = a.stats;
   L.push('# Harness facts + drift pointers (deterministic — for coach)');
   L.push(`Transcript: ${meta.file} (${meta.lines} lines). Lines below are events in THIS file.`);
-  L.push('Investigate any spot with: `node .claude/skills/review/session-report.mjs --around <line>`');
+  L.push('Investigate any spot with: `node .claude/skills/signposts/session-report.mjs --around <line>`');
   L.push('');
 
   L.push('## Hard stats (the verdict inputs)');

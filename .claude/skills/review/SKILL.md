@@ -1,13 +1,14 @@
 ---
 name: review
 description: ALWAYS invoke when the user signals end of session ("wrap up", "/review", "let's wrap this up", "we're done").
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash(git log *), Bash(git diff *), Bash(git show *), Bash(git status), Bash(node .claude/skills/review/session-report.mjs *), Task, AskUserQuestion
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash(git log *), Bash(git diff *), Bash(git show *), Bash(git status), Task, AskUserQuestion
 ---
 
 # Review
 
-The keystone skill. Closes a session: **deterministic facts → parallel read-only reviews →
-one HTML field-guide (`wrap-up.html`) you decide on → main thread applies → ticks state.**
+The keystone skill. Closes a session: **four parallel read-only diff reviews → chain the
+`/signposts` audit (the process verdict) → one HTML field-guide (`wrap-up.html`) you decide
+on → main thread applies.**
 
 ## Principles
 
@@ -34,28 +35,29 @@ one HTML field-guide (`wrap-up.html`) you decide on → main thread applies → 
   (`dev`, else `master`/`main`).
 - One-line scope summary (spec · commit count · files touched). Confirm before proceeding.
 
-## Step 2 — Facts pre-pass (deterministic)
+## Step 2 — Spawn the diff reviewers (parallel, read-only, return-to-main)
 
-Run the skill's own parser, `node .claude/skills/review/session-report.mjs`. Capture the facts
-report — it gives **coach** its numbers (hook fires/outcomes, justfile hit-rate, signpost
-coverage) and an **`ops footprint`** flag (devops always runs, but uses this to know whether
-it has anything to report). This is the deterministic measurement layer; the agents reason
-over it, they don't recompute it.
-
-## Step 3 — Spawn the reviewers (parallel, read-only, return-to-main)
-
-Spawn in parallel. Pass each the **slug + diff range**; pass **coach the facts report**.
-Each agent **returns** its findings as its final message — none writes a file.
+Spawn in parallel. Pass each the **slug + diff range**. Each agent reasons over the **git
+diff** and **returns** its findings as its final message — none writes a file.
 
 | Agent | Lens | Run when |
 |---|---|---|
 | `secops` | security must-fix | always |
 | `codeops` | simpler code + its tests (QA) | always |
 | `docops` | docs/comments made untrue | always |
-| `coach` | is the signposts machinery working (hooks/justfile/signposts) | always |
-| `devops` | deploy-notes for the release step | always (returns "none" when the diff has no DB/infra footprint) |
+| `devops` | deploy-notes for the release step | always (returns "none" when the diff has no DB/infra footprint — it derives that from the diff itself) |
 
-Collect all returned findings.
+Collect all returned findings. **`coach` is no longer in this set** — the "is the machinery
+working" lens reads the *session*, not the diff, so it moved to `/signposts audit`, chained next.
+
+## Step 3 — Chain the `/signposts audit` (the process verdict)
+
+Run the **`/signposts audit`** flow (owned by the `signposts` skill): it spawns **coach** over
+the session transcript via `session-report.mjs` (now `.claude/skills/signposts/`) and returns
+candidate `rules/` checks + `signposts.yaml` entries — the "is the signposts machinery working"
+verdict, the same one wrap-up has always carried. **Surface these; never auto-apply** — building
+a rule or sign is deliberate `/signposts` disposal. Chaining it here is what keeps the process
+verdict landing at every wrap-up even though coach left the reviewer set.
 
 ## Step 4 — Synthesise `wrap-up.html` (main thread)
 
@@ -64,10 +66,10 @@ build a mental model and make decisions:
 
 - **What was done** — the session's changes, grouped and scannable (your own context + the
   diff/git log). Plus any key decisions made in flight.
-- **Recommendations** — *one* consolidated, de-duplicated decision list across all
-  reviewers, severity-ordered (secops must-fix first). Each row: lens · a plain-English
-  title · **why it matters** (the consequence) · the `file:line` detail *second* · your
-  recommended disposition (Adopt / Skip + one-line why).
+- **Recommendations** — *one* consolidated, de-duplicated decision list across the four
+  reviewers **and the chained audit's process findings**, severity-ordered (secops must-fix
+  first). Each row: lens · a plain-English title · **why it matters** (the consequence) · the
+  `file:line` detail *second* · your recommended disposition (Adopt / Skip + one-line why).
 - **Deploy notes** — devops always runs; include its checklist, or "no operational footprint" if it returned none.
 
 > **The plain-English bar — non-negotiable.** The reviewers write in expert shorthand for
@@ -90,11 +92,11 @@ The user reads `wrap-up.html` and says what to adopt. **Wait.** Don't apply anyt
 
 Apply only what the user accepted, verbatim where the reviewer gave exact text:
 
-- **coach** → `signposts.yaml` edits. **New `rules/` checks are NOT auto-added** — they're a
-  deliberate `/signposts` operationalisation; surface, don't apply.
 - **docops** → comment / doc-truth fixes.
 - **codeops** → simplifications / missing tests.
 - **secops** → action the must-fixes, or surface them for the user.
+- **process (from the chained audit)** → `signposts.yaml` entries and **new `rules/` checks
+  are NOT auto-added** — they're deliberate `/signposts` operationalisation; surface, don't apply.
 
 Everything stays uncommitted — the user reviews via `git diff`.
 
@@ -102,7 +104,7 @@ Everything stays uncommitted — the user reviews via `git diff`.
 
 - **`{folder}/wrap-up.html`** — record the outcome in the file you already wrote: flip each
   recommendation's Adopt/Skip pill to what the user chose, and fill the **Stats** line
-  (commits · files · +X/−Y · hooks / justfile / signpost coverage, from the facts report).
+  (commits · files · +X/−Y · hooks / justfile / signpost coverage, from the chained audit's facts).
   The **Deploy notes** section is what `/release` reads — keep it accurate (or "No
   operational footprint"). It's the single record, no `.md` twin. If the feature spans
   several review sessions, carry forward any deploy notes that haven't shipped yet.
