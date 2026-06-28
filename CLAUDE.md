@@ -41,14 +41,11 @@ deliberately left out of the minimal set (deploy-coupled / not core).
 
 ## Work conventions — the NEW model
 
-`.work/` here already uses the **stable-folder** model from the spec's Part 1: work lives at
+`.work/` here uses the **stable-folder** model from the spec's Part 1: work lives at
 `tasks/<type>/<area>/<name>/` (**type ∈ feat · bug · chore**) with **status in a
 `.props.yaml`** inside the folder — the path never moves. See [`.work/README.md`](.work/README.md).
-
-> The installed `/work` skill still describes the *older* folder-move model
-> (`backlog/ready/complete` directories, `feat/`+`harness/` types). Until the
-> `chore/harness/work-conventions` task reconciles it, **this repo's convention above wins** —
-> don't recreate `backlog/ready/complete` directories.
+The installed `/work` skill now describes this model (reconciled in Phase 1 of the
+system-design plan); don't recreate `backlog/ready/complete` directories.
 
 ## Communication
 

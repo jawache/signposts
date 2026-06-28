@@ -19,17 +19,17 @@ one HTML field-guide (`wrap-up.html`) you decide on → main thread applies → 
    nothing.
 3. **One artefact.** `wrap-up.html` is the whole record — your mental-model, the adopt/skip
    decisions, the deploy notes `/release` reads, and the stats. No `.md` twin, nothing else.
-4. **The spec stays frozen** — review reads `spec.html`, never edits it. State is folder
-   location, which `/work complete` moves; review never moves folders.
+4. **The spec stays frozen** — review reads `spec.html`, never edits it. State is the
+   `status` field in `.props.yaml`, which `/work complete` sets; review never touches it.
 5. **Never commit, push, or tag.** Wrap-up produces files; the user commits.
 
 ---
 
 ## Step 1 — Pre-flight (scope)
 
-- **Active work folder** — the current branch's `/work` folder: `.work/tasks/ready/<branch-path>/`
-  (`git branch --show-current` → the path; else look under `tasks/backlog/`). `{folder}` below means
-  this. If unclear, ask. None → *Exploratory mode* (bottom).
+- **Active work folder** — the work's stable `/work` folder: `.work/tasks/<type>/<area>/<name>/`
+  (the path you hold in context; else list `.work/tasks` and ask). `{folder}` below means
+  this. None → *Exploratory mode* (bottom).
 - **Diff range:** `git merge-base HEAD <base>`..HEAD, where `<base>` is the working branch
   (`dev`, else `master`/`main`).
 - One-line scope summary (spec · commit count · files touched). Confirm before proceeding.
@@ -106,8 +106,8 @@ Everything stays uncommitted — the user reviews via `git diff`.
   The **Deploy notes** section is what `/release` reads — keep it accurate (or "No
   operational footprint"). It's the single record, no `.md` twin. If the feature spans
   several review sessions, carry forward any deploy notes that haven't shipped yet.
-- **State is folders, not flags.** Review doesn't move the work folder or tick a backlog —
-  that's `/work complete` (run after this). Review's output is `wrap-up.html`, full stop.
+- **State is the `status` field, not a folder.** Review doesn't move the work folder or set
+  `status` — that's `/work complete` (run after this). Review's output is `wrap-up.html`, full stop.
 
 ## Step 8 — Report card
 
