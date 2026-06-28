@@ -1,0 +1,103 @@
+<!--
+  wrap-up.html — the session's single record + human-facing review artefact. The MAIN
+  THREAD fills this in from the reviewers' returned findings (Step 4), then finalises it
+  (Step 7): the adopt/skip decisions, the deploy notes /release reads, and the stats all
+  live here — there is no .md twin. Self-contained (no external assets). Replace every
+  FILL marker; delete unused rows. An optional inline <svg> in "What was done" is welcome.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wrap-up — FILL:feature</title>
+<style>
+  :root {
+    --ink: #1a1a1a; --muted: #666; --line: #e5e5e5; --bg: #fafafa;
+    --adopt: #0a7d34; --skip: #8a8a8a;
+    --sec: #c0392b; --code: #2a6fb0; --docs: #7d5ba6; --coach: #b8860b; --ops: #2c7a7b;
+  }
+  * { box-sizing: border-box; }
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         color: var(--ink); background: var(--bg); margin: 0; }
+  main { max-width: 60rem; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 1rem; padding-bottom: .35rem; border-bottom: 2px solid var(--line); }
+  .scope { color: var(--muted); font-size: .9rem; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; margin: .75rem 0; }
+  .did { display: grid; gap: .5rem; }
+  .did li { margin: 0; }
+  /* recommendation rows */
+  .rec { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 8px; padding: .85rem 1.1rem; margin: .6rem 0; }
+  .rec.sec { border-left-color: var(--sec); } .rec.code { border-left-color: var(--code); }
+  .rec.docs { border-left-color: var(--docs); } .rec.coach { border-left-color: var(--coach); }
+  .rec-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .badge { font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+           padding: .12rem .5rem; border-radius: 999px; color: #fff; }
+  .badge.sec { background: var(--sec); } .badge.code { background: var(--code); }
+  .badge.docs { background: var(--docs); } .badge.coach { background: var(--coach); } .badge.ops { background: var(--ops); }
+  .pill { font-size: .72rem; font-weight: 700; padding: .12rem .55rem; border-radius: 999px; margin-left: auto; }
+  .pill.adopt { background: #e6f4ea; color: var(--adopt); } .pill.skip { background: #f0f0f0; color: var(--skip); }
+  .rec code, code { background: #f3f3f3; padding: .05rem .3rem; border-radius: 4px; font-size: .85em; }
+  .why { margin: .35rem 0 0; }                                          /* "why it matters" — prominent, plain English */
+  .change { color: var(--muted); font-size: .9rem; margin: .4rem 0 0; } /* technical detail — demoted, for the curious */
+  .deploy { background: #f0f7f7; border: 1px solid #cfe3e3; border-radius: 10px; padding: 1rem 1.25rem; }
+  .deploy li { margin: .2rem 0; }
+  .human { font-size: .7rem; font-weight: 700; color: var(--ops); }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Wrap-up — FILL:feature</h1>
+  <p class="scope">FILL:date · FILL:N commits · FILL:M files (+X / −Y) · branch FILL:branch</p>
+
+  <h2>What was done</h2>
+  <!-- FILL: 3–7 scannable bullets/cards of the session's actual changes, grouped.
+       Optional: an inline <svg> if a picture helps the mental model. -->
+  <div class="card">
+    <ul class="did">
+      <li>FILL:change</li>
+    </ul>
+  </div>
+
+  <h2>Recommendations — decide adopt / skip</h2>
+  <!-- FILL: ONE consolidated, de-duplicated list from all reviewers, severity-ordered
+       (secops must-fix first). lens class/badge ∈ sec|code|docs|coach.
+       THE PLAIN-ENGLISH BAR (non-negotiable): write each row so a tech-literate reader who
+       has NEVER seen this codebase can decide adopt/skip from it alone. A plain title (no
+       code jargon); a mandatory "Why it matters" in consequence terms (define any internal
+       noun inline); the file:line / mechanism comes SECOND, for the curious. For a proposed
+       rule/check, describe what it checks + catches in plain words — never just a lint name.
+       Delete this comment + the example. -->
+  <div class="rec sec">
+    <div class="rec-head">
+      <span class="badge sec">secops</span>
+      <strong>FILL: plain-English title — what it is, no jargon</strong>
+      <span class="pill adopt">Adopt</span>
+    </div>
+    <p class="why"><b>Why it matters:</b> FILL: the consequence in plain terms — what breaks or what you'd lose, defining any code-internal noun inline.</p>
+    <p class="change"><b>Detail:</b> FILL: the concrete change · <code>file:line</code></p>
+  </div>
+  <!-- repeat .rec blocks; or, if nothing across all lenses: -->
+  <!-- <p class="empty">No recommendations this session.</p> -->
+
+  <h2>Deploy notes</h2>
+  <!-- FILL: only if devops ran (ops footprint). Else: <p class="empty">No operational footprint.</p>
+       Mark human-at-deploy items with <span class="human">[human]</span>. -->
+  <div class="deploy">
+    <ul>
+      <li>FILL:DB change / backfill needed</li>
+      <li>FILL:data to upload · scripts to create · new service · <span class="human">[human]</span> env/secret to set</li>
+    </ul>
+  </div>
+
+  <h2>Stats</h2>
+  <p class="scope">FILL: N commits · M files (+X / −Y) · hooks fires · pre-commit pass/fail · justfile hit-rate · signpost coverage</p>
+
+  <h2>Outstanding</h2>
+  <!-- FILL: deferred work / held deploy / must-fixes still to action; or delete this section if none. -->
+  <div class="card"><ul class="did"><li>FILL:open item</li></ul></div>
+</main>
+</body>
+</html>

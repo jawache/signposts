@@ -1,0 +1,102 @@
+<!--
+  research.html — a research brief, for the human operator.
+  Written by `/work research` (and where `testimony` files its dossier). Optimised for
+  YOU to absorb a body of research fast and act on it: a tight Summary up top, then the
+  findings, then the sources. Every claim that leans on a source carries a citation link;
+  the Sources list at the bottom is the evidence trail.
+
+  BE MULTIMODAL. Prose alone is the weakest way to explain research. Wherever a picture
+  beats words, use one: inline <svg> diagrams (flows, comparisons, timelines), <img> for
+  screenshots/charts, comparison <table>s for "X vs Y vs Z". Lead with the visual, caption
+  it, then the prose.
+
+  Citations: inline <a class="cite" href="#s1">[1]</a> next to a claim → a matching
+  <li id="s1"> in Sources. Mark anything you couldn't verify (paywalled, 403) as such —
+  never smooth over a gap. Replace every FILL; delete unused blocks (including this comment).
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Research — FILL:topic</title>
+<style>
+  :root { --ink: #1a1a1a; --muted: #666; --line: #e5e5e5; --bg: #fafafa; --accent: #2a6fb0; --warn: #c0392b; }
+  * { box-sizing: border-box; }
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         color: var(--ink); background: var(--bg); margin: 0; }
+  main { max-width: 60rem; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 1rem; padding-bottom: .35rem; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.02rem; margin: 1.5rem 0 .5rem; }
+  .scope { color: var(--muted); font-size: .9rem; }
+  .scope a { color: var(--accent); }
+  .summary { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: .85rem 1.2rem; margin: 1.25rem 0 2rem; }
+  .summary ul { margin: .3rem 0; } .summary li { margin: .3rem 0; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; margin: .75rem 0; }
+  .card p:first-child { margin-top: 0; } .card p:last-child { margin-bottom: 0; }
+  /* a figure — diagram or image with a caption; this is the preferred way to explain */
+  figure { margin: 1rem 0; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem; text-align: center; }
+  figure svg, figure img { max-width: 100%; height: auto; }
+  figcaption { color: var(--muted); font-size: .85rem; margin-top: .5rem; text-align: left; }
+  /* a verbatim quote / evidence block */
+  blockquote { margin: .75rem 0; padding: .5rem 1rem; border-left: 3px solid var(--line); color: #333; background: #fff; }
+  blockquote cite { display: block; color: var(--muted); font-size: .85rem; font-style: normal; margin-top: .3rem; }
+  a.cite { font-size: .75em; vertical-align: super; color: var(--accent); text-decoration: none; padding: 0 .1rem; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0; font-size: .92rem; background: #fff; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  code { background: #f3f3f3; padding: .05rem .3rem; border-radius: 4px; font-size: .85em; }
+  ol.sources { font-size: .9rem; } ol.sources li { margin: .4rem 0; }
+  .unverified { color: var(--warn); font-weight: 600; }
+  details.more { margin: .6rem 0 0; border: 1px dashed var(--line); border-radius: 8px; padding: .5rem .85rem; background: #fcfcfc; }
+  details.more > summary { cursor: pointer; color: var(--accent); font-size: .9rem; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FILL:topic</h1>
+  <p class="scope">FILL:date · <span>FILL:status</span><!-- · informs <a href="FILL">FILL:work</a> --></p>
+
+  <!-- Summary — the load-bearing conclusions, 3–5 bullets. What you'd act on without reading further. -->
+  <div class="summary">
+    <strong>Summary</strong>
+    <ul>
+      <li>FILL: a load-bearing conclusion, with its citation <a class="cite" href="#s1">[1]</a></li>
+    </ul>
+  </div>
+
+  <!-- ── FINDINGS — free-form; let the topic dictate structure. LEAD WITH VISUALS. ──
+       A figure (inline <svg> or <img>) almost always beats a paragraph. A comparison
+       table beats prose for "X vs Y". Use h3 subsections. Cite as you go. -->
+
+  <h2>FILL: a findings heading</h2>
+
+  <figure>
+    <!-- FILL: an inline <svg> diagram (flow / comparison / timeline) or an <img>. Delete if truly none fits. -->
+    <svg viewBox="0 0 600 120" role="img" aria-label="FILL"><!-- FILL --></svg>
+    <figcaption>FILL: what the picture shows.</figcaption>
+  </figure>
+
+  <div class="card">
+    <p>FILL: the finding, in plain terms, with citations <a class="cite" href="#s1">[1]</a> where it leans on a source.</p>
+  </div>
+
+  <!-- a comparison, when you're weighing options -->
+  <table>
+    <thead><tr><th>FILL:option</th><th>FILL:dimension</th><th>FILL:dimension</th></tr></thead>
+    <tbody><tr><td>FILL</td><td>FILL</td><td>FILL</td></tr></tbody>
+  </table>
+
+  <!-- verbatim evidence, when a source's own words matter -->
+  <blockquote>FILL: the quote.<cite>FILL: who — what they built · <a href="FILL">source</a></cite></blockquote>
+
+  <h2>Sources</h2>
+  <!-- FILL: every source, numbered to match the inline [n]. Name + what makes it credible + link.
+       Flag anything you couldn't fetch as <span class="unverified">unverified</span>. -->
+  <ol class="sources">
+    <li id="s1">FILL: author / org — what they built · <a href="FILL">url</a></li>
+  </ol>
+</main>
+</body>
+</html>

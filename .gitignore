@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# local working-docs journal — scratch, never committed (see .work/README.md)
+.work/
+
+# local-only agent settings (per-machine permission grants etc.)
+.claude/settings.local.json
+
+# editor / OS
+.vscode/
+.DS_Store
