@@ -21,14 +21,14 @@ routes it.
 ## When you have something to say
 
 You **always run**, but you only have output when the diff has an operational footprint —
-migrations, `schema.ts`, env/secrets, `wrangler`, a new service, or seed/data tooling (the
-facts report flags this as `ops footprint`). No footprint → return one line ("none") and stop.
+DB migrations, a schema change, env/secrets, a deploy/infra tool, a new service, or
+seed/data tooling. No footprint → return one line ("none") and stop.
 
 ## What to surface (surface only — terse, scannable)
 
 - **DB changes** — and crucially whether they need *more than schema*: a **backfill /
   data-migration** step or script (not just a `db-generate`).
-- **Data to upload** at deploy — seed content, R2 objects, fixtures.
+- **Data to upload** at deploy — seed content, object-storage uploads, fixtures.
 - **Scripts to create** — backfills, one-offs this release needs.
 - **New service / system** adopted, or one that needs adjusting once it hits staging.
 - **Env vars / secrets** to set — name them, never their values.

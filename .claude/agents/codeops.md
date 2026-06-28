@@ -37,19 +37,17 @@ the main thread routes it.
 - Tests that assert nothing, over-mock, or test the mock; a `domain.ts` with no co-located
   `.test.ts` (TDD-first is the house rule).
 
-**Functional-core shape (`src/lib`) — judge the diff against `signposts.yaml`:**
-Read the `src/lib/**` signpost — it is the source of truth for the allowlist + the
-thinking/talking model. Mechanical checks already enforce the *filenames* (allowlist),
-no-functions-in-`types`/`index`, symbol-in-test, and `domain.ts` coverage — **don't
-re-flag those.** Surface only what a filename check CAN'T see:
-- **Pure logic hiding in a talking file** — a real, testable transform inside a
-  `db`/`server`/`client`/`hooks`/`deps` file. It belongs in `domain.ts`, where coverage
-  gates it. Name the function.
-- **Filename ≠ behaviour** — a `db.ts` calling a third-party API (should be `server`), a
-  `server.ts` doing browser work (should be `client`), a `client.ts` touching Neon, a
-  `hooks.ts` with no React. The name must tell the truth.
-- **A component carrying logic** — a `.tsx`/`.astro` doing work that belongs in a feature's
-  `domain.ts`; it should import the core and stay a thin shell.
+**Structural placement — judge the diff against the project's architecture signposts:**
+Where `signposts.yaml` / `docs/arch/architecture.md` define a module shape (which file
+holds what), mechanical checks already enforce the *filenames* and obvious boundaries —
+**don't re-flag those.** Surface only what a filename check CAN'T see:
+- **Pure logic hiding in the wrong layer** — a real, testable transform sitting in a file
+  meant for wiring/IO instead of the unit-tested core. Name the function; say where it belongs.
+- **Filename ≠ behaviour** — a module whose name promises one thing and does another (an
+  IO-named file calling a third-party API, a "client" file doing server work). The name
+  must tell the truth.
+- **A view/component carrying logic** — a template or component doing work that belongs in
+  the core; it should import the core and stay a thin shell.
 
 ## Output (returned to main)
 

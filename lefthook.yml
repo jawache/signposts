@@ -1,0 +1,44 @@
+# lefthook.yml — the single orchestrator. Every commit-time rule is listed here.
+#
+# Two triggers, by speed (commit is the real gate, and it runs WITHOUT Claude —
+# which is why the rule files are committed in the repo, not a per-user cache):
+#   • agent-edit — fast, file-local. Run on every Claude Edit/Write via
+#     .claude/hooks/lefthook-on-write.sh → `lefthook run agent-edit --file <p>`.
+#   • pre-commit — the full gate: the same fast rules over the staged set.
+#
+# Each `run:` puts the matched files into positional params (`set --`) and skips
+# when there are none. Rule sources + how to prove them: rules/README.md.
+#
+# The ast-grep job globs *.{ts,tsx} — this repo is JS/.mjs, so it lies DORMANT
+# until a TypeScript file appears, then fires. (Stack bundles widen the globs +
+# add their own jobs when installed.)
+
+output:
+  - summary
+  - failure
+
+agent-edit:
+  parallel: true
+  jobs:
+    - name: ast-grep
+      glob: "*.{ts,tsx}"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || ast-grep scan "$@"'
+    - name: no-package-scripts
+      glob: "package.json"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-no-package-scripts.mjs "$@"'
+    - name: justfile-docs
+      glob: "justfile"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-justfile-docs.mjs "$@"'
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: ast-grep
+      glob: "*.{ts,tsx}"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || ast-grep scan "$@"'
+    - name: no-package-scripts
+      glob: "package.json"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-no-package-scripts.mjs "$@"'
+    - name: justfile-docs
+      glob: "justfile"
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-justfile-docs.mjs "$@"'

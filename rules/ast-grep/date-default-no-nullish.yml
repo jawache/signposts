@@ -1,0 +1,21 @@
+id: date-default-no-nullish
+language: tsx
+severity: error
+message: |
+  Use `||`, not `??`, for optional date defaults.
+
+  Why this matters:
+    `??` only falls through on null/undefined. An empty string, `0`, or an
+    invalid placeholder date passes the `??` guard and flows downstream as a
+    bad date. `||` also catches those falsy cases, which is what date defaults
+    actually want here.
+
+  Fix:
+    const published = row.published_at || new Date();   // not ?? new Date()
+
+  Read more: docs/arch/architecture.md (Forbidden / standardised choices)
+
+rule:
+  any:
+    - pattern: $X ?? new Date($$$)
+    - pattern: $X ?? new Date

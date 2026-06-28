@@ -1,0 +1,39 @@
+# signposts.yaml — the advisory map. The .claude/hooks/signposts.mjs PostToolUse hook
+# injects a sign's note the moment you touch a matching path or run a matching command,
+# and re-injects after ~config.drift_tokens of drift. Authored via /signposts.
+#
+# Advisory only for now: no `avoid:` blocks (those are the reactive gate, added when
+# this repo grows a real banned pattern). A line earns its place only if it's local,
+# not already caught by a check, and load-bearing up front. See
+# .claude/skills/signposts/SKILL.md.
+
+config:
+  drift_tokens: 200000   # re-inject a sign after ~this many tokens of drift
+
+signs:
+  - id: skills
+    globs: [".claude/skills/**"]
+    text: |-
+      Author skills from their `templates/`; keep the plain-English bar. The skill
+      carries *how* (process); the template carries *what* (structure) — don't
+      reinvent the structure. Be multimodal: diagrams / tables over walls of prose.
+
+  - id: agents
+    globs: [".claude/agents/**"]
+    text: |-
+      Review sub-agents are read-only and RETURN findings to the main thread — they
+      write NO files. Recommendations-or-silence: surface only what should change.
+
+  - id: rules
+    globs: ["rules/**"]
+    text: |-
+      Every rule ships a `--test` (a legal + an illegal sample), names the decision
+      in its error message, and is wired into BOTH lefthook groups (agent-edit +
+      pre-commit) AND the `just test-rules` recipe. Read rules/README.md for the how.
+
+  - id: work-journal
+    globs: [".work/**"]
+    text: |-
+      `.work/` is the gitignored working-docs journal — never commit it into the code
+      repo. Status is the `status` field in each task's `.props.yaml`; the folder at
+      tasks/<type>/<area>/<name>/ never moves.

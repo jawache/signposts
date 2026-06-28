@@ -1,0 +1,10 @@
+ruleDirs:
+  - rules/ast-grep
+
+# No custom languages here: the core rules target built-in TS/TSX, which ast-grep
+# parses out of the box. Stack bundles that need a custom grammar (e.g. astro via
+# virchau13/tree-sitter-astro, built by `just rules-build`) add their own
+# customLanguages block when they're installed.
+
+testConfigs:
+  - testDir: rules/ast-grep-tests
