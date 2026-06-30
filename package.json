@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "//": "All commands live in the justfile — run `just` to list them. Kept empty on purpose: ONE source of truth (enforced by rules/check-no-package-scripts.mjs). See ./justfile."
+    "//": "All commands live in the justfile — run `just` to list them. Kept empty on purpose: ONE source of truth (enforced by the `no-package-scripts` rule in signposts.yaml). See ./justfile."
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.42.3",
+    "@ast-grep/napi": "^0.42.3",
     "lefthook": "^2.1.8",
     "yaml": "^2.8.3"
   }

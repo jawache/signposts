@@ -121,7 +121,24 @@ function selfTest() {
   process.exit(ok ? 0 : 1);
 }
 
-const args = process.argv.slice(2);
-if (args[0] === '--test') selfTest();
-else if (args.length) runFiles(args);
-else process.exit(0);
+// Own-script primitive — the engine (`use: ./rules/check-justfile-docs.mjs`) imports
+// this default and calls evaluate() over the justfile's (reconstructed) text, so the
+// rule now fires pre-emptively at edit time too, not just at commit.
+export default {
+  category: 'D',
+  kind: 'content',
+  evaluate(rule, ctx) {
+    return undocumentedRecipes(ctx.content, rule.exempt || [])
+      .map((r) => `recipe '${r.name}' (line ${r.line}) has no [doc("…")] attribute`);
+  },
+};
+
+// CLI only when run directly — NOT when imported by the engine (else this would
+// execute against the engine's argv and exit the process mid-evaluate).
+const isMain = process.argv[1] && process.argv[1].endsWith('check-justfile-docs.mjs');
+if (isMain) {
+  const args = process.argv.slice(2);
+  if (args[0] === '--test') selfTest();
+  else if (args.length) runFiles(args);
+  else process.exit(0);
+}

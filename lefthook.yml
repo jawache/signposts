@@ -1,17 +1,20 @@
-# lefthook.yml — the single orchestrator. Every commit-time rule is listed here.
+# lefthook.yml — the single orchestrator. Every commit-time rule runs through here.
 #
 # Two triggers, by speed (commit is the real gate, and it runs WITHOUT Claude —
 # which is why the rule files are committed in the repo, not a per-user cache):
 #   • agent-edit — fast, file-local. Run on every Claude Edit/Write via
 #     .claude/hooks/lefthook-on-write.sh → `lefthook run agent-edit --file <p>`.
-#   • pre-commit — the full gate: the same fast rules over the staged set.
+#   • pre-commit — the full gate: the same rules over the staged set.
+#
+# The `engine` job IS the gate now (rules/_engine.mjs, --phase commit). It runs the
+# auto-discovered ast-grep rules (category A) AND every signposts.yaml instance whose
+# `when:` includes commit — the SAME rules the PreToolUse hook runs pre-emptively at
+# edit time. It self-filters by each rule's `on:` glob, so no per-job glob is needed.
+# (no-package-scripts + justfile-docs are now engine instances; only the git-discard
+# safety guard stays a dedicated PreToolUse hook — it correlates against git state.)
 #
 # Each `run:` puts the matched files into positional params (`set --`) and skips
 # when there are none. Rule sources + how to prove them: rules/README.md.
-#
-# The ast-grep job globs *.{ts,tsx} — this repo is JS/.mjs, so it lies DORMANT
-# until a TypeScript file appears, then fires. (Stack bundles widen the globs +
-# add their own jobs when installed.)
 
 output:
   - summary
@@ -20,25 +23,11 @@ output:
 agent-edit:
   parallel: true
   jobs:
-    - name: ast-grep
-      glob: "*.{ts,tsx}"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || ast-grep scan "$@"'
-    - name: no-package-scripts
-      glob: "package.json"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-no-package-scripts.mjs "$@"'
-    - name: justfile-docs
-      glob: "justfile"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-justfile-docs.mjs "$@"'
+    - name: engine
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/_engine.mjs --phase commit "$@"'
 
 pre-commit:
   parallel: true
   jobs:
-    - name: ast-grep
-      glob: "*.{ts,tsx}"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || ast-grep scan "$@"'
-    - name: no-package-scripts
-      glob: "package.json"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-no-package-scripts.mjs "$@"'
-    - name: justfile-docs
-      glob: "justfile"
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/check-justfile-docs.mjs "$@"'
+    - name: engine
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/_engine.mjs --phase commit "$@"'

@@ -5,9 +5,10 @@
 #   config:    engine runtime config (read by the signposts.mjs advisory hook).
 #   advisory:  the proactive signs — a note injected the moment you touch a matching
 #              path or run a matching command (read by signposts.mjs).
-#   rules:     per-rule parameters — a parameterised check reads its slice via
-#              rules/_config.mjs `ruleConfig('<name>')`. ast-grep rules don't appear
-#              here: their pattern IS their config.
+#   rules:     rule INSTANCES — each names a primitive via `use:` + its config + `when:`
+#              (the category engine, rules/_engine.mjs, runs them). ast-grep rules are
+#              auto-discovered from rules/ast-grep/ and don't appear here. A params-only
+#              entry (no `use:`) just feeds a standalone check via `ruleConfig('<id>')`.
 #   install:   files → destinations, devDeps, settings hooks, activation commands —
 #              read by `npx signposts` to scaffold + ACTIVATE this bundle (Phase 6).
 #
@@ -49,8 +50,32 @@ advisory:
       tasks/<type>/<area>/<name>/ never moves.
 
 rules:
-  justfile-docs:
-    exempt: []              # recipe names that don't require a [doc("…")] (throwaway helpers)
+  # D · structured-file invariant — package.json `scripts` stays empty (only //-prefixed
+  # comment keys). The justfile is the one command source. (was check-no-package-scripts.mjs)
+  - id: no-package-scripts
+    use: json-invariant
+    on: "package.json"
+    assert: { path: scripts, keysPrefixedWith: "//" }
+    when: [edit, commit]
+    message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
+
+  # D · own-script primitive — every justfile recipe carries a [doc("…")]. Bespoke
+  # justfile parsing lives in the script; the engine runs it. (was a standalone lefthook job)
+  - id: justfile-docs
+    use: ./rules/check-justfile-docs.mjs
+    on: "justfile"
+    exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
+    when: [edit, commit]
+    message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
+
+  # P · protected paths — a content-free edit/commit block. `when: [edit, commit]` ⇒ ONE
+  # rule, BOTH triggers: the PreToolUse hook denies a matching edit pre-emptively, and
+  # lefthook blocks a matching file at commit.
+  - id: no-edit-generated
+    use: protected-path
+    deny: ["**/*.generated.ts", "vendor/**"]
+    when: [edit, commit]
+    message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
 
 install:
   # Files this bundle drops into a target repo. `merge: true` means "weave into the

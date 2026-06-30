@@ -11,78 +11,101 @@ into that stack — they are not here.
 
 ## Prove they work
 
-Every rule has valid/invalid **samples** — they're the test, the documentation, and
+Every rule has legal/illegal **samples** — they're the test, the documentation, and
 the spec. One command proves the lot:
 
 ```
-just test-rules    # ast-grep tests + every check's self-test
+just test-rules    # ast-grep tests + the engine self-test (8 categories) + each check's --test
 ```
 
-## How it runs
+## How it runs — one engine, two triggers
 
-`lefthook.yml` is the single orchestrator. Triggers:
+`rules/_engine.mjs` is the evaluator. A rule's `when:` decides which triggers it fires on,
+so **one config line drives both paths**:
 
-- **agent-edit** — fast, file-local; fires on every Claude Edit/Write via `.claude/hooks/lefthook-on-write.sh`.
-- **pre-commit** — the full gate over the staged set. Runs **without Claude** (on a plain
-  `git commit`), which is why the rule files live committed in the repo, not in a per-user cache.
-- **pre-Bash** — two checks run as PreToolUse hooks on Bash in `.claude/settings.json`, not via
-  lefthook, because they must fire *before* the command runs: `check-git-discard` (an
-  irreversible working-tree wipe) and `strip-claude-attribution` (a commit/PR carrying AI attribution).
+- **edit** — the `preemptive-block.mjs` PreToolUse hook reconstructs the would-be file
+  *in memory* and asks the engine (`phase: edit`). A violation is returned as a `deny`
+  **before the write lands**, fed back so Claude self-corrects.
+- **commit / push** — `lefthook.yml`'s `engine` job runs the same engine
+  (`--phase commit`) over the staged set. Runs **without Claude** (a plain `git commit`),
+  which is why the rule files live committed in the repo, not in a per-user cache.
 
-Edit-time guidance (non-blocking) is separate: the `signposts.mjs` PostToolUse hook injects
-per-area notes from `signposts.yaml`.
+Two safety checks stay **dedicated PreToolUse Bash hooks** (not engine rules) because they
+must fire before a *command* runs and need runtime/git state: `check-git-discard` (an
+irreversible working-tree wipe) and `strip-claude-attribution`. Edit-time *guidance*
+(non-blocking) is separate again: the `signposts.mjs` PostToolUse hook injects per-area
+notes from `signposts.yaml`.
 
-## Tooling per rule type
+## The eight categories (primitives)
 
-| Rule type | Tool | Why |
-|---|---|---|
-| TS/TSX AST patterns | **ast-grep** (`rules/ast-grep/*.yml`) | real parser, no false matches on strings/comments |
-| Cross-statement / file logic | **node** (`rules/check-*.mjs`) | needs more than a single AST match |
-| Filesystem / command shape | **bash** (`rules/check-*.sh`) | not a code pattern |
+Every rule is an instance of a **primitive** (`rules/primitives.mjs`), one per category.
+`use:` names the primitive; the rest of the instance is its config.
+
+| Cat | Primitive (`use:`) | Kind | Catches |
+|---|---|---|---|
+| **A** | `ast-grep-pattern` | content | a TS/TSX AST pattern (declarative `rules/ast-grep/*.yml`, **auto-discovered**) |
+| **B** | `symbols-in-sibling` | content | correlation across nodes/files via the parser-as-library (e.g. exported symbols unreferenced in the sibling test) |
+| **C** | `sibling-exists` | path | a required sibling file is missing (no content parse) |
+| **D** | `json-invariant` (+ own-script) | content | a structured-file invariant (e.g. `package.json` `scripts` must be empty; a justfile recipe missing `[doc]`) |
+| **E** | `text-ban` | content | a banned regex in prose / content |
+| **F** | `command-guard` | command | a banned shell command shape (richer guards stay dedicated hooks) |
+| **P** | `protected-path` | path | a content-free edit/commit of a protected path (generated / vendored) |
+| **G** | `tool-gate` | project | an external tool exits non-zero (depcruise, coverage…) — commit/push only |
+
+A–E, F, P are **signposts-native** (the logic lives here). G is **tool-delegated** — the
+tool owns its config file; signposts only orchestrates (run + trigger + block-on-nonzero).
 
 ## Built (all with samples; `just test-rules` green)
 
-| Rule | File | Catches |
+| Rule | `use:` | Catches |
 |---|---|---|
-| `date-default-no-nullish` | `ast-grep/date-default-no-nullish.yml` | `?? new Date()` instead of `\|\|` (dormant until a `.ts`/`.tsx` exists) |
-| no-package-scripts | `check-no-package-scripts.mjs` | real keys in `package.json` `scripts` (the justfile is the home) |
-| justfile-docs | `check-justfile-docs.mjs` | a justfile recipe without a `[doc("…")]` attribute |
-| git-discard guard | `check-git-discard.mjs` (PreToolUse on Bash) | `git checkout -- <paths>` / `git restore <paths>` about to wipe uncommitted edits (stash first, or append `# discard-ok`) |
+| `date-default-no-nullish` | ast-grep (auto) | `?? new Date()` instead of `\|\|` (dormant until a `.ts`/`.tsx` exists) |
+| `no-package-scripts` | `json-invariant` | real keys in `package.json` `scripts` (the justfile is the home) |
+| `justfile-docs` | `./rules/check-justfile-docs.mjs` | a justfile recipe without a `[doc("…")]` attribute |
+| `no-edit-generated` | `protected-path` | a hand edit of `**/*.generated.ts` / `vendor/**` |
+| git-discard guard | dedicated Bash hook | `git checkout -- <paths>` / `git restore <paths>` about to wipe uncommitted edits (stash first, or append `# discard-ok`) |
 
-The matching engine for `signposts.yaml` (advisory notes + any future `avoid:` bans) lives in
-`.claude/hooks/signposts-core.mjs` (pure, unit-tested by `--test`); `signposts.mjs` is the
-PostToolUse shell that injects notes; `signposts-test.mjs` is its integration test.
+The matcher for `signposts.yaml` advisory notes lives in `.claude/hooks/signposts-core.mjs`
+(pure, `--test`); `signposts.mjs` is the PostToolUse shell that injects them.
 
 ## signposts.yaml schema
 
-A bundle carries **one** `signposts.yaml` — every config a rule, the engine, or the
-installer needs, each section with a single consumer:
+A bundle carries **one** `signposts.yaml`, each section with a single consumer:
 
 | Section | Consumer | Holds |
 |---|---|---|
 | `project:` | `npx signposts` | bundle identity (`bundle`, `description`) |
 | `config:` | `signposts.mjs` hook | engine runtime config (`drift_tokens`) |
 | `advisory:` | `signposts.mjs` hook | the proactive signs (glob/command matcher → note) |
-| `rules:` | a parameterised check | per-rule parameters, keyed by rule name |
+| `rules:` | the category engine | **rule instances** (a list) — each names a primitive + its config + `when:` |
 | `install:` | `npx signposts` | files → destinations, `devDependencies`, `activate` commands |
 
-**The rule-config contract.** A check receives the **files to scan as positional path
-args** (the lefthook contract: `node rules/check-x.mjs <file> …`). Its **config** comes
-from `signposts.yaml` via `rules/_config.mjs` → `ruleConfig('<rule-name>')`, which returns
-that rule's slice of `rules:` (or `{}` — so a rule with no config keeps its defaults). This
-is the one calling convention; a rule never parses `signposts.yaml` itself.
+**A rule instance:**
 
-Worked example — `check-justfile-docs` reads `rules.justfile-docs.exempt` (recipe names that
-don't need a `[doc]`): the files still arrive as args, only the exempt list comes from config.
+```yaml
+- id: no-package-scripts      # unique id (also how ruleConfig finds it)
+  use: json-invariant         # a built-in primitive, OR ./path to your own script
+  on: "package.json"          # glob(s) the rule fires on (path primitives use deny:/sibling: instead)
+  assert: { path: scripts, keysPrefixedWith: "//" }   # primitive-specific config
+  when: [edit, commit]        # triggers: edit = pre-emptive; commit/push = the gate
+  message: "…"                # the human reason, fed back on a block
+```
 
-**ast-grep rules are exempt.** They're declarative — the YAML pattern *is* the config, and
-ast-grep can't read `signposts.yaml` at runtime — so pattern rules never appear under `rules:`.
-Only imperative checks (node / shell) read config. That's the resolution of the "one config
-every rule reads" question: *every imperative rule reads one config; declarative rules carry
-theirs as the pattern.*
+- **ast-grep rules are auto-discovered** from `rules/ast-grep/*.yml` and need no `rules:`
+  entry — the YAML pattern *is* the config (the zero-code authoring path).
+- **`use:` = a built-in primitive name OR a path** (`./rules/check-x.mjs`) to your own
+  script — the escape hatch. An own-script default-exports `{ category, kind, evaluate(rule, ctx) }`
+  and **guards its CLI** so importing it has no side-effects.
+- **`ruleConfig('<id>')`** (`rules/_config.mjs`) returns a rule's instance for the few checks
+  that still read config directly; it accepts the instance-list form (find by `id`).
 
 ## Adding a rule
 
-Author it with the **`/signposts`** skill. In short: write the check at the right shape, ship a
-`--test` (a legal + an illegal sample), wire it into both lefthook groups + the `test-rules`
-recipe, and add a row here.
+Author it with the **`/signposts`** skill. Three cases:
+
+1. **Ban/require a code pattern** → drop a `rules/ast-grep/<name>.yml`. Zero code.
+2. **A structural / path / file invariant** → add a `rules:` instance naming a built-in
+   primitive + its config. No code.
+3. **Genuinely novel** → write a small own-script (`use: ./rules/<name>.mjs`), ship a
+   `--test` (legal + illegal sample), then `/propagate` it so it graduates into a core
+   primitive. Either way: wire nothing by hand — the engine job already runs every instance.

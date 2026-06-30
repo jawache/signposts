@@ -24,7 +24,11 @@ import { parse as parseYaml } from 'yaml';
 export function ruleConfig(name, root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
   try {
     const doc = parseYaml(readFileSync(join(root, 'signposts.yaml'), 'utf8')) || {};
-    return (doc.rules && doc.rules[name]) || {};
+    const rules = doc.rules;
+    // Instance-list form (the engine schema): find the entry by id.
+    if (Array.isArray(rules)) return rules.find((r) => r && r.id === name) || {};
+    // Legacy map form: rules.<name>.
+    return (rules && rules[name]) || {};
   } catch {
     return {};
   }
