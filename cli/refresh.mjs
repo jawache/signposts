@@ -15,9 +15,13 @@
 // The lock is rewritten to the new shas for every file that wasn't left in conflict.
 
 import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import {
   PACK_NAME, listPackFiles, readBytes, readText, writeBytes, writeText, sha256, exists,
 } from './pack.mjs';
+import { resolveSource } from './source.mjs';
+import { loadPacks, diffPacks } from '../.claude/skills/signposts/pack-diff.mjs';
+import { applyNamespace } from './install.mjs';
 
 export function refresh({ packRoot, target, log = console.log }) {
   const lockPath = join(target, 'signposts.lock.json');
@@ -69,9 +73,37 @@ export function refresh({ packRoot, target, log = console.log }) {
   lock.packs[PACK_NAME] = nextLock;
   writeText(lockPath, JSON.stringify(lock, null, 2) + '\n');
 
-  log(`\n${updated} updated, ${added} added, ${upToDate} up to date, ${conflicts.length} conflict(s).`);
+  log(`\n[${PACK_NAME}] ${updated} updated, ${added} added, ${upToDate} up to date, ${conflicts.length} conflict(s).`);
   if (conflicts.length) log(`Resolve each .theirs, then run refresh again.`);
-  return { updated, added, upToDate, conflicts };
+
+  // installed namespace packs (the packs: list, minus the baked-in core) ────────
+  const packResults = refreshInstalledPacks(target, log);
+  return { updated, added, upToDate, conflicts, packs: packResults };
+}
+
+// Re-resolve every source in packs: (git / npm / local) and pull namespace updates:
+// new entries + latest scripts land; a locally-diverged entry (a collision) is kept.
+function refreshInstalledPacks(target, log) {
+  const doc = (() => { try { return parseYaml(readText(join(target, 'signposts.yaml'))) || {}; } catch { return {}; } })();
+  const specs = (doc.packs || []).filter((s) => s && s !== PACK_NAME && !/@signposts\/core/.test(s));
+  const out = [];
+  for (const spec of specs) {
+    let resolved;
+    try { resolved = resolveSource(spec); } catch (e) { log(`! ${spec}: ${e.message}`); out.push({ spec, error: e.message }); continue; }
+    const src = loadPacks(resolved.path);
+    const tgt = loadPacks(target);
+    // refresh every namespace this source and I share (i.e. the ones I installed from it)
+    const shared = new Set([...Object.keys(src.signs), ...Object.keys(src.rules)].filter((ns) => (tgt.signs[ns] || tgt.rules[ns])));
+    let added = 0, scripts = 0; const collisions = [];
+    for (const ns of shared) {
+      const report = diffPacks(src, tgt, ns);
+      const r = applyNamespace({ srcPath: resolved.path, srcPacks: src, namespace: ns, target, report });
+      added += r.added; scripts += r.scripts; collisions.push(...r.collisions);
+    }
+    log(`[${spec}] ${[...shared].join(', ') || '(no shared ns)'}: ${added} added, ${scripts} script(s), ${collisions.length} collision(s) kept`);
+    out.push({ spec, namespaces: [...shared], added, scripts, collisions });
+  }
+  return out;
 }
 
 function safeJson(s) { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }
