@@ -233,10 +233,13 @@ async function selfTest() {
     results.push({ name: 'when-routing commit (same rule)', pass: commitV.length === 1 && commitV[0].rule.id === editV[0].rule.id });
     results.push({ name: 'when-routing clean passes', pass: cleanV.length === 0 });
 
-    // 3. the SHELL contract: a shell rule blocks pre-emptively via the temp-file path.
+    // 3. the SHELL contract: a self-contained shell rule blocks via the temp-file path.
+    // (Self-contained so this proof holds in any scaffolded repo, not just this one.)
+    const probe = join(tmp, 'probe.sh');
+    writeFileSync(probe, '#!/usr/bin/env bash\ngrep -q BANNED "$2" && { echo "banned in $1" >&2; exit 1; }\nexit 0\n', { mode: 0o755 });
     const cfg2 = join(tmp, 'shell.yaml');
-    writeFileSync(cfg2, 'rules:\n  local:\n    - id: no-attr\n      use: local/no-ai-attribution\n      on: ["**/*.md"]\n');
-    const bad = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'x\nCo-Authored-By: Claude <a@b>\n', configPath: cfg2 });
+    writeFileSync(cfg2, `rules:\n  local:\n    - id: probe\n      use: "${probe}"\n      on: ["**/*.md"]\n`);
+    const bad = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'note\nBANNED line\n', configPath: cfg2 });
     const ok = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'clean notes only\n', configPath: cfg2 });
     results.push({ name: 'shell-contract edit blocks (temp-file)', pass: bad.length === 1 });
     results.push({ name: 'shell-contract edit clean passes', pass: ok.length === 0 });

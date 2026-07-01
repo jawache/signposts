@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "signposts": "cli/signposts.mjs"
+  },
   "scripts": {
     "//": "All commands live in the justfile — run `just` to list them. Kept empty on purpose: ONE source of truth (enforced by the `no-package-scripts` rule in signposts.yaml). See ./justfile."
   },

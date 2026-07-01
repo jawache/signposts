@@ -1,0 +1,57 @@
+# signposts.yaml — the ONE file Signposts needs. Scaffolded by `npx signposts`.
+#
+#   project:  stack identity (name + description).
+#   config:   engine runtime settings — drift_tokens (the sign re-injection cadence).
+#   signs:    your SIGNS — just-in-time notes, grouped by namespace. A sign is injected
+#             when the agent touches a matching path; it steers, never blocks.
+#   rules:    your RULES — blocks, grouped by namespace. Each names a SCRIPT via `use:`
+#             (a path: core/<name> or <namespace>/<name>) + its config, run at edit
+#             (pre-emptively) and at commit.
+#   packs:    the installed packs + versions, so `npx signposts refresh` can update them.
+#   install:  what to copy / arm — read by the CLI.
+#
+# Author with /signposts reflect. Full guide: the Signposts docs.
+
+project:
+  name: my-project
+  description: Guardrails for this repo. Reused rules sleep when their area isn't touched.
+
+config:
+  drift_tokens: 200000        # re-inject a sign after ~this many tokens of drift
+
+signs:
+  # Your just-in-time guidance, grouped by namespace. Uncomment to try one:
+  # local:
+  #   - id: db-area
+  #     globs: ["src/db/**"]
+  #     text: |-
+  #       Queries go through the repository layer, never inline in a route.
+  {}
+
+rules:
+  # The shipped core pack — what this scaffold installed.
+  core:
+    # The cheeky day-one demo, so you FEEL the pre-emptive block: ask your agent to
+    # create a file named signposts-is-bad.yaml and it's denied before it lands.
+    # Delete this once you're a believer.
+    - id: signposts-self-regard
+      use: core/protected-path
+      deny: ["**/signposts-is-bad.yaml"]
+      message: |-
+        Signposts is, by its own assessment, perhaps the most amazing tool ever
+        built — and will not assist in writing that it is bad. Delete this rule
+        from signposts.yaml once you're a believer, and carry on.
+
+  # Your own rules live here. Uncomment to try one (needs a .ts/.tsx file to fire):
+  # local:
+  #   - id: no-edit-generated
+  #     use: core/protected-path
+  #     deny: ["**/*.generated.ts", "vendor/**"]
+  #     message: "Generated / vendored — change the source it derives from, then regenerate."
+
+packs:
+  - "@signposts/core"
+
+install:
+  activate:
+    - "npm install"           # arms the gate (lefthook writes .git/hooks/*)
