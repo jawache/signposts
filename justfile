@@ -26,7 +26,7 @@ install:
 
 [doc("Run every rules/ check + self-test (ast-grep, the engine's core scripts + shell contract, justfile-docs, no-ai-attribution, git-discard, the signposts engine + session-report).")]
 test-rules:
-    ast-grep test --skip-snapshot-tests && node rules/_engine.mjs --test && node rules/local/justfile-docs.mjs --test && bash rules/local/no-ai-attribution.sh --test && node rules/check-git-discard.mjs --test && node .claude/hooks/signposts-core.mjs --test && node .claude/hooks/signposts-test.mjs && node .claude/skills/signposts/session-report.mjs --test
+    ast-grep test --skip-snapshot-tests && node rules/_engine.mjs --test && node rules/local/justfile-docs.mjs --test && bash rules/local/no-ai-attribution.sh --test && node rules/check-git-discard.mjs --test && node .claude/hooks/signposts-core.mjs --test && node .claude/hooks/signposts-test.mjs && node .claude/skills/signposts/session-report.mjs --test && node .claude/skills/signposts/pack-diff.mjs --test
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:
