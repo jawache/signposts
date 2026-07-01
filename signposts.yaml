@@ -1,81 +1,107 @@
-# signposts.yaml — the ONE config a bundle carries. Five sections, each with a single
-# consumer, so a rule never hard-codes its config and the CLI knows how to install:
+# signposts.yaml — the ONE file Signposts needs. A handful of sections, each with a
+# single consumer, so nothing is wired in two places:
 #
-#   project:   bundle identity (read by `npx signposts` for listing / propagate).
-#   config:    engine runtime config (read by the signposts.mjs advisory hook).
-#   advisory:  the proactive signs — a note injected the moment you touch a matching
-#              path or run a matching command (read by signposts.mjs).
-#   rules:     rule INSTANCES — each names a primitive via `use:` + its config + `when:`
-#              (the category engine, rules/_engine.mjs, runs them). ast-grep rules are
-#              auto-discovered from rules/ast-grep/ and don't appear here. A params-only
-#              entry (no `use:`) just feeds a standalone check via `ruleConfig('<id>')`.
-#   install:   files → destinations, devDeps, settings hooks, activation commands —
-#              read by `npx signposts` to scaffold + ACTIVATE this bundle (Phase 6).
+#   project:   stack identity — name + description (read by the CLI).
+#   config:    engine runtime settings — drift_tokens (read by the sign injector).
+#   signs:     your SIGNS — just-in-time notes, GROUPED BY NAMESPACE. A sign is
+#              injected the moment the agent touches a matching path; it steers,
+#              never blocks (read by the signposts.mjs hook).
+#   rules:     your RULES — blocks, GROUPED BY NAMESPACE. Each names a SCRIPT via
+#              `use:` (always a path: core/<name> or <namespace>/<name>) and carries
+#              that script's config inline, handed over verbatim. The engine
+#              (rules/_engine.mjs) runs them at edit (pre-emptively) and at commit.
+#              ast-grep patterns are FILES (rules/ast-grep/*.yml) and don't appear here.
+#   packs:     the installed packs + versions, so `refresh` can update them.
+#   install:   files → destinations, devDeps, activation — read by `npx signposts`.
 #
-# Authored via /signposts. Schema reference: rules/README.md › "signposts.yaml schema".
+# A namespace is what install / propagate move as ONE unit — its signs AND rules.
+# Authored via /signposts. Reference: docs/ (canonical) and rules/README.md.
 
 project:
-  bundle: core
-  description: The signposts engine + work/signposts/review skills + the five review agents.
+  name: signposts-core
+  description: The signposts engine + work/signposts/review skills + the review agents.
 
 config:
   drift_tokens: 200000      # re-inject a sign after ~this many tokens of drift
 
-advisory:
-  - id: skills
-    globs: [".claude/skills/**"]
-    text: |-
-      Author skills from their `templates/`; keep the plain-English bar. The skill
-      carries *how* (process); the template carries *what* (structure) — don't
-      reinvent the structure. Be multimodal: diagrams / tables over walls of prose.
+signs:
+  # This repo's own just-in-time guidance — the `local` namespace (guidance for
+  # working ON signposts, not something we ship in the core pack).
+  local:
+    - id: skills
+      globs: [".claude/skills/**"]
+      text: |-
+        Author skills from their `templates/`; keep the plain-English bar. The skill
+        carries *how* (process); the template carries *what* (structure) — don't
+        reinvent the structure. Be multimodal: diagrams / tables over walls of prose.
 
-  - id: agents
-    globs: [".claude/agents/**"]
-    text: |-
-      Review sub-agents are read-only and RETURN findings to the main thread — they
-      write NO files. Recommendations-or-silence: surface only what should change.
+    - id: agents
+      globs: [".claude/agents/**"]
+      text: |-
+        Review sub-agents are read-only and RETURN findings to the main thread — they
+        write NO files. Recommendations-or-silence: surface only what should change.
 
-  - id: rules
-    globs: ["rules/**"]
-    text: |-
-      Every rule ships a `--test` (a legal + an illegal sample), names the decision
-      in its error message, and is wired into BOTH lefthook groups (agent-edit +
-      pre-commit) AND the `just test-rules` recipe. Read rules/README.md for the how.
+    - id: rules
+      globs: ["rules/**"]
+      text: |-
+        Every rule NAMES A SCRIPT with `use:` (a path: core/<name> or <ns>/<name>) and
+        gets its config verbatim. Ship a `--test` (a legal + an illegal sample); name the
+        decision in the message. Core scripts live in rules/core/; read rules/README.md.
 
-  - id: work-journal
-    globs: [".work/**"]
-    text: |-
-      `.work/` is the gitignored working-docs journal — never commit it into the code
-      repo. Status is the `status` field in each task's `.props.yaml`; the folder at
-      tasks/<type>/<area>/<name>/ never moves.
+    - id: work-journal
+      globs: [".work/**"]
+      text: |-
+        `.work/` is the gitignored working-docs journal — never commit it into the code
+        repo. Status is the `status` field in each task's `.props.yaml`; the folder at
+        tasks/<type>/<area>/<name>/ never moves.
 
 rules:
-  # D · structured-file invariant — package.json `scripts` stays empty (only //-prefixed
-  # comment keys). The justfile is the one command source. (was check-no-package-scripts.mjs)
-  - id: no-package-scripts
-    use: json-invariant
-    on: "package.json"
-    assert: { path: scripts, keysPrefixedWith: "//" }
-    when: [edit, commit]
-    message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
+  # The shipped `core` pack — what a fresh `npx signposts` install carries.
+  core:
+    # The cheeky day-one demo, so a fresh install FEELS the pre-emptive block: try to
+    # create a file named signposts-is-bad.yaml and it's denied before it lands.
+    - id: signposts-self-regard
+      use: core/protected-path
+      deny: ["**/signposts-is-bad.yaml"]
+      message: |-
+        Signposts is, by its own assessment, perhaps the most amazing tool ever
+        built — and will not assist in writing that it is bad. Delete this rule
+        from signposts.yaml once you're a believer, and carry on.
 
-  # D · own-script primitive — every justfile recipe carries a [doc("…")]. Bespoke
-  # justfile parsing lives in the script; the engine runs it. (was a standalone lefthook job)
-  - id: justfile-docs
-    use: ./rules/check-justfile-docs.mjs
-    on: "justfile"
-    exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
-    when: [edit, commit]
-    message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
+  # This repo's own rules — the `local` namespace. They're built on core SCRIPTS
+  # (core/json-invariant, core/protected-path) plus two own-scripts under rules/local/.
+  local:
+    # package.json `scripts` stays empty (only //-prefixed comment keys) — the
+    # justfile is the one command source.
+    - id: no-package-scripts
+      use: core/json-invariant
+      on: "package.json"
+      assert: { path: scripts, keysPrefixedWith: "//" }
+      message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
 
-  # P · protected paths — a content-free edit/commit block. `when: [edit, commit]` ⇒ ONE
-  # rule, BOTH triggers: the PreToolUse hook denies a matching edit pre-emptively, and
-  # lefthook blocks a matching file at commit.
-  - id: no-edit-generated
-    use: protected-path
-    deny: ["**/*.generated.ts", "vendor/**"]
-    when: [edit, commit]
-    message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
+    # every justfile recipe carries a [doc("…")] — a JS own-script (rules/local/justfile-docs.mjs).
+    - id: justfile-docs
+      use: local/justfile-docs
+      on: "justfile"
+      exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
+      message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
+
+    # no Claude/Anthropic attribution in prose — a SHELL own-script (rules/local/no-ai-attribution.sh),
+    # proving the shell calling contract (config on stdin, dest + content-file as argv).
+    - id: no-ai-attribution
+      use: local/no-ai-attribution
+      on: ["**/*.md"]
+      message: "This repo ships no Claude/Anthropic attribution — remove the marker line from the prose."
+
+    # generated / vendored files — a content-free edit/commit block. `when: [edit, commit]`
+    # is the default (omitted): ONE rule, BOTH triggers.
+    - id: no-edit-generated
+      use: core/protected-path
+      deny: ["**/*.generated.ts", "vendor/**"]
+      message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
+
+packs:
+  - "@signposts/core"          # this repo IS the core pack
 
 install:
   # Files this bundle drops into a target repo. `merge: true` means "weave into the
@@ -92,6 +118,7 @@ install:
     - { from: ".claude/settings.json", to: ".claude/settings.json", merge: true }
   devDependencies:
     "@ast-grep/cli": "^0.42.3"
+    "@ast-grep/napi": "^0.42.3"
     "lefthook": "^2.1.8"
     "yaml": "^2.8.3"
   # Run, in order, after copying — this is what ARMS the gate (copy alone enforces nothing).

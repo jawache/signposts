@@ -1,20 +1,22 @@
 #!/usr/bin/env node
-// rules/check-justfile-docs.mjs — every justfile recipe carries a [doc("…")].
+// rules/local/justfile-docs.mjs — every justfile recipe carries a [doc("…")].
 //
-// `just --list` is the command catalogue's help screen; without an explicit
-// [doc] attribute it falls back to the LAST comment line above a recipe, which
-// for multi-line comment blocks is a mid-sentence fragment (a stray URL was
-// the `dev` recipe's help for a while). An explicit [doc("…")] makes the help
-// declared, not inferred — this check keeps that true for every recipe.
+// A JS own-script (this repo's own `local` rule, built like any core script). It's
+// wired in signposts.yaml as `use: local/justfile-docs`.
 //
-// Config (read from signposts.yaml `rules.justfile-docs`):
-//   exempt: [name, …]   recipe names that don't require a [doc] (throwaway helpers).
+// `just --list` is the command catalogue's help screen; without an explicit [doc]
+// attribute it falls back to the LAST comment line above a recipe, which for
+// multi-line comment blocks is a mid-sentence fragment. An explicit [doc("…")]
+// makes the help declared, not inferred — this keeps that true for every recipe.
 //
-// Usage:  node rules/check-justfile-docs.mjs <justfile> [...]   (exit 2)
-//         node rules/check-justfile-docs.mjs --test             (self-test)
+// Contract: kind 'content' → evaluate(rule, ctx={ path, content, root, … }); the
+// whole rule entry (incl. `exempt:`) arrives verbatim as `rule`.
+//
+// Usage:  node rules/local/justfile-docs.mjs <justfile> [...]   (exit 2)
+//         node rules/local/justfile-docs.mjs --test             (self-test)
 
 import { readFileSync } from 'node:fs';
-import { ruleConfig } from './_config.mjs';
+import { ruleConfig } from '../_config.mjs';
 
 // Words that open a non-recipe construct at column 0.
 const RESERVED = new Set(['set', 'alias', 'export', 'import', 'mod', 'unexport']);
@@ -108,7 +110,7 @@ function selfTest() {
     found[0].name === 'build' && found[0].line === 2 &&
     found[1].name === 'bare-recipe' && found[1].line === 9;
 
-  // config-driven exempt (the signposts.yaml `rules.justfile-docs.exempt` slice):
+  // config-driven exempt (the signposts.yaml `justfile-docs.exempt` slice):
   // exempting both undocumented recipes clears the sample; exempting one leaves one.
   const exemptAllOk = undocumentedRecipes(illegal, ['build', 'bare-recipe']).length === 0;
   const exemptOneOk = (() => {
@@ -117,15 +119,13 @@ function selfTest() {
   })();
 
   const ok = legalOk && illegalOk && exemptAllOk && exemptOneOk;
-  console.log(ok ? 'PASS check-justfile-docs' : 'FAIL check-justfile-docs');
+  console.log(ok ? 'PASS local/justfile-docs' : 'FAIL local/justfile-docs');
   process.exit(ok ? 0 : 1);
 }
 
-// Own-script primitive — the engine (`use: ./rules/check-justfile-docs.mjs`) imports
-// this default and calls evaluate() over the justfile's (reconstructed) text, so the
-// rule now fires pre-emptively at edit time too, not just at commit.
+// The rule object the engine loads via `use: local/justfile-docs` — config (incl.
+// `exempt`) arrives verbatim as `rule`; ctx.content is the reconstructed justfile.
 export default {
-  category: 'D',
   kind: 'content',
   evaluate(rule, ctx) {
     return undocumentedRecipes(ctx.content, rule.exempt || [])
@@ -135,7 +135,7 @@ export default {
 
 // CLI only when run directly — NOT when imported by the engine (else this would
 // execute against the engine's argv and exit the process mid-evaluate).
-const isMain = process.argv[1] && process.argv[1].endsWith('check-justfile-docs.mjs');
+const isMain = process.argv[1] && process.argv[1].endsWith('justfile-docs.mjs');
 if (isMain) {
   const args = process.argv.slice(2);
   if (args[0] === '--test') selfTest();

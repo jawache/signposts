@@ -99,7 +99,7 @@ function reconstruct(tool_name, tool_input) {
 
 function denyReason(violations) {
   const blocks = violations.map((v) => {
-    const head = `[${v.rule.id}]${v.file ? ` · ${v.file}` : ''}`;
+    const head = `[${v.rule.id}]${v.path ? ` · ${v.path}` : ''}`;
     const msg = v.rule.message ? '\n  ' + String(v.rule.message).trim().replace(/\n/g, '\n  ') : '';
     const hits = v.hits.map((h) => '    ' + h).join('\n');
     return head + msg + '\n' + hits;

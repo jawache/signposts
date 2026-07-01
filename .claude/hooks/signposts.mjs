@@ -66,9 +66,13 @@ process.exit(0)
 function loadMap(p) {
   try {
     const d = parseYaml(readFileSync(p, 'utf8')) || {}
-    // `advisory:` is the canonical section; `signs:` is the older name (still accepted);
-    // a bare top-level list is also tolerated.
-    const list = Array.isArray(d.advisory) ? d.advisory : Array.isArray(d.signs) ? d.signs : Array.isArray(d) ? d : []
+    // `signs:` is the canonical section, GROUPED BY NAMESPACE (namespace → [entries]);
+    // we flatten in YAML order. A flat list, and the legacy `advisory:` name, are tolerated.
+    const raw = d.signs ?? d.advisory
+    let list = []
+    if (Array.isArray(raw)) list = raw
+    else if (raw && typeof raw === 'object') list = Object.values(raw).flat() // grouped
+    else if (Array.isArray(d)) list = d
     const signs = list.filter((e) => e && e.id)
     const drift = Number(d.config && d.config.drift_tokens) || THRESHOLD
     return { signs, drift }

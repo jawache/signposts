@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// rules/_engine.mjs — the category engine. ONE evaluator, TWO trigger paths.
+// rules/_engine.mjs — the engine. ONE evaluator, TWO trigger paths, no registry.
 //
 //   • edit   — the PreToolUse hook reconstructs the would-be file and calls
 //              evaluate({phase:'edit', …}) → a `deny` before the write lands.
@@ -7,33 +7,49 @@
 //              node rules/_engine.mjs --phase commit <files…>   (exit 2 on violation)
 //   • push   — same CLI, --phase push.
 //
-// A rule's `when:` decides which paths it fires on, so ONE config line drives both.
-// Rules come from signposts.yaml `rules:` (instances naming a primitive via `use:`)
-// PLUS auto-discovered ast-grep rules/ast-grep/*.yml (category A — zero-code authoring).
+// A rule NAMES A SCRIPT with `use:` (always a path) and carries its config inline.
+// The whole entry is handed to the script VERBATIM — there is no category registry.
+//   • use: core/<name>         → rules/core/<name>.mjs   (the shipped scripts)
+//   • use: <namespace>/<name>  → rules/<namespace>/<name>.{mjs,sh}   (your own)
+// Rules live GROUPED BY NAMESPACE under `rules:` in signposts.yaml, PLUS the
+// auto-discovered ast-grep pattern files (rules/ast-grep/*.yml → core/ast-grep).
 //
-// Fails safe everywhere: a malformed config / rule / primitive is skipped, never throws.
+// `when:` decides which triggers a rule fires on; it defaults to [edit, commit], so
+// ONE config line drives both paths. Fails safe everywhere: a malformed config /
+// rule / script is skipped, never throws.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, isAbsolute, relative, extname } from 'node:path';
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { join, isAbsolute, relative, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { matchAny } from './_util.mjs';
-import { primitives, selfTestAll } from './primitives.mjs';
 
+const HERE = dirname(fileURLToPath(import.meta.url));           // …/rules
 const TS_GLOB = '**/*.{ts,tsx,mts,cts}';
+const CORE = ['ast-grep', 'sibling-exists', 'symbols-in-sibling', 'json-invariant',
+              'text-ban', 'command-guard', 'protected-path', 'tool-gate'];
 
 // ── load + normalise rules ────────────────────────────────────────────────────
 export function loadRules(root, configPath) {
   const rules = [];
 
-  // 1. instances from signposts.yaml (list form = the engine schema)
+  // 1. instances from signposts.yaml `rules:` — GROUPED BY NAMESPACE (ns → [entries])
   try {
     const doc = parseYaml(readFileSync(configPath || join(root, 'signposts.yaml'), 'utf8')) || {};
-    if (Array.isArray(doc.rules)) {
-      for (const r of doc.rules) if (r && r.use) rules.push(normalise(r));
+    const grouped = doc.rules;
+    if (grouped && typeof grouped === 'object' && !Array.isArray(grouped)) {
+      for (const [ns, list] of Object.entries(grouped)) {
+        if (!Array.isArray(list)) continue;
+        for (const r of list) if (r && r.use) rules.push(normalise({ ...r, namespace: ns }));
+      }
+    } else if (Array.isArray(grouped)) {                        // tolerate a legacy flat list
+      for (const r of grouped) if (r && r.use) rules.push(normalise(r));
     }
   } catch { /* no config / malformed → just the ast-grep rules below */ }
 
-  // 2. auto-discovered ast-grep rules (category A)
+  // 2. auto-discovered ast-grep pattern files → synthetic `core/ast-grep` rules
   const dir = join(root, 'rules/ast-grep');
   let files = [];
   try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)); } catch { /* none */ }
@@ -42,15 +58,13 @@ export function loadRules(root, configPath) {
       const r = parseYaml(readFileSync(join(dir, f), 'utf8'));
       if (!r || !r.rule) continue;
       rules.push(normalise({
-        id: r.id || f,
-        use: 'ast-grep-pattern',
-        astgrep: r.rule,
-        lang: r.language,
+        id: r.id || f, namespace: 'core', use: 'core/ast-grep',
+        astgrep: r.rule, lang: r.language,
         on: r.files || TS_GLOB,
         when: (r.metadata && r.metadata.when) || ['edit', 'commit'],
         message: r.message,
       }));
-    } catch { /* skip malformed rule */ }
+    } catch { /* skip malformed pattern file */ }
   }
   return rules;
 }
@@ -59,10 +73,23 @@ function normalise(r) {
   return { ...r, when: r.when || ['edit', 'commit'] };
 }
 
-async function resolvePrimitive(rule, root) {
-  if (primitives[rule.use]) return primitives[rule.use];
-  if (typeof rule.use === 'string' && /^[./]/.test(rule.use)) {       // escape hatch: own script
-    try { return (await import(isAbsolute(rule.use) ? rule.use : join(root, rule.use))).default; } catch { return null; }
+// Resolve `use:` (always a path) to a runnable: a JS script module or a shell path.
+// Returns { kind, js } for JavaScript, { kind:'content', shell } for a shell script.
+async function resolveScript(use, root) {
+  if (!use || typeof use !== 'string') return null;
+  const candidates = [];
+  if (/\.(mjs|js)$/.test(use)) candidates.push({ type: 'js', file: use });
+  else if (/\.sh$/.test(use)) candidates.push({ type: 'sh', file: use });
+  else { candidates.push({ type: 'js', file: `rules/${use}.mjs` }, { type: 'sh', file: `rules/${use}.sh` }); }
+  for (const c of candidates) {
+    const abs = isAbsolute(c.file) ? c.file : join(root, c.file);
+    if (!existsSync(abs)) continue;
+    if (c.type === 'js') {
+      try { const mod = (await import(abs)).default; if (mod) return { kind: mod.kind || 'content', js: mod }; }
+      catch { return null; }
+    } else {
+      return { kind: 'content', shell: abs };   // shell rules follow the content contract
+    }
   }
   return null;
 }
@@ -72,60 +99,93 @@ function rel(file, root) {
 }
 
 // ── evaluate file-oriented rules for a phase ──────────────────────────────────
-// files: repo paths to check. getContent(file)->string for 'content' primitives
-// (in-memory reconstruction at edit; disk read at commit).
+// files: repo paths to check. getContent(file)->string reconstructs the would-be
+// bytes (in-memory at edit; disk read at commit) for content rules.
 export async function evaluate({ phase, files, root, getContent, configPath }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const violations = [];
 
   for (const rule of rules) {
-    const prim = await resolvePrimitive(rule, root);
-    if (!prim || prim.kind === 'command') continue;          // command rules: see evaluateCommand
+    const s = await resolveScript(rule.use, root);
+    if (!s || s.kind === 'command') continue;                  // command rules: see evaluateCommand
 
-    if (prim.kind === 'project') {                            // tool-gate: run once for the phase
-      try {
-        const hits = await prim.evaluate(rule, { root });
-        if (hits.length) violations.push({ rule, file: null, hits });
-      } catch { /* fail safe */ }
+    if (s.kind === 'project') {                                // tool-gate: run once for the phase
+      if (!s.js) continue;
+      try { const hits = await s.js.evaluate(rule, { root }); if (hits.length) violations.push({ rule, path: null, hits }); }
+      catch { /* fail safe */ }
       continue;
     }
 
     for (const abs of files) {
-      const file = rel(abs, root);
-      if (rule.on && !matchAny(file, [].concat(rule.on))) continue;
-      const ctx = {
-        file, root,
+      const path = rel(abs, root);
+      if (rule.on && !matchAny(path, [].concat(rule.on))) continue;
+
+      if (s.shell) {                                            // shell contract (dest + content-file argv)
+        try { const hits = runShell(s.shell, rule, { path, abs, root, phase, getContent }); if (hits.length) violations.push({ rule, path, hits }); }
+        catch { /* fail safe */ }
+        continue;
+      }
+
+      const ctx = {                                            // JS contract
+        path, root, phase,
         exists: (p) => existsSync(p),
         readText: (p) => { try { return readFileSync(p, 'utf8'); } catch { return null; } },
       };
-      if (prim.kind === 'content') {
+      if (s.kind === 'content') {
         try { ctx.content = getContent(abs); } catch { continue; }
         if (ctx.content == null) continue;
       }
-      try {
-        const hits = await prim.evaluate(rule, ctx);
-        if (hits && hits.length) violations.push({ rule, file, hits });
-      } catch { /* a stumbling rule never breaks the gate */ }
+      try { const hits = await s.js.evaluate(rule, ctx); if (hits && hits.length) violations.push({ rule, path, hits }); }
+      catch { /* a stumbling rule never breaks the gate */ }
     }
   }
   return violations;
 }
 
-// ── evaluate command-guard rules (F) against a Bash command string ────────────
+// The shell calling contract: config JSON on stdin, dest path + content-file path as
+// argv. The content-file is a TEMP file at edit (the would-be bytes materialised) and
+// the REAL file at commit — so the script never has to know which trigger it's on.
+function runShell(shellPath, rule, { path, abs, root, phase, getContent }) {
+  let tmpDir;
+  try {
+    let contentFile;
+    if (phase === 'commit' || phase === 'push') {
+      contentFile = isAbsolute(abs) ? abs : join(root, abs);   // the real file on disk
+    } else {
+      const content = getContent(abs);
+      if (content == null) return [];
+      tmpDir = mkdtempSync(join(tmpdir(), 'sg-'));
+      contentFile = join(tmpDir, 'content');
+      writeFileSync(contentFile, content);
+    }
+    const r = spawnSync('bash', [shellPath, path, contentFile], {
+      cwd: root, encoding: 'utf8',
+      input: JSON.stringify(rule),
+      env: { ...process.env, SIGNPOSTS_ROOT: root, SIGNPOSTS_PHASE: phase },
+    });
+    if (r.status === 0) return [];
+    const msg = (r.stderr || r.stdout || '').trim();
+    return msg ? msg.split('\n') : [`shell rule exited ${r.status}`];
+  } finally {
+    if (tmpDir) { try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ } }
+  }
+}
+
+// ── evaluate command-guard rules against a Bash command string ────────────────
 export async function evaluateCommand({ command, phase = 'edit', root, configPath }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const out = [];
   for (const rule of rules) {
-    const prim = await resolvePrimitive(rule, root);
-    if (!prim || prim.kind !== 'command') continue;
-    try { const hits = await prim.evaluate(rule, { command, root }); if (hits.length) out.push({ rule, hits }); }
+    const s = await resolveScript(rule.use, root);
+    if (!s || s.kind !== 'command' || !s.js) continue;
+    try { const hits = await s.js.evaluate(rule, { command, root }); if (hits.length) out.push({ rule, hits }); }
     catch { /* fail safe */ }
   }
   return out;
 }
 
 export function formatViolation(v) {
-  const where = v.file ? ` · ${v.file}` : '';
+  const where = v.path ? ` · ${v.path}` : '';
   const msg = v.rule.message ? `\n  ${v.rule.message}` : '';
   return `✗ ${v.rule.id} (${v.rule.use})${where}${msg}\n` + v.hits.map((h) => `    ${h}`).join('\n');
 }
@@ -142,48 +202,52 @@ async function cli(argv) {
     else files.push(a);
   }
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const getContent = (f) => { try { return readFileSync(f, 'utf8'); } catch { return null; } };
+  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
   const violations = await evaluate({ phase, files, root, getContent, configPath });
   if (violations.length === 0) process.exit(0);
   process.stderr.write('\n' + violations.map(formatViolation).join('\n\n') + '\n\n');
   process.exit(2);
 }
 
-// ── self-test (prove all eight + when-routing both paths) ─────────────────────
+// ── self-test (every core script + when-routing + the shell contract) ─────────
 async function selfTest() {
-  const results = await selfTestAll();                       // the eight categories
-  // integration: ONE rule, when:[edit,commit], fires on BOTH paths via the same code.
-  const root = '/tmp/sg-engine-test';
-  const cfg = { rules: [{ id: 'no-generated', use: 'protected-path', deny: ['**/*.generated.ts'], when: ['edit', 'commit'] }] };
-  // stub loadRules by passing the config inline through a temp evaluate
-  const fakeFile = 'src/api.generated.ts';
-  const run = async (phase) => evaluateViaConfig(cfg, { phase, files: [fakeFile], root, getContent: () => '' });
-  const editV = await run('edit');
-  const commitV = await run('commit');
-  const cleanV = await evaluateViaConfig(cfg, { phase: 'edit', files: ['src/api.ts'], root, getContent: () => '' });
-  results.push({ name: 'when-routing edit', pass: editV.length === 1 });
-  results.push({ name: 'when-routing commit (same rule)', pass: commitV.length === 1 && commitV[0].rule.id === editV[0].rule.id });
-  results.push({ name: 'when-routing clean passes', pass: cleanV.length === 0 });
+  const results = [];
 
-  for (const r of results) console.log(r.pass ? 'PASS' : 'FAIL', r.name);
-  const ok = results.every((r) => r.pass);
-  console.log(ok ? `\nengine self-test: PASS (${results.length} checks)` : '\nengine self-test: FAIL');
-  process.exit(ok ? 0 : 1);
-}
-
-// evaluate against an inline config object (used by the self-test; no file I/O)
-async function evaluateViaConfig(cfg, { phase, files, root, getContent }) {
-  const rules = cfg.rules.map(normalise).filter((r) => r.when.includes(phase));
-  const out = [];
-  for (const rule of rules) {
-    const prim = primitives[rule.use];
-    for (const file of files) {
-      if (rule.on && !matchAny(file, [].concat(rule.on))) continue;
-      const hits = await prim.evaluate(rule, { file, root, content: getContent(file), exists: () => false, readText: () => null });
-      if (hits.length) out.push({ rule, file, hits });
-    }
+  // 1. every core script's own legal + illegal sample.
+  for (const name of CORE) {
+    try { const mod = (await import(join(HERE, 'core', `${name}.mjs`))).default; results.push(await mod.test()); }
+    catch (e) { results.push({ name: `core/${name}`, pass: false, err: e?.message }); }
   }
-  return out;
+
+  const root = join(HERE, '..');                               // real repo root (rules/core lives here)
+  const tmp = mkdtempSync(join(tmpdir(), 'sg-selftest-'));
+  try {
+    // 2. when-routing: ONE grouped-config rule fires on edit AND commit via the same code.
+    const cfg = join(tmp, 'when.yaml');
+    writeFileSync(cfg, 'rules:\n  local:\n    - id: no-generated\n      use: core/protected-path\n      deny: ["**/*.generated.ts"]\n');
+    const run = (phase, file) => evaluate({ phase, files: [file], root, getContent: () => '', configPath: cfg });
+    const editV = await run('edit', 'src/api.generated.ts');
+    const commitV = await run('commit', 'src/api.generated.ts');
+    const cleanV = await run('edit', 'src/api.ts');
+    results.push({ name: 'when-routing edit', pass: editV.length === 1 });
+    results.push({ name: 'when-routing commit (same rule)', pass: commitV.length === 1 && commitV[0].rule.id === editV[0].rule.id });
+    results.push({ name: 'when-routing clean passes', pass: cleanV.length === 0 });
+
+    // 3. the SHELL contract: a shell rule blocks pre-emptively via the temp-file path.
+    const cfg2 = join(tmp, 'shell.yaml');
+    writeFileSync(cfg2, 'rules:\n  local:\n    - id: no-attr\n      use: local/no-ai-attribution\n      on: ["**/*.md"]\n');
+    const bad = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'x\nCo-Authored-By: Claude <a@b>\n', configPath: cfg2 });
+    const ok = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'clean notes only\n', configPath: cfg2 });
+    results.push({ name: 'shell-contract edit blocks (temp-file)', pass: bad.length === 1 });
+    results.push({ name: 'shell-contract edit clean passes', pass: ok.length === 0 });
+  } finally {
+    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+
+  for (const r of results) console.log(r.pass ? 'PASS' : 'FAIL', r.name, r.err ? `— ${r.err}` : '');
+  const okAll = results.every((r) => r.pass);
+  console.log(okAll ? `\nengine self-test: PASS (${results.length} checks)` : '\nengine self-test: FAIL');
+  process.exit(okAll ? 0 : 1);
 }
 
 const entry = process.argv[1] && process.argv[1].endsWith('_engine.mjs');
