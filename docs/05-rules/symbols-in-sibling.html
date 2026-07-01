@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>core/symbols-in-sibling — Signposts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="../index.html">Sign<span>posts</span></a>
+  <a href="../01-quickstart.html">Quickstart</a>
+  <a href="../02-the-loop.html">The loop</a>
+  <a href="../03-concepts.html">Concepts</a>
+  <a href="../10-skills.html">Skills</a>
+  <a href="../04-signposts-yaml.html">Config</a>
+  <a href="index.html">Rules</a>
+  <a href="../06-signs.html">Signs</a>
+  <a href="../07-authoring.html">Authoring</a>
+  <a href="../11-packs.html">Packs</a>
+  <a href="../08-wiring.html">Wiring</a>
+  <a href="../09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1><code>core/symbols-in-sibling</code> &nbsp;<span class="muted">— exports must show up in the sibling</span></h1>
+  <p class="lede">Correlation across two files: every symbol a module exports must be referenced in its
+  partner file (typically the test). Catches untested exports.</p>
+
+  <h2>What it catches</h2>
+  <p>An exported function, class, or const that the sibling test never mentions — a sign it's untested.
+  It parses the module to find its exports, then checks they appear in the partner. This is the
+  parser-as-library family: it reasons across files, not just within one line.</p>
+
+  <h2>Config</h2>
+  <pre><code>rules:
+  - id: exports-are-tested
+    use: core/symbols-in-sibling
+    on: "src/domain/**/*.ts"
+    sibling: "{dir}/{name}.test.ts"   # where the exports must be referenced
+    message: "Each exported symbol must be referenced in its test. Red → green."</code></pre>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><code>on</code></td><td>Glob(s) for the modules to check.</td></tr>
+    <tr><td><code>sibling</code></td><td>The partner whose text must mention each export — same <code>{dir}/{name}/{base}/{path}</code> templating as <a href="sibling-exists.html">core/sibling-exists</a>.</td></tr>
+    <tr><td><code>message</code></td><td>The reason, shown on a block.</td></tr>
+  </table>
+
+  <h3>Legal vs illegal</h3>
+  <pre><code>// user.ts          export function getUser(){…}  export function delUser(){…}
+// user.test.ts     test(getUser…)                 // delUser never referenced
+                                                    ✗ blocked: 'delUser' untested</code></pre>
+
+  <div class="note"><strong>Reference, not assertion.</strong> It checks the export is <em>mentioned</em>
+  in the partner — a cheap, fast proxy for "is it tested", not a coverage tool. For true coverage, reach
+  for a <a href="tool-gate.html">core/tool-gate</a>.</div>
+
+  <div class="pn"><a href="sibling-exists.html">← core/sibling-exists</a><a href="json-invariant.html">core/json-invariant →</a></div>
+</main>
+</body>
+</html>

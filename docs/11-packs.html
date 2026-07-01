@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packs & distribution — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>Packs &amp; distribution</h1>
+  <p class="lede">A pack is just a namespace — a coherent set of rules and signs (and the scripts they
+  use). There's no separate pack format to maintain: any repo with a <code>signposts.yaml</code> can be
+  installed from, including your day-to-day project.</p>
+
+  <h2>A pack is a namespace</h2>
+  <p>In <a href="04-signposts-yaml.html">your config</a> everything is grouped by namespace. A pack is one
+  of those groups — its <code>signs:</code> and its <code>rules:</code> — plus the scripts those rules
+  reference in <code>rules/&lt;namespace&gt;/</code>.</p>
+  <pre><code>signs:
+  neon:
+    - { id: migrations, globs: ["src/db/migrations/**"], text: "Migrations are append-only." }
+rules:
+  neon:
+    - { id: no-raw-pool, use: neon/no-raw-pool, on: "src/**/*.ts" }
+      # + rules/neon/no-raw-pool.mjs</code></pre>
+  <p>Because a pack is a slice of the file plus a folder, <code>signposts.yaml</code> itself <em>is</em>
+  the manifest — nothing extra to write. (This mirrors how Claude Code plugins are just a repo you point
+  at.)</p>
+
+  <h2>Author in place — never extract</h2>
+  <p>The trap with "packaging" is that it pulls your rules away from where you use them, and then they're
+  hard to edit. So don't. You build your <code>neon</code> rules in <code>rules/neon/</code> in your
+  actual project, and share by letting others point at your repo. The rules never leave the place you
+  author them.</p>
+
+  <h2>Installing — cherry-pick from any repo</h2>
+  <p><code>/signposts install</code> points at a repo, diffs it against yours, and lets you pick what to
+  pull — by namespace or by entry. See <a href="10-skills.html">the skill</a>. The deterministic form,
+  when you already know what you want:</p>
+  <pre><code>npx signposts install github:you/your-project           # browse what's there
+npx signposts install github:you/your-project  neon     # take the neon namespace</code></pre>
+  <p>It copies <code>rules/neon/</code> and merges the <code>neon</code> group from both
+  <code>signs:</code> and <code>rules:</code> — the whole pack, in one move.</p>
+
+  <h2>The hub: your own repo as the spine</h2>
+  <p>You don't need a public anything. Keep a personal rules repo (private is fine) as your hub:
+  <code>reflect</code> finds a rule in a project → <code>propagate</code> sends it to the hub →
+  <code>install</code> pulls it into your other projects. Trusted teammates can install from the hub too.</p>
+
+  <h2>Two distribution doors</h2>
+  <p>The same pack ships either way — pick by how much ceremony you want.</p>
+  <table>
+    <tr><th></th><th>Git <span class="muted">(default)</span></th><th>npm-scoped <span class="muted">(at scale)</span></th></tr>
+    <tr><td>Source</td><td><code>github:you/pack#v1</code>, or private over SSH</td><td><code>@signposts/neon</code> · <code>@acme/guardrails</code></td></tr>
+    <tr><td>Publish step</td><td>just <code>git push</code> (tag to pin)</td><td><code>npm publish</code></td></tr>
+    <tr><td>Versioning</td><td>tags / refs</td><td>semver (<code>@^2</code>)</td></tr>
+    <tr><td>Private</td><td>a private repo</td><td>a private registry</td></tr>
+    <tr><td>Best for</td><td>you · personal · quick · private</td><td>official packs · companies · access control</td></tr>
+  </table>
+  <p>Official packs live under the project's <code>@signposts/*</code> scope; a company publishes under
+  its own (<code>@acme/*</code>); you just push a repo.</p>
+
+  <h2>Refresh tracks what you installed</h2>
+  <p>Your config records installed packs so <code>npx signposts refresh</code> can pull updates:</p>
+  <pre><code>packs:
+  - "@signposts/neon@^2"                 # npm, semver-tracked
+  - "github:you/signposts-mystyle#v1"    # git, ref-tracked</code></pre>
+
+  <div class="note"><strong>core is a pack too.</strong> The baked-in scripts and starter rules ship as
+  the <code>core</code> namespace — same mechanism as <code>neon</code> or your own. Nothing is special;
+  it's just the pack that comes pre-installed.</div>
+
+  <div class="pn"><a href="07-authoring.html">← Authoring</a><a href="08-wiring.html">How it wires →</a></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>core/protected-path — Signposts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="../index.html">Sign<span>posts</span></a>
+  <a href="../01-quickstart.html">Quickstart</a>
+  <a href="../02-the-loop.html">The loop</a>
+  <a href="../03-concepts.html">Concepts</a>
+  <a href="../10-skills.html">Skills</a>
+  <a href="../04-signposts-yaml.html">Config</a>
+  <a href="index.html">Rules</a>
+  <a href="../06-signs.html">Signs</a>
+  <a href="../07-authoring.html">Authoring</a>
+  <a href="../11-packs.html">Packs</a>
+  <a href="../08-wiring.html">Wiring</a>
+  <a href="../09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1><code>core/protected-path</code> &nbsp;<span class="muted">— block edits to certain paths</span></h1>
+  <p class="lede">Forbid hand-edits to files that shouldn't be touched by hand at all — generated output,
+  vendored code, anything machine-owned. The simplest rule: it only looks at the path.</p>
+
+  <h2>What it catches</h2>
+  <p>Any attempt to edit or commit a file under a protected glob. It reads no content — the path alone
+  decides — so it's instant and unambiguous.</p>
+
+  <h2>Config</h2>
+  <pre><code>rules:
+  - id: no-edit-generated
+    use: core/protected-path
+    deny: ["**/*.generated.ts", "vendor/**"]
+    message: "Generated / vendored — change the source it derives from, then regenerate."</code></pre>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><code>deny</code></td><td>Glob(s) for the protected paths. Editing or committing a matching file is blocked. (Uses <code>deny:</code> instead of <code>on:</code> — the path is the whole rule.)</td></tr>
+    <tr><td><code>message</code></td><td>The reason, shown on a block.</td></tr>
+  </table>
+
+  <h3>Legal vs illegal</h3>
+  <pre><code>src/app/page.ts            ✓ passes
+src/api.generated.ts       ✗ blocked
+vendor/lib/thing.js        ✗ blocked</code></pre>
+
+  <p>This is the rule used in the <a href="../02-the-loop.html">two-triggers demo</a>: one line, default
+  <code>when</code>, blocks the agent pre-emptively <em>and</em> blocks a plain <code>git commit</code>.
+  It's also the kind of rule behind the <a href="../01-quickstart.html">first-run demo</a>
+  (<code>signposts-is-bad.yaml</code>).</p>
+
+  <div class="pn"><a href="command-guard.html">← core/command-guard</a><a href="tool-gate.html">core/tool-gate →</a></div>
+</main>
+</body>
+</html>

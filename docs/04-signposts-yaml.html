@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The config file — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>The config file — <code>signposts.yaml</code></h1>
+  <p class="lede">Everything Signposts needs lives in one file at your repo root. A handful of sections,
+  each with a single consumer, so nothing is wired in two places.</p>
+
+  <table>
+    <tr><th>Section</th><th>Holds</th><th>Read by</th></tr>
+    <tr><td><code>project</code></td><td>Stack identity — a name and description.</td><td>the CLI</td></tr>
+    <tr><td><code>config</code></td><td>Engine runtime settings — currently <code>drift_tokens</code> (the sign re-injection cadence).</td><td>the sign injector</td></tr>
+    <tr><td><code>signs</code></td><td>Your <span class="chip sign">sign</span> notes, <strong>grouped by namespace</strong>.</td><td>the sign injector</td></tr>
+    <tr><td><code>rules</code></td><td>Your <span class="chip rule">rule</span> blocks, <strong>grouped by namespace</strong>.</td><td>the engine</td></tr>
+    <tr><td><code>packs</code></td><td>The installed packs + versions, so <code>refresh</code> can update them.</td><td>the CLI</td></tr>
+    <tr><td><code>install</code></td><td>What to copy, which deps to add, how to arm it.</td><td>the CLI</td></tr>
+  </table>
+
+  <h2>Grouped by namespace</h2>
+  <p>Both <code>signs:</code> and <code>rules:</code> are grouped by <strong>namespace</strong> — the pack
+  each belongs to. <code>core</code> is the built-in pack; <code>local</code> is your own ad-hoc stuff; a
+  name like <code>neon</code> is a coherent set you might share. A namespace is what
+  <a href="11-packs.html">install and propagate</a> move as one unit — its signs <em>and</em> rules together.</p>
+
+  <h2>A worked example</h2>
+  <pre><code>project:
+  name: my-core
+  description: My personal dev guardrails. Reused on every repo; irrelevant rules sleep.
+
+config:
+  drift_tokens: 200000          # re-inject a sign after ~this many tokens of drift
+
+signs:
+  local:
+    - id: db-area
+      globs: ["src/db/**"]
+      text: |-
+        Queries go through the repository layer, never inline in a route.
+
+rules:
+  local:
+    - id: no-edit-generated
+      use: core/protected-path
+      deny: ["**/*.generated.ts", "vendor/**"]
+      message: "Generated / vendored — change the source, then regenerate."
+  imports:
+    - id: boundaries           # a tool-gate is heavy → commit-only, so set when:
+      use: core/tool-gate
+      run: "npx depcruise src --config .dependency-cruiser.cjs"
+      carries: [".dependency-cruiser.cjs"]
+      when: [commit]
+
+packs:
+  - "@signposts/core"          # the baked-in pack
+install:
+  activate: ["npm install"]    # arms the gate (lefthook writes .git/hooks/*)</code></pre>
+
+  <h2>How a rule reads</h2>
+  <p>Each entry names a <strong>script</strong> with <code>use:</code> and carries that script's config
+  inline. The whole entry is handed to the script <strong>verbatim</strong>.</p>
+  <ul>
+    <li><code>use: core/&lt;name&gt;</code> — a <a href="05-rules/index.html">core script</a>; or
+      <code>&lt;namespace&gt;/&lt;name&gt;</code> for <a href="07-authoring.html">your own</a>.</li>
+    <li><code>on:</code> — the glob(s) it applies to (some scripts use <code>deny:</code> or
+      <code>run:</code> instead).</li>
+    <li><code>when:</code> — defaults to <code>[edit, commit]</code>; <strong>omit it</strong> unless you
+      need to override (a tool-gate that's <code>[commit]</code> only).</li>
+    <li><code>message:</code> — the reason, fed back to the agent on a block.</li>
+  </ul>
+
+  <div class="note"><strong>Code patterns are files, not inline.</strong> ast-grep rules stay as
+  <code>rules/ast-grep/*.yml</code> (so <code>ast-grep scan</code> and the test runner use the same
+  files); the <code>core/ast-grep</code> runner executes them in-process. See
+  <a href="05-rules/ast-grep.html">core/ast-grep</a>. Everything else is a normal <code>rules:</code> entry.</div>
+
+  <div class="pn"><a href="10-skills.html">← Skills</a><a href="05-rules/index.html">The rules →</a></div>
+</main>
+</body>
+</html>

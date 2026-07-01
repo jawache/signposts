@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>Running it — the CLI and the skill</h1>
+  <p class="lede">Signposts has two surfaces, split by a simple question: does the step need judgement?
+  If not, it's a deterministic CLI command. If it does, it's a mode of the <code>/signposts</code> skill.</p>
+
+  <table>
+    <tr><th></th><th>Deterministic — <code>npx signposts</code></th><th>Judgement — <code>/signposts</code></th></tr>
+    <tr><td>Does</td><td>drops files, computes facts</td><td>reads facts, converses, decides</td></tr>
+    <tr><td>Commands</td><td><code>scaffold</code> · <code>refresh</code> · the fetch/diff helpers</td><td><code>reflect</code> · <code>propagate</code> · <code>install</code></td></tr>
+  </table>
+  <p>The rule between them: the CLI never guesses, and the skill never rediscovers what a script could
+  just tell it. A helper script emits the facts (what changed, what's in another repo, what collides);
+  the skill applies the judgement.</p>
+
+  <h2>The CLI — <code>npx signposts</code></h2>
+  <ul>
+    <li><code>npx signposts</code> — <strong>scaffold</strong>: drop the engine, hooks, config, and the
+      core pack into a repo, and arm the gate. One-time. (<a href="01-quickstart.html">Quickstart</a>.)</li>
+    <li><code>npx signposts refresh</code> — pull updates for the packs you've installed, tracked in your
+      <code>packs:</code> list.</li>
+    <li>Under the hood it also exposes the <strong>fetch / diff / apply</strong> helpers the skill calls —
+      e.g. "summarise what's in <em>that</em> repo versus mine" — so the AI doesn't burn tokens working
+      it out.</li>
+  </ul>
+
+  <h2>The skill — <code>/signposts &lt;mode&gt;</code></h2>
+  <p>One skill, three modes. Each leans on a deterministic helper for facts, then does the part only
+  judgement can.</p>
+
+  <h3><code>/signposts reflect</code> — the coach</h3>
+  <p>Run it at the <strong>end of a session</strong>. A helper hands it the session's real history — what
+  you corrected, what you re-explained, what a rule blocked — and the coach proposes new signposts:
+  <em>"this drift → a <span class="chip sign">sign</span>"</em> or <em>"this mistake → a
+  <span class="chip rule">rule</span>"</em>, or both. You accept, and it authors and tests them. This is
+  the engine of <a href="02-the-loop.html">the loop</a>.</p>
+
+  <h3><code>/signposts propagate</code> — send a rule to a repo</h3>
+  <p>Lift a rule or sign out of this project and <strong>send it to a repo you name</strong> — genericising
+  the bits that were specific to you. That repo can be <em>your own</em>, even private: keep a personal
+  rules repo as your <strong>hub</strong>, and propagate the good ones there. (Or target an upstream pack
+  and it opens a PR.) You don't need a public repo to reuse your work.</p>
+
+  <h3><code>/signposts install</code> — cherry-pick from a repo</h3>
+  <p>Point it at any repo — your hub, a teammate's project, an official pack. A helper diffs
+  <em>their</em> signposts against <em>yours</em> — what's new, what collides, which namespaces — and the
+  skill walks you through an <strong>interactive picker</strong>: take the whole <code>neon</code>
+  namespace, or individual entries. Collisions are talked through, not resolved by a rigid rule — this is
+  exactly where an AI is good.</p>
+
+  <h2>The hub loop</h2>
+  <p>Put together, the three modes route your best guardrails through a repo you own:</p>
+  <div class="loop">
+    <div class="step"><b><code>reflect</code></b> in project A surfaces a rule worth keeping.</div>
+    <div class="step"><b><code>propagate</code></b> sends it to your private hub repo.</div>
+    <div class="step"><b><code>install</code></b> pulls it into projects B, C, D — and anyone you trust
+      can install from your hub too.</div>
+  </div>
+  <p class="muted">Guardrails you discover in real work flow outward on their own, through a repo you
+  control — no central catalogue, no public anything required.</p>
+
+  <div class="note"><strong>What's <em>not</em> in the tool.</strong> Signposts stays tightly focused on
+  scaffold + the <code>/signposts</code> skill. The broader planning journal (<code>/work</code>) and the
+  code-review agents live in their own repos — they're a different job from steering the agent.</div>
+
+  <div class="pn"><a href="03-concepts.html">← Concepts</a><a href="04-signposts-yaml.html">The config file →</a></div>
+</main>
+</body>
+</html>

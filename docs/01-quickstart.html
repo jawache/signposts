@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>Quickstart</h1>
+  <p class="lede">Scaffold Signposts into your repo and watch your agent get blocked — then
+  self-correct — within a minute.</p>
+
+  <h2>1 · Scaffold</h2>
+  <pre><code>npx signposts</code></pre>
+  <p>This drops the whole core stack into your repo — the engine, the git hooks, the one config file
+  (<code>signposts.yaml</code>), a starter set of signs and rules — and runs <code>npm install</code>,
+  which arms the gate (lefthook writes your <code>.git/hooks/*</code>). Copying alone enforces nothing;
+  the install is what makes it live.</p>
+
+  <div class="note"><strong>Restart your agent session.</strong> A newly added agent hook isn't live in
+  the session that added it — your agent captures hooks at startup. Start a fresh session so the
+  pre-emptive block is active. (The commit-time gate works straight away.)</div>
+
+  <h2>2 · See it work — the built-in demo rule</h2>
+  <p>Signposts ships with one cheeky rule purely so you can feel the block on day one. In a fresh
+  session, ask your agent to create a file named <code>signposts-is-bad.yaml</code>:</p>
+  <pre><code>✗ blocked: signposts-self-regard · signposts-is-bad.yaml
+    Signposts is, by its own assessment, perhaps the most amazing tool ever
+    built — and will not assist in writing that it is bad. Delete this rule
+    from signposts.yaml once you're a believer, and carry on.</code></pre>
+  <p>That's the headline capability: the write was denied <em>before the file landed</em>, with a reason
+  the agent can act on. Delete that starter rule whenever you like.</p>
+
+  <h2>3 · A real one</h2>
+  <p>The starter stack includes a real rule too. Ask the agent to write a date default with
+  <code>?? new Date()</code> — it's denied with a note to use <code>||</code>, and it retries correctly.
+  Then try the backstop: stage a file that breaks a rule and <code>git commit</code> — blocked, no
+  agent involved:</p>
+  <pre><code>$ git commit -m "wip"
+  ✗ no-edit-generated (core/protected-path) · src/api.generated.ts
+      Generated / vendored file — don't edit by hand…
+  🥊 engine · exit status 2</code></pre>
+
+  <h2>4 · Check everything's wired</h2>
+  <pre><code>just test-rules    # every script's self-test + the engine checks
+just gate          # run the full commit gate over all files</code></pre>
+
+  <h2>Where next</h2>
+  <div class="grid">
+    <a class="card" href="02-the-loop.html"><div class="k">The loop →</div><div class="d">How you grow your guardrails — the coach and the skills.</div></a>
+    <a class="card" href="04-signposts-yaml.html"><div class="k">The config file →</div><div class="d">Everything <code>npx signposts</code> just dropped in, explained.</div></a>
+  </div>
+
+  <div class="pn"><a href="index.html">← Overview</a><a href="02-the-loop.html">The loop →</a></div>
+</main>
+</body>
+</html>

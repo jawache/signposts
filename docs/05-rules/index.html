@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rules — Signposts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="../index.html">Sign<span>posts</span></a>
+  <a href="../01-quickstart.html">Quickstart</a>
+  <a href="../02-the-loop.html">The loop</a>
+  <a href="../03-concepts.html">Concepts</a>
+  <a href="../10-skills.html">Skills</a>
+  <a href="../04-signposts-yaml.html">Config</a>
+  <a href="index.html">Rules</a>
+  <a href="../06-signs.html">Signs</a>
+  <a href="../07-authoring.html">Authoring</a>
+  <a href="../11-packs.html">Packs</a>
+  <a href="../08-wiring.html">Wiring</a>
+  <a href="../09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1><span class="chip rule">rule</span> &nbsp;The core scripts</h1>
+  <p class="lede">A rule names a <strong>script</strong> with <code>use:</code> and carries its config
+  inline. Signposts ships a handful of core scripts that cover the ground; pick the one that matches
+  what you're stopping.</p>
+
+  <p>Everything is a script — no special cases, nothing auto-magic. <code>use:</code> is always a path: a
+  core one (<code>core/&lt;name&gt;</code>) or <a href="../07-authoring.html">your own</a>
+  (<code>&lt;namespace&gt;/&lt;name&gt;</code>).</p>
+
+  <h2>Pick by what you're stopping</h2>
+  <table>
+    <tr><th>You want to stop…</th><th><code>use:</code></th></tr>
+    <tr><td>A banned code shape in TS/TSX (e.g. <code>?? new Date()</code>)</td><td><a href="ast-grep.html">core/ast-grep</a></td></tr>
+    <tr><td>A file that's missing a required companion (e.g. its test)</td><td><a href="sibling-exists.html">core/sibling-exists</a></td></tr>
+    <tr><td>An exported symbol never referenced in its sibling test</td><td><a href="symbols-in-sibling.html">core/symbols-in-sibling</a></td></tr>
+    <tr><td>A structured file breaking a shape rule (e.g. <code>package.json</code>)</td><td><a href="json-invariant.html">core/json-invariant</a></td></tr>
+    <tr><td>A banned word or pattern in text/prose</td><td><a href="text-ban.html">core/text-ban</a></td></tr>
+    <tr><td>A dangerous shell command</td><td><a href="command-guard.html">core/command-guard</a></td></tr>
+    <tr><td>Any hand-edit of a protected path (generated, vendored)</td><td><a href="protected-path.html">core/protected-path</a></td></tr>
+    <tr><td>A whole-project tool failing (import graph, coverage, types)</td><td><a href="tool-gate.html">core/tool-gate</a></td></tr>
+  </table>
+
+  <h2>Two families</h2>
+  <div class="modes">
+    <div class="mode" style="border-top:4px solid var(--ok)">
+      <h3>Native (in-process)</h3>
+      <p>All but the last. Signposts owns the logic; the config is in your <code>signposts.yaml</code>.
+      They run <strong>in-process</strong>, so they fire <strong>pre-emptively</strong> on edit and at
+      commit. (This is why <a href="ast-grep.html">ast-grep</a> is a core script, not a tool-gate — it
+      can block before the write lands.)</p>
+    </div>
+    <div class="mode" style="border-top:4px solid var(--gold)">
+      <h3>Tool-delegated</h3>
+      <p><a href="tool-gate.html">core/tool-gate</a> only. The <em>tool</em> owns its config file (e.g.
+      dependency-cruiser, <code>tsc</code>); Signposts just runs it and blocks on failure. Commit/push
+      only — you can't run a whole-project build on every keystroke.</p>
+    </div>
+  </div>
+
+  <div class="note"><strong>On <code>when:</code>.</strong> Native scripts default to
+  <code>[edit, commit]</code> — leave it off. A tool-gate must set <code>when: [commit]</code> (it's too
+  heavy to run pre-emptively). That's the only place <code>when:</code> earns its keep. Rules are
+  <a href="../04-signposts-yaml.html">grouped by namespace</a> in your config.</div>
+
+  <div class="pn"><a href="../04-signposts-yaml.html">← The config file</a><a href="ast-grep.html">core/ast-grep →</a></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,85 @@
+/* Signposts docs — shared styles. Plain, readable, adopter-facing. */
+:root{
+  --ink:#1b2430; --mut:#5d6b7a; --line:#e4e9f0; --bg:#f7f9fc; --card:#fff;
+  --brand:#2a6fb0; --brand-bg:#eaf3fb;
+  --rule:#c8472f; --rule-bg:#fdeee9;     /* a rule — blocks (hard) */
+  --sign:#1f7a8c; --sign-bg:#e8f5f7;     /* a sign — nudges (soft) */
+  --ok:#1f9d57; --ok-bg:#e9f8ef;
+  --code:#101826; --codeink:#d8e2ee; --gold:#b07d00; --gold-bg:#fbf3df;
+  --maxw:880px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.92);
+  backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--line)}
+.top .inner{max-width:var(--maxw);margin:0 auto;padding:.55rem 1.2rem;display:flex;
+  flex-wrap:wrap;align-items:center;gap:.3rem .85rem;font-size:.88rem}
+.top a{color:var(--mut);text-decoration:none}
+.top a:hover{color:var(--ink)}
+.top .brand{font-weight:700;color:var(--ink);margin-right:.6rem}
+.top .brand span{color:var(--brand)}
+
+main{max-width:var(--maxw);margin:0 auto;padding:2.2rem 1.2rem 4rem}
+h1{font-size:2rem;line-height:1.15;margin:.2rem 0 .3rem}
+h2{font-size:1.35rem;margin:2.2rem 0 .6rem;padding-top:.4rem}
+h3{font-size:1.05rem;margin:1.4rem 0 .4rem}
+.lede{font-size:1.18rem;color:var(--mut);margin:.2rem 0 1.4rem}
+p,li{color:#27313d}
+code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:.85em;
+  background:#eef2f7;border:1px solid var(--line);border-radius:5px;padding:.05rem .35rem}
+pre{background:var(--code);color:var(--codeink);border-radius:10px;padding:1rem 1.1rem;
+  overflow:auto;font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:.82rem;line-height:1.55}
+pre code{background:none;border:none;padding:0;color:inherit;font-size:inherit}
+
+/* two-mode chips */
+.chip{display:inline-block;font-weight:700;font-size:.78rem;letter-spacing:.02em;
+  padding:.12rem .55rem;border-radius:999px;text-transform:uppercase}
+.chip.rule{background:var(--rule-bg);color:var(--rule)}
+.chip.sign{background:var(--sign-bg);color:var(--sign)}
+.chip.soon{background:var(--gold-bg);color:var(--gold)}
+.chip.built{background:var(--ok-bg);color:var(--ok)}
+
+/* callouts */
+.note,.status{border:1px solid var(--line);border-left:4px solid var(--brand);
+  background:var(--card);border-radius:8px;padding:.8rem 1rem;margin:1.1rem 0;font-size:.95rem}
+.status{border-left-color:var(--gold);background:var(--gold-bg)}
+
+/* cards / nav grid */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.2rem 0}
+.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:1rem 1.1rem;text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--brand);transform:translateY(-1px)}
+.card .k{font-weight:700;color:var(--ink)}
+.card .d{color:var(--mut);font-size:.9rem;margin-top:.2rem}
+
+/* two-mode side-by-side */
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.mode{border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem;background:var(--card)}
+.mode.rule{border-top:4px solid var(--rule)}
+.mode.sign{border-top:4px solid var(--sign)}
+.mode h3{margin-top:.3rem}
+
+/* the loop steps */
+.loop{counter-reset:step;margin:1.4rem 0;display:grid;gap:.7rem}
+.step{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:.85rem 1rem .85rem 3.2rem}
+.step::before{counter-increment:step;content:counter(step);position:absolute;left:.9rem;top:.85rem;
+  width:1.6rem;height:1.6rem;border-radius:50%;background:var(--brand);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.step b{color:var(--ink)}
+
+table{border-collapse:collapse;width:100%;font-size:.92rem;margin:1rem 0}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+
+/* prev / next footer */
+.pn{display:flex;justify-content:space-between;gap:1rem;margin-top:3rem;
+  border-top:1px solid var(--line);padding-top:1.2rem;font-size:.92rem}
+.pn a{color:var(--brand);text-decoration:none}
+.pn a:hover{text-decoration:underline}
+.muted{color:var(--mut)}
+@media(max-width:640px){.grid,.modes{grid-template-columns:1fr}}

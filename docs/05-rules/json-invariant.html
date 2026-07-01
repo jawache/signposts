@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>core/json-invariant — Signposts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="../index.html">Sign<span>posts</span></a>
+  <a href="../01-quickstart.html">Quickstart</a>
+  <a href="../02-the-loop.html">The loop</a>
+  <a href="../03-concepts.html">Concepts</a>
+  <a href="../10-skills.html">Skills</a>
+  <a href="../04-signposts-yaml.html">Config</a>
+  <a href="index.html">Rules</a>
+  <a href="../06-signs.html">Signs</a>
+  <a href="../07-authoring.html">Authoring</a>
+  <a href="../11-packs.html">Packs</a>
+  <a href="../08-wiring.html">Wiring</a>
+  <a href="../09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1><code>core/json-invariant</code> &nbsp;<span class="muted">— assert a structured file's shape</span></h1>
+  <p class="lede">Hold a JSON file to a shape rule — like "<code>package.json</code> scripts must stay
+  empty". Parses the file properly, so formatting doesn't matter.</p>
+
+  <h2>What it catches</h2>
+  <p>A structured config file drifting from its intended shape. The starter example: keeping
+  <code>package.json</code> <code>scripts</code> empty so the justfile stays the single command source.</p>
+
+  <h2>Config</h2>
+  <pre><code>rules:
+  - id: no-package-scripts
+    use: core/json-invariant
+    on: "package.json"
+    assert: { path: scripts, keysPrefixedWith: "//" }
+    message: "package.json scripts must stay empty — commands live in the justfile."</code></pre>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><code>on</code></td><td>Glob(s) for the JSON file(s) to check.</td></tr>
+    <tr><td><code>assert.path</code></td><td>A dotted path into the JSON to inspect (e.g. <code>scripts</code>, <code>compilerOptions.paths</code>).</td></tr>
+    <tr><td><code>assert.keysPrefixedWith</code></td><td>Every key at that path must start with this prefix (here, only <code>//</code> comment keys are allowed). Anything else is a violation.</td></tr>
+    <tr><td><code>message</code></td><td>The reason, shown on a block.</td></tr>
+  </table>
+
+  <h3>Legal vs illegal</h3>
+  <pre><code>{ "scripts": { "//": "see justfile" } }            ✓ passes
+{ "scripts": { "//": "x", "dev": "vite" } }        ✗ blocked: "scripts.dev"</code></pre>
+
+  <div class="note"><strong>Could this be ast-grep?</strong> Possibly — there are JSON/YAML grammars, so
+  some structured-file checks could fold into <a href="ast-grep.html">core/ast-grep</a>. Today
+  <code>core/json-invariant</code> is the simple path for JSON; a bespoke structured-file rule (YAML, the
+  justfile) is a small <a href="../07-authoring.html">own-script</a> until it earns a place in core.</div>
+
+  <div class="pn"><a href="symbols-in-sibling.html">← core/symbols-in-sibling</a><a href="text-ban.html">core/text-ban →</a></div>
+</main>
+</body>
+</html>

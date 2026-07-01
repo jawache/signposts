@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concepts — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>Concepts — two halves of one anti-drift system</h1>
+  <p class="lede">Signposts has two kinds of steering: <b>signs</b> and <b>rules</b>. To understand why
+  there are two, start with how an AI agent actually goes wrong.</p>
+
+  <h2>The premise: the agent drifts</h2>
+  <p>An AI coding agent isn't being difficult when it ignores your conventions. The problem is
+  <strong>context drift</strong>. On a fresh session it follows whatever guidance it has, faithfully.
+  But as the conversation grows — tens, then hundreds of thousands of tokens — earlier guidance fades,
+  and it slips back into generic habits. It's not malice; it's the context window doing what context
+  windows do.</p>
+  <p>So you have two needs: give the agent the best possible chance to <em>get it right the first
+  time</em>, and a way to <em>catch it when it drifts anyway</em>. Those are the two halves.</p>
+
+  <!-- SIGN -->
+  <h2><span class="chip sign">sign</span> &nbsp;A sign — just-in-time context</h2>
+  <p>A sign is a note attached to an <em>area</em> of your codebase. Think of it like a
+  <strong>flashlight</strong>: instead of one enormous rules file the agent skims once and forgets,
+  the guidance for each area lives with that area and is lit up exactly when the agent is standing
+  there.</p>
+
+  <h3>It arrives on read</h3>
+  <p>Signposts injects an area's sign the moment the agent <strong>reads</strong> a file in that area.
+  That timing is deliberate: in practice an agent almost never writes into an area it hasn't first
+  read — so a read is the reliable signal that it's about to work there. The sign lands in context
+  just before it's needed, not pages earlier.</p>
+
+  <h3>It's re-injected as the context grows</h3>
+  <p>To fight drift directly, a sign is <strong>re-injected every <code>X</code> tokens</strong>
+  (configurable — the <code>drift_tokens</code> setting). If you're 600k tokens deep and last touched
+  a piece of code 500k tokens ago, the next time the agent works there the note is quietly refreshed.
+  You're not relying on a single early mention surviving the whole session.</p>
+
+  <div class="note"><strong>Why this keeps your starting context tight.</strong> Because signs are
+  delivered by area, on demand, you don't front-load the agent with a thousand rules — most of which
+  are irrelevant to the task in front of it. The context it starts with stays small and on-point; the
+  rest shows up just in time. (This just-in-time idea is why the project was nearly called
+  <em>Flashlight</em>.)</div>
+
+  <!-- RULE -->
+  <h2><span class="chip rule">rule</span> &nbsp;A rule — the backstop</h2>
+  <p>Signs give the agent a chance to do the right thing. Rules make sure the wrong thing can't slip
+  through when it drifts anyway. A rule is a check that <strong>blocks</strong> — and the headline
+  trick is <em>when</em>: it fires the instant the agent tries to write the offending code,
+  <strong>before the file is saved</strong>.</p>
+
+  <h3>Every block carries the fix</h3>
+  <p>A rule doesn't just say "no". It returns a <strong>message explaining how to do it right</strong>,
+  fed straight back to the agent so it corrects itself on the spot. In that sense a rule is <em>also</em>
+  guidance — one that only appears at the moment of the mistake. You could, in theory, run with rules
+  alone and let the blocks teach. But then the agent only ever learns by hitting a wall; signs let it
+  avoid the wall in the first place.</p>
+
+  <h3>It's about confidence, not hope</h3>
+  <p>You can't rely on signs and simply hope they stick across a long session. Rules are the half that
+  lets you <em>know</em> a class of mistake won't land — no matter how far the context has drifted, and
+  even when there's no AI in the loop at all (a rule also runs at <code>git commit</code>).</p>
+
+  <!-- TOGETHER -->
+  <h2>How they work together</h2>
+  <p>Most guardrails want both halves: a sign so the agent gets it right early, and a rule to catch it
+  if the growing context makes it slip. But it isn't all-or-nothing — you can have just signs, just
+  rules, or both.</p>
+  <table>
+    <tr><th></th><th><span class="chip sign">sign</span></th><th><span class="chip rule">rule</span></th></tr>
+    <tr><td>Job</td><td>Get it right the first time</td><td>Catch it when it drifts</td></tr>
+    <tr><td>Blocks?</td><td>No — a nudge</td><td>Yes — before the write, and at commit</td></tr>
+    <tr><td>When you feel it</td><td>On reading an area (and re-injected over time)</td><td>The moment a banned change is attempted</td></tr>
+    <tr><td>Good for</td><td>Shape &amp; judgement calls; broad guidance</td><td>Clear-cut, costly, or irreversible mistakes</td></tr>
+    <tr><td>How common</td><td>Many — they're cheap and dormant when irrelevant</td><td>Fewer — a rule is usually the special case</td></tr>
+  </table>
+  <p class="muted">Keep the starting context tight: lots of light-touch signs delivered just in time, a
+  small number of rules for the things that really must not happen.</p>
+
+  <h2>One rule, two triggers</h2>
+  <p>A rule fires on both triggers by default (<code>when: [edit, commit]</code>) — one definition, two
+  places:</p>
+  <table>
+    <tr><th>Trigger</th><th>Where</th><th>What it does</th></tr>
+    <tr><td><code>edit</code></td><td>Inside your agent, before a write</td><td>Pre-emptive block — reconstructs the would-be file, checks it, denies with the fix so the agent self-corrects.</td></tr>
+    <tr><td><code>commit</code> / <code>push</code></td><td>Your git hooks</td><td>The backstop gate over staged files — runs even on a plain <code>git commit</code>, with no AI involved.</td></tr>
+  </table>
+  <p>You only set <code>when:</code> when you want something other than both — e.g. a heavy
+  whole-project check that can only run at commit. See <a href="04-signposts-yaml.html">the config
+  file</a> and <a href="05-rules/index.html">the rules</a>.</p>
+
+  <div class="pn"><a href="02-the-loop.html">← The loop</a><a href="04-signposts-yaml.html">The config file →</a></div>
+</main>
+</body>
+</html>

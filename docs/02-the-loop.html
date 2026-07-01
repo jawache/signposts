@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The loop — Signposts</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="index.html">Sign<span>posts</span></a>
+  <a href="01-quickstart.html">Quickstart</a>
+  <a href="02-the-loop.html">The loop</a>
+  <a href="03-concepts.html">Concepts</a>
+  <a href="10-skills.html">Skills</a>
+  <a href="04-signposts-yaml.html">Config</a>
+  <a href="05-rules/index.html">Rules</a>
+  <a href="06-signs.html">Signs</a>
+  <a href="07-authoring.html">Authoring</a>
+  <a href="11-packs.html">Packs</a>
+  <a href="08-wiring.html">Wiring</a>
+  <a href="09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1>The loop</h1>
+  <p class="lede">Signposts isn't a ruleset you install once and forget. It grows with your project —
+  it learns your guardrails from the corrections you make, one session at a time.</p>
+
+  <p>Most "AI rules" tools hand you a fixed list and hope it fits. Signposts assumes the opposite:
+  the guardrails worth having are the ones <em>your</em> project teaches you, in the moment you hit
+  the problem. The job of Signposts is to capture each of those the moment it surfaces, and apply it
+  forever after. That capture-and-apply cycle is the loop.</p>
+
+  <h2>The cycle</h2>
+  <div class="loop">
+    <div class="step"><b>Scaffold.</b> Run <code>npx signposts</code> once in your repo. It lays down the
+      engine, the git hooks, the one config file (<code>signposts.yaml</code>), and the core pack of
+      signs and rules. From here it's armed.</div>
+    <div class="step"><b>Develop normally.</b> You work with your agent as you always do. Signposts
+      steers in the background — <span class="chip sign">sign</span> notes appear as the agent touches
+      relevant files; <span class="chip rule">rule</span> blocks stop known mistakes before they land.</div>
+    <div class="step"><b>Reflect.</b> At the end of a session you run <code>/signposts reflect</code>. A
+      <strong>coach</strong> looks at what actually happened — what you corrected, what went sideways,
+      what you had to explain twice.</div>
+    <div class="step"><b>The coach proposes a signpost — and gives you the choice.</b> For each issue it
+      found it suggests a <span class="chip sign">sign</span> (a nudge, for judgement calls), a
+      <span class="chip rule">rule</span> (a hard block, for clear-cut mistakes), or <em>both</em> — a
+      sign so the agent gets it right first time, plus a rule to catch it if it drifts. You decide.</div>
+    <div class="step"><b>Apply it.</b> The coach authors and tests it — usually a few lines of config.
+      From now on it steers every session, for you and anyone who clones the repo. The agent stops
+      making that mistake.</div>
+    <div class="step"><b>Optionally, share it.</b> <code>/signposts propagate</code> sends a good signpost
+      to a repo you choose — your own hub, or upstream as a PR. Others <code>install</code> it from there.
+      A guardrail born in your project becomes one everybody benefits from.</div>
+  </div>
+  <p class="muted">…then back to step 2. Each pass leaves your agent a little harder to derail.</p>
+
+  <h2>The skill that runs it</h2>
+  <p>The loop is driven by one skill, <code>/signposts</code>, with three modes — the coach
+  (<code>reflect</code>), sharing up (<code>propagate</code>), and pulling in (<code>install</code>).
+  The coach is the heart: it doesn't guess at rules in the abstract, it learns them from your real
+  corrections. Full detail on <a href="10-skills.html">the skills page</a>.</p>
+
+  <h2>Why the sign-or-rule choice matters</h2>
+  <p>Not every lesson should be a hard block. Some are judgement calls where a reminder is enough;
+  forcing them would just get in the way. Others are clear-cut — there's a right answer and a wrong
+  one — and a reminder isn't enough because the agent will drift back. The coach's value is that it
+  surfaces the issue <em>and</em> frames the decision, instead of silently picking for you.</p>
+
+  <table>
+    <tr><th>You hit…</th><th>Coach suggests</th><th>Because</th></tr>
+    <tr><td>The agent keeps putting business logic in a "view" file</td><td>a <span class="chip sign">sign</span> on that folder</td><td>It's a shape/taste call; a nudge in the right place is enough.</td></tr>
+    <tr><td>The agent used <code>?? new Date()</code>, which silently breaks on empty strings</td><td>a <span class="chip rule">rule</span> that blocks it</td><td>There's a correct form; a reminder would drift, a block won't.</td></tr>
+    <tr><td>A command nearly wiped uncommitted work</td><td>a <span class="chip rule">rule</span> — a command guard</td><td>Irreversible. It must be stopped before it runs, not flagged after.</td></tr>
+  </table>
+
+  <h2>This is the differentiator</h2>
+  <p>Because signposts are authored where the need arises and then shared upward — through
+  <a href="11-packs.html">a repo you own</a> — the best guardrails bubble up from real work rather than
+  being dictated from the top. Your stack is <em>yours</em> — reuse it across every repo, and let
+  irrelevant rules lie dormant (a database rule costs nothing in a project with no database). That
+  decentralised, learn-as-you-go authorship is what Signposts is really for.</p>
+
+  <div class="pn"><a href="index.html">← Overview</a><a href="03-concepts.html">Concepts →</a></div>
+</main>
+</body>
+</html>

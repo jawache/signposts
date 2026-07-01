@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>core/sibling-exists — Signposts</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="inner">
+  <a class="brand" href="../index.html">Sign<span>posts</span></a>
+  <a href="../01-quickstart.html">Quickstart</a>
+  <a href="../02-the-loop.html">The loop</a>
+  <a href="../03-concepts.html">Concepts</a>
+  <a href="../10-skills.html">Skills</a>
+  <a href="../04-signposts-yaml.html">Config</a>
+  <a href="index.html">Rules</a>
+  <a href="../06-signs.html">Signs</a>
+  <a href="../07-authoring.html">Authoring</a>
+  <a href="../11-packs.html">Packs</a>
+  <a href="../08-wiring.html">Wiring</a>
+  <a href="../09-troubleshooting.html">Help</a>
+</div></nav>
+
+<main>
+  <h1><code>core/sibling-exists</code> &nbsp;<span class="muted">— require a companion file</span></h1>
+  <p class="lede">Insist that a file has a partner — its test, its types, its story file. Path-only: it
+  decides from the filename, without reading any content.</p>
+
+  <h2>What it catches</h2>
+  <p>A file that's supposed to come with a companion but doesn't — e.g. a domain module with no
+  <code>.test.ts</code> next to it.</p>
+
+  <h2>Config</h2>
+  <pre><code>rules:
+  - id: domain-has-test
+    use: core/sibling-exists
+    on: "src/domain/**/*.ts"          # files this applies to
+    sibling: "{dir}/{name}.test.ts"   # the partner that must exist
+    message: "Every domain module needs a sibling test."</code></pre>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><code>on</code></td><td>Glob(s) for the files the rule applies to.</td></tr>
+    <tr><td><code>sibling</code></td><td>The required partner, as a template. Placeholders: <code>{dir}</code> (folder), <code>{name}</code> (filename without extension), <code>{base}</code> (filename with extension), <code>{path}</code> (full path without extension).</td></tr>
+    <tr><td><code>message</code></td><td>The reason, shown on a block.</td></tr>
+  </table>
+
+  <h3>Legal vs illegal</h3>
+  <pre><code>src/domain/user.ts  +  src/domain/user.test.ts    ✓ passes
+src/domain/order.ts (no order.test.ts)            ✗ blocked</code></pre>
+
+  <div class="note"><strong>Path-shape, not content.</strong> This only checks that the partner
+  <em>exists</em>. To check what's <em>in</em> it — e.g. that the test actually references the module's
+  exports — use <a href="symbols-in-sibling.html">core/symbols-in-sibling</a>.</div>
+
+  <div class="pn"><a href="ast-grep.html">← core/ast-grep</a><a href="symbols-in-sibling.html">core/symbols-in-sibling →</a></div>
+</main>
+</body>
+</html>
