@@ -13,9 +13,11 @@ deps, the lefthook git-hook — and `propagate` pushes a new rule (or a fix to a
 to this repo as a PR. That up-flow is the differentiator nobody else ships: **decentralised
 authorship** — a rule is born in the project that hit the need, then bubbles up to be shared.
 
-**Skills are the mechanism, not the product.** The `work`/`signposts`/`review` skills and the
-review agents exist to *operate and install* the rules machinery — they are not what people
-contribute. People contribute **rules**, grouped into bundles.
+**Skills are the mechanism, not the product.** The `/signposts` skill (and the `coach` agent it
+spawns) exists to *operate and author* the rules machinery — it is not what people contribute.
+People contribute **rules**, grouped into bundles. The general workflow skills (`/work`,
+`/review`) and the code-review agents are *not* part of Signposts — they live globally in the
+personal **workbench** repo (`~/.claude`), a different job from steering the agent.
 
 A **signpost** is anything that steers the agent: **enforced** (a `rules/` check that blocks at
 edit + commit — "you can't do this"; the heart of it) or **advisory** (path-glob notes in
@@ -29,9 +31,12 @@ edit + commit — "you can't do this"; the heart of it) or **advisory** (path-gl
 We are at design stage. Only a **minimal dogfood setup** is installed so we can use
 Signposts *on this repo as we build it*:
 
-- `.claude/agents/` — the 5 review sub-agents (`secops · codeops · docops · coach · devops`).
-- `.claude/skills/` — `work` (working-docs journal), `signposts` (author rules + signposts),
-  `review` (close a session).
+- `.claude/agents/` — `coach` (the reflect detector `/signposts reflect` spawns).
+- `.claude/skills/` — `signposts` (author + share rules and signs; modes reflect · propagate · install).
+
+The general workflow skills (`work`, `review`) and the code-review agents (`secops · codeops ·
+docops · devops`) now live globally in **workbench** (`~/.claude/`), so they apply across every
+project — split out because they're a different job from steering the agent.
 
 **Not yet wired** (it's the planned build, not a regression): the enforcement engine —
 `signposts.yaml`, `rules/` + `rules/README.md`, `lefthook.yml`, `justfile`, `sgconfig.yml`,

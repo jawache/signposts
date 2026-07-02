@@ -19,7 +19,7 @@
 
 project:
   name: signposts-core
-  description: The signposts engine + work/signposts/review skills + the review agents.
+  description: The signposts engine + the /signposts skill + the coach agent (reflect detector).
 
 config:
   drift_tokens: 200000      # re-inject a sign after ~this many tokens of drift

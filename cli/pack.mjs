@@ -30,6 +30,7 @@ const VENDOR_FILES = [
   'rules/check-git-discard.mjs',
   'sgconfig.yml',
   'lefthook.yml',
+  '.claude/agents/coach.md',   // the reflect detector — /signposts reflect spawns it
   '.claude/hooks/preemptive-block.mjs',
   '.claude/hooks/signposts.mjs',
   '.claude/hooks/signposts-core.mjs',

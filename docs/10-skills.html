@@ -83,8 +83,11 @@
   control — no central catalogue, no public anything required.</p>
 
   <div class="note"><strong>What's <em>not</em> in the tool.</strong> Signposts stays tightly focused on
-  scaffold + the <code>/signposts</code> skill. The broader planning journal (<code>/work</code>) and the
-  code-review agents live in their own repos — they're a different job from steering the agent.</div>
+  scaffold + the <code>/signposts</code> skill (plus the <code>coach</code> agent it spawns). The broader
+  planning journal (<code>/work</code>) and the code-review agents (<code>codeops · secops · devops ·
+  docops</code>) are a different job from steering the agent, so they live <em>globally</em> in a personal
+  <strong>workbench</strong> repo (your <code>~/.claude</code>) that applies across every project — not
+  shipped per-repo by Signposts.</div>
 
   <div class="pn"><a href="03-concepts.html">← Concepts</a><a href="04-signposts-yaml.html">The config file →</a></div>
 </main>
