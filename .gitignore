@@ -1,8 +1,12 @@
 # dependencies
 node_modules/
 
-# local working-docs journal — scratch, never committed (see .work/README.md)
-.work/
+# local working-docs journal — scratch, never committed (see .work/README.md).
+# No trailing slash: in a worktree .work is a SYMLINK to the main checkout's journal.
+.work
+
+# per-worktree dev port, written by the wt pre-start hook (.config/wt.toml)
+.wt-port
 
 # local-only agent settings (per-machine permission grants etc.)
 .claude/settings.local.json

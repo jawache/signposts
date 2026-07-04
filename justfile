@@ -22,6 +22,10 @@ default:
 install:
     npm ci
 
+[doc("Create a worktree for <branch> and open it in VS Code (worktrunk; pre-start hook copies ignored setup files, writes .wt-port, links .work).")]
+worktree branch:
+    wt switch -x code -c {{branch}}
+
 # ── rules / tests ──────────────────────────────────────────────────────────────
 
 [doc("Run every rules/ check + self-test (ast-grep, the engine's core scripts + shell contract, justfile-docs, no-ai-attribution, git-discard, the signposts engine + session-report).")]

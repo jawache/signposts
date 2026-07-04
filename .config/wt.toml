@@ -1,0 +1,22 @@
+# Worktrunk project config — https://worktrunk.dev
+#
+# Manual flow only: `wt switch -c <branch>` (or `wt switch -x code -c <branch>`)
+# creates the worktree and runs the pre-start hook below. We don't use `wt merge`;
+# land work with a plain `git rebase main` + fast-forward.
+
+# Runs once on worktree creation, in the new worktree's root, blocking post-start
+# until done. Three steps:
+#   1. copy-ignored — copies the gitignored setup artifacts a fresh worktree lacks
+#      (allow-list: .worktreeinclude — node_modules beats a cold npm ci, plus local
+#      agent settings).
+#   2. writes this worktree's stable dev port (hashed from the branch name,
+#      10000–19999) into gitignored .wt-port — every worktree gets its own port,
+#      no clashes.
+#   3. symlinks .work → the main checkout's journal (worktrees are siblings of the
+#      main `signposts` folder, so the relative path resolves) — all worktrees
+#      share ONE work journal; a symlink, never a copy.
+pre-start = "wt step copy-ignored && printf '%s\n' {{ branch | hash_port }} > .wt-port && ln -sfn ../signposts/.work .work"
+
+# `wt list` shows each worktree's dev URL (same hash_port as .wt-port; dimmed when down).
+[list]
+url = "http://localhost:{{ branch | hash_port }}"

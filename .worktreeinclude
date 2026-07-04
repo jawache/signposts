@@ -1,0 +1,15 @@
+# Files `wt step copy-ignored` copies into a new worktree (run by the pre-start
+# hook in .config/wt.toml). A file is copied only if it is BOTH gitignored AND
+# matched here — the allow-list of setup artifacts a fresh `git worktree` lacks.
+# NOTE: .work/ is deliberately absent — it's symlinked to the main checkout by
+# the pre-start hook, never copied.
+#
+# Patterns are gitignore-style — NO inline comments (a trailing `# …` becomes
+# part of the pattern). Keep comments on their own line.
+
+# installed deps (copy beats a cold `npm install`)
+node_modules/
+# local-only agent settings (per-machine permission grants)
+.claude/settings.local.json
+# editor settings
+.vscode/
