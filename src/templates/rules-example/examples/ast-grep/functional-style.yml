@@ -1,0 +1,22 @@
+# EXAMPLE — beat 3 of the quick-start tour (delete the whole rules/examples/ folder when done).
+#
+# A declarative ast-grep rule. Drop any *.yml in an `ast-grep/` folder and it's
+# auto-discovered — no signposts.yaml entry needed. It matches a SYNTAX SHAPE with a real
+# parser, so `for` inside a string or comment never false-trips it (grep can't tell them
+# apart). `files:` scopes it — here, a stricter pure-FP dialect any file opts into by name.
+#
+# Try it: ask your agent to "add src/sum.functional.ts that totals an array with a for-loop
+# and a running total" → blocked. Then "do it functionally with reduce" → it lands. (It'll
+# also ask you for a sum.functional.test.ts — that's the test-first rule composing with this.)
+id: functional-style
+language: typescript
+files: ["**/*.functional.ts"]        # this file promises to be pure — no mutation, no loops
+message: |
+  *.functional.ts is a pure-FP zone: no `let`/`var`, no imperative loops.
+  Reach for `const` + `.map` / `.filter` / `.reduce`.
+rule:
+  any:
+    - pattern: let $X = $Y
+    - pattern: var $X = $Y
+    - pattern: for ($$$) $$$
+    - pattern: while ($$$) $$$

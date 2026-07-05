@@ -18,34 +18,37 @@ import {
   DEV_DEPENDENCIES, ACTIVATE, SKILL_SURFACE, copyFile, readText, writeText, exists,
 } from './pack.mjs';
 
-export function scaffold({ packRoot, target, activate = true, log = console.log }) {
+export function scaffold({ packRoot, target, activate = true, dryRun = false, log = console.log }) {
   const rel = (p) => join(target, p);
+  if (dryRun) log(`DRY RUN — showing the footprint on ${target}; nothing will be written.\n`);
 
   // 1. copy the discoverable skill surface -------------------------------------
   let copied = 0;
-  for (const f of SKILL_SURFACE) if (exists(join(packRoot, f))) { if (copyFile(join(packRoot, f), rel(f)) !== 'unchanged') copied++; }
-  log(`• skill surface: ${copied} written / ${SKILL_SURFACE.length} (SKILL.md + coach.md — the only files copied; the engine stays in node_modules)`);
+  for (const f of SKILL_SURFACE) if (exists(join(packRoot, f))) { if (!dryRun && copyFile(join(packRoot, f), rel(f)) !== 'unchanged') copied++; }
+  log(`• skill surface: ${dryRun ? `would write ${SKILL_SURFACE.length}` : `${copied} written`} (SKILL.md + coach.md — the only files copied; the engine stays in node_modules)`);
 
   // 2. merge package.json devDependencies --------------------------------------
-  log(`• package.json: ${mergePackageJson(rel('package.json'))}`);
+  log(`• package.json: ${mergePackageJson(rel('package.json'), dryRun)}`);
 
   // 3. merge .claude/settings.json hooks (from the dep-wired template) ----------
-  log(`• .claude/settings.json: ${mergeSettings(rel('.claude/settings.json'), join(packRoot, 'src/templates/settings.json'))}`);
+  log(`• .claude/settings.json: ${mergeSettings(rel('.claude/settings.json'), join(packRoot, 'src/templates/settings.json'), dryRun)}`);
 
   // 4. starter files (only if absent) ------------------------------------------
-  log(`• signposts.yaml: ${starter(rel('signposts.yaml'), join(packRoot, 'src/templates/signposts.yaml'))}`);
-  log(`• lefthook.yml: ${starter(rel('lefthook.yml'), join(packRoot, 'src/templates/lefthook.yml'))}`);
-  log(`• justfile: ${starter(rel('justfile'), join(packRoot, 'src/templates/justfile'))}`);
+  log(`• signposts.yaml: ${starter(rel('signposts.yaml'), join(packRoot, 'src/templates/signposts.yaml'), dryRun)}`);
+  log(`• lefthook.yml: ${starter(rel('lefthook.yml'), join(packRoot, 'src/templates/lefthook.yml'), dryRun)}`);
+  log(`• justfile: ${starter(rel('justfile'), join(packRoot, 'src/templates/justfile'), dryRun)}`);
 
-  // 5. seed rules/ with a worked example of each authoring path (only if absent) -
-  log(`• rules/: ${seedRules(join(packRoot, 'src/templates/rules-example'), join(target, 'rules'), log)}`);
+  // 5. seed rules/ with the quick-start tour (only files that are absent) -------
+  log(`• rules/: ${seedRules(join(packRoot, 'src/templates/rules-example'), join(target, 'rules'), dryRun)}`);
 
   // 6. activate -----------------------------------------------------------------
-  if (activate) runActivate(target, packRoot, log);
+  if (dryRun) log(`• activate: would ${activate ? 'install signposts + arm the gate' : 'be skipped (--no-activate)'}`);
+  else if (activate) runActivate(target, packRoot, log);
   else log(`• activate: skipped (run \`${ACTIVATE.join(' && ')}\` to install signposts + arm the gate)`);
 
+  if (dryRun) { log(`\nDry run complete — re-run without --dry-run to apply.`); return; }
   log(`\n✓ Signposts wired in (as a dev dependency). Restart your agent session so the`);
-  log(`  pre-emptive hook loads, then ask it to create signposts-is-bad.yaml to feel the block.`);
+  log(`  pre-emptive hook loads, then walk the quick-start tour in rules/README.md.`);
 }
 
 function runActivate(target, packRoot, log) {
@@ -69,7 +72,7 @@ function devLinkActivate(target, packRoot, log) {
 }
 
 // ── merge helpers (weave, never clobber; idempotent) ──────────────────────────
-function mergePackageJson(dst) {
+function mergePackageJson(dst, dryRun) {
   const existing = readText(dst);
   let pkg = existing ? safeJson(existing) || {} : { name: 'my-project', version: '0.1.0', private: true, type: 'module',
     scripts: { '//': 'Commands live in the justfile — run `just`.' } };
@@ -78,11 +81,13 @@ function mergePackageJson(dst) {
   for (const [name, ver] of Object.entries(DEV_DEPENDENCIES)) if (!pkg.devDependencies[name]) { pkg.devDependencies[name] = ver; added++; }
   const next = JSON.stringify(pkg, null, 2) + '\n';
   if (next === existing) return 'unchanged';
+  const verb = existing ? `merge (${added} devDep${added === 1 ? '' : 's'})` : 'create';
+  if (dryRun) return `would ${verb}`;
   writeText(dst, next);
   return existing ? `merged (${added} devDep${added === 1 ? '' : 's'} added)` : 'created';
 }
 
-function mergeSettings(dst, templatePath) {
+function mergeSettings(dst, templatePath, dryRun) {
   const incoming = safeJson(readText(templatePath))?.hooks;
   if (!incoming) return 'skipped (no template)';
   const existing = readText(dst);
@@ -100,29 +105,34 @@ function mergeSettings(dst, templatePath) {
   }
   const next = JSON.stringify(cfg, null, 2) + '\n';
   if (next === existing) return 'unchanged';
+  const verb = existing ? `merge (${added} hook${added === 1 ? '' : 's'})` : 'create';
+  if (dryRun) return `would ${verb}`;
   writeText(dst, next);
   return existing ? `merged (${added} hook${added === 1 ? '' : 's'} wired)` : 'created';
 }
 
-function starter(dst, srcTemplate) {
+function starter(dst, srcTemplate, dryRun) {
   if (exists(dst)) return 'kept (already present)';
   const tpl = readText(srcTemplate);
   if (tpl == null) return 'skipped (template missing)';
+  if (dryRun) return 'would create';
   writeText(dst, tpl);
   return 'created';
 }
 
 // Seed the consumer's rules/ with a worked example of each authoring path (an ast-grep
 // pattern + a script + a README) so it's not an empty folder — copied only if absent.
-function seedRules(srcDir, dstDir) {
+function seedRules(srcDir, dstDir, dryRun) {
   if (!exists(srcDir)) return 'skipped (no examples)';
   let seeded = 0, kept = 0;
   for (const r of walk(srcDir)) {
     const dst = join(dstDir, r);
     if (exists(dst)) { kept++; continue; }
-    copyFile(join(srcDir, r), dst); seeded++;
+    if (!dryRun) copyFile(join(srcDir, r), dst);
+    seeded++;
   }
-  return seeded ? `${seeded} example(s) seeded into rules/` : (kept ? 'kept (examples already present)' : 'skipped');
+  if (dryRun) return seeded ? `would seed ${seeded} tour file(s) into rules/` : 'kept (tour already present)';
+  return seeded ? `${seeded} tour file(s) seeded into rules/` : (kept ? 'kept (tour already present)' : 'skipped');
 }
 function walk(dir, base = '') {
   const out = [];

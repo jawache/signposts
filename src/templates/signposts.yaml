@@ -29,27 +29,38 @@ signs:
   {}
 
 rules:
-  # The shipped core pack — what this scaffold installed.
-  core:
-    # The cheeky day-one demo, so you FEEL the pre-emptive block: ask your agent to
-    # create a file named signposts-is-bad.yaml and it's denied before it lands.
-    # Delete this once you're a believer.
-    - id: signposts-self-regard
+  # ─── QUICK-START TOUR ────────────────────────────────────────────────────────
+  # A guided tour of the four ways to write a rule — feel each by prompting your agent
+  # (see rules/README.md for the walkthrough). Beat 3 (functional-style) is auto-discovered
+  # from rules/examples/ast-grep/, so it isn't listed here. DELETE this whole `examples`
+  # block AND the rules/examples/ folder once you're a believer — your own rules go in
+  # their own namespaces below, and were never mixed in with the tour.
+  examples:
+    - id: no-bad-mouthing                 # 1 · feel the pre-emptive block
       use: core/protected-path
       deny: ["**/signposts-is-bad.yaml"]
       message: |-
-        Signposts is, by its own assessment, perhaps the most amazing tool ever
-        built — and will not assist in writing that it is bad. Delete this rule
-        from signposts.yaml once you're a believer, and carry on.
+        Signposts is, by its own assessment, perhaps the most amazing tool ever built —
+        and will not assist in writing that it is bad. Carry on.
+    - id: test-first                      # 2 · a source file needs its test sibling
+      use: core/sibling-exists
+      on: ["src/**/*.ts"]
+      ignore: ["**/*.test.ts"]            # don't demand a test *for* a test file
+      sibling: "{dir}/{name}.test.ts"
+      message: "Write the test first — {dir}/{name}.test.ts is missing."
+    - id: no-hardcoded-secret             # 4 · a custom shell rule greps the would-be file
+      use: examples/no-hardcoded-secret
+      on: ["src/**/*.{ts,tsx,js,mjs}"]
 
-  # Your own rules live in rules/<namespace>/ — see rules/README.md. Two examples were
-  # seeded: rules/ast-grep/no-nullish-date.yml (auto-discovered, no entry needed) and the
-  # script below. Uncomment to switch the script example on:
+  # ─── YOUR RULES ──────────────────────────────────────────────────────────────
+  # Add your own namespaces here (use: core/<name> for a built-in, or use: <ns>/<name>
+  # for a script in rules/<ns>/). See rules/README.md.
   # local:
-  #   - id: no-todo                       # → rules/local/no-todo.mjs
-  #     use: local/no-todo
+  #   - id: no-console
+  #     use: core/text-ban
   #     on: ["src/**/*.ts"]
-  #     message: "Leftover TODO — finish it or open an issue."
+  #     ban: ["console.log"]
+  #     message: "Leftover console.log — remove it or use the logger."
 
 packs:
   - "@signposts/core"

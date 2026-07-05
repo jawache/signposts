@@ -57,7 +57,7 @@ Usage:
 Options:
   --target <dir>   operate on <dir> instead of the current directory
   --no-activate    scaffold without running \`npm install\`
-  --dry-run        (uninstall) preview what would be removed, change nothing
+  --dry-run        preview the footprint (scaffold) or what would be removed (uninstall)
 
 Judgement lives in the /signposts skill (reflect · propagate · install).`);
 }
@@ -80,7 +80,7 @@ try {
   }
   else if (opts.cmd === 'refresh') refresh({ target: opts.target });
   else if (opts.cmd === 'uninstall') uninstall({ target: opts.target, dryRun: opts.dryRun });
-  else if (!opts.cmd || opts.cmd === 'scaffold') scaffold({ packRoot: PACK_ROOT, target: opts.target, activate: opts.activate });
+  else if (!opts.cmd || opts.cmd === 'scaffold') scaffold({ packRoot: PACK_ROOT, target: opts.target, activate: opts.activate, dryRun: opts.dryRun });
   else { console.error(`Unknown command: ${opts.cmd}\n`); help(); process.exit(1); }
 } catch (e) {
   console.error(`signposts: ${e?.stack || e}`);

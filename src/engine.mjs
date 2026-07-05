@@ -18,7 +18,7 @@
 // ONE config line drives both paths. Fails safe everywhere: a malformed config /
 // rule / script is skipped, never throws.
 
-import { readFileSync, existsSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, isAbsolute, relative, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -55,28 +55,43 @@ export function loadRules(root, configPath) {
   } catch { /* no config / malformed → just the ast-grep rules below */ }
 
   // 2. auto-discovered ast-grep pattern files → synthetic `core/ast-grep` rules.
-  // ast-grep patterns are the PROJECT's own (rules/ast-grep/*.yml) — the package ships none.
+  // They live in any `ast-grep/` folder under rules/ — rules/ast-grep/ (namespace core) or
+  // rules/<ns>/ast-grep/ (e.g. the seeded rules/examples/ast-grep/). The package ships none.
   const seen = new Set(rules.map((r) => r.id));
-  const dir = join(root, 'rules/ast-grep');
-  let files = [];
-  try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)); } catch { /* none */ }
-  for (const f of files) {
-    try {
-      const r = parseYaml(readFileSync(join(dir, f), 'utf8'));
-      if (!r || !r.rule) continue;
-      const id = r.id || f;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      rules.push(normalise({
-        id, namespace: 'core', use: 'core/ast-grep',
-        astgrep: r.rule, lang: r.language,
-        on: r.files || TS_GLOB,
-        when: (r.metadata && r.metadata.when) || ['edit', 'commit'],
-        message: r.message,
-      }));
-    } catch { /* skip malformed pattern file */ }
+  for (const dir of astGrepDirs(root)) {
+    let files = [];
+    try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)); } catch { continue; /* no such dir */ }
+    for (const f of files) {
+      try {
+        const r = parseYaml(readFileSync(join(dir, f), 'utf8'));
+        if (!r || !r.rule) continue;
+        const id = r.id || f;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        rules.push(normalise({
+          id, namespace: 'core', use: 'core/ast-grep',
+          astgrep: r.rule, lang: r.language,
+          on: r.files || TS_GLOB,
+          when: (r.metadata && r.metadata.when) || ['edit', 'commit'],
+          message: r.message,
+        }));
+      } catch { /* skip malformed pattern file */ }
+    }
   }
   return rules;
+}
+
+// Every `ast-grep/` folder under rules/: the root one (namespace core) plus one per
+// namespace subfolder, so seeded examples under rules/examples/ast-grep/ are picked up.
+function astGrepDirs(root) {
+  const rulesDir = join(root, 'rules');
+  const dirs = [join(rulesDir, 'ast-grep')];
+  try {
+    for (const e of readdirSync(rulesDir, { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== 'ast-grep') dirs.push(join(rulesDir, e.name, 'ast-grep'));
+    }
+  } catch { /* no rules/ dir */ }
+  return dirs;
 }
 
 function normalise(r) {
@@ -135,6 +150,7 @@ export async function evaluate({ phase, files, root, getContent, configPath }) {
     for (const abs of files) {
       const path = rel(abs, root);
       if (rule.on && !matchAny(path, [].concat(rule.on))) continue;
+      if (rule.ignore && matchAny(path, [].concat(rule.ignore))) continue;   // opt paths out (e.g. *.test.ts)
 
       if (s.shell) {                                            // shell contract (dest + content-file argv)
         try { const hits = runShell(s.shell, rule, { path, abs, root, phase, getContent }); if (hits.length) violations.push({ rule, path, hits }); }
@@ -259,6 +275,21 @@ async function selfTest() {
     const ok = await evaluate({ phase: 'edit', files: ['NOTES.md'], root, getContent: () => 'clean notes only\n', configPath: cfg2 });
     results.push({ name: 'shell-contract edit blocks (temp-file)', pass: bad.length === 1 });
     results.push({ name: 'shell-contract edit clean passes', pass: ok.length === 0 });
+
+    // 4. `ignore:` opts paths out (a test file shouldn't be asked for a test of its own).
+    const cfg3 = join(tmp, 'ignore.yaml');
+    writeFileSync(cfg3, 'rules:\n  local:\n    - id: needs-test\n      use: core/sibling-exists\n' +
+      '      on: ["src/**/*.ts"]\n      ignore: ["**/*.test.ts"]\n      sibling: "{dir}/{name}.test.ts"\n');
+    const ignored = await evaluate({ phase: 'commit', files: ['src/a.test.ts'], root: tmp, getContent: () => '', configPath: cfg3 });
+    const enforced = await evaluate({ phase: 'commit', files: ['src/a.ts'], root: tmp, getContent: () => '', configPath: cfg3 });
+    results.push({ name: 'ignore skips opted-out paths', pass: ignored.length === 0 });
+    results.push({ name: 'ignore leaves others enforced', pass: enforced.length === 1 });
+
+    // 5. ast-grep discovery reaches a namespaced rules/<ns>/ast-grep/ folder (seeded tour).
+    mkdirSync(join(tmp, 'rules/examples/ast-grep'), { recursive: true });
+    writeFileSync(join(tmp, 'rules/examples/ast-grep/nsrule.yml'), 'id: ns-astgrep\nlanguage: typescript\nrule:\n  pattern: var $X = $Y\n');
+    const nsFound = loadRules(tmp, join(tmp, 'no-config.yaml')).some((r) => r.id === 'ns-astgrep');
+    results.push({ name: 'ast-grep discovered under rules/<ns>/ast-grep', pass: nsFound });
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
   }
