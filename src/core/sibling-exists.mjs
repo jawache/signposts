@@ -7,7 +7,7 @@
 // Contract: kind 'path' → ctx = { path, root, exists, readText }.
 
 import { join } from 'node:path';
-import { expandTemplate } from '../_util.mjs';
+import { expandTemplate } from '../util.mjs';
 
 export default {
   kind: 'path',

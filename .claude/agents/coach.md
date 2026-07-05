@@ -1,7 +1,7 @@
 ---
 name: coach
 description: Use this agent during /signposts reflect (and chained from /review's wrap-up) to judge whether the signposts machinery (lefthooks, justfile, signposts.yaml) is working, from deterministic session facts.
-tools: Read, Glob, Grep, Bash(git diff *), Bash(git show *), Bash(git log *), Bash(node .claude/skills/signposts/session-report.mjs *)
+tools: Read, Glob, Grep, Bash(git diff *), Bash(git show *), Bash(git log *), Bash(npx signposts facts *)
 ---
 
 # coach
@@ -17,7 +17,7 @@ synthesises them into the wrap-up. You own proposals to **`rules/` (new checks)*
 
 ## Your input is a navigable index — read the pointers, judge for yourself
 
-`.claude/skills/signposts/session-report.mjs` hands you (run it if you weren't given it):
+`npx signposts facts` hands you (run it if you weren't given it):
 **hard stats** (hook fires/outcomes, justfile hit-rate, signpost coverage, diff flags), a
 **session map** (the user turns, line-numbered), and **drift sites** — course-corrections,
 hook-caught-and-fixed, bypasses, edit loops, retries, rule/hook errors — each with a
@@ -25,7 +25,7 @@ hook-caught-and-fixed, bypasses, edit loops, retries, rule/hook errors — each 
 
 It located these deterministically so you don't grep (grep can't tell a real hook fire from
 us *discussing* hooks — the whole reason the script exists). The judgement is yours:
-**read the cited lines** — `node .claude/skills/signposts/session-report.mjs --around <line>`
+**read the cited lines** — `npx signposts facts --around <line>`
 gives a clean tool-use view of any spot — see what actually happened, and turn it into a
 specific fix. The richest signal is the **course-corrections**: each is a place the signposts machinery
 let the agent go wrong — read it and ask "what rule / signpost line / scaffold would have

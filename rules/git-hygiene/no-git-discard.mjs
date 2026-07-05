@@ -151,27 +151,18 @@ export function dirtyTargets(paths, cwd) {
     .map((l) => l.slice(3));
 }
 
-function runHook() {
-  let input = '';
-  try { input = readFileSync(0, 'utf8'); } catch { process.exit(0); }
-  let data;
-  try { data = JSON.parse(input || '{}'); } catch { process.exit(0); }
-  const cmd = data?.tool_input?.command;
-  if (typeof cmd !== 'string' || !cmd) process.exit(0);
-  const targets = discardPaths(cmd);
-  if (!targets.length) process.exit(0);
-  const dirty = dirtyTargets(targets, data.cwd);
-  if (!dirty.length) process.exit(0);
-  process.stderr.write(
-    `✗ blocked: this would discard uncommitted edits to:\n` +
-      dirty.map((f) => `    • ${f}`).join('\n') + `\n` +
-      `  \`git checkout -- <paths>\` / \`git restore <paths>\` overwrite the working tree with no undo.\n` +
-      `  Preserve the edits first:  git stash push -- ${dirty.join(' ')}\n` +
-      `  If the discard is intentional, re-run the exact command with a literal \`# discard-ok\` comment appended.\n` +
-      `  See docs/arch/architecture.md#git-discard-guard\n`,
-  );
-  process.exit(2);
-}
+// The command-rule the engine loads via `use: git-hygiene/no-git-discard`. It's a
+// `kind: 'command'` script: the command-guard hook runs it via evaluateCommand with
+// ctx = { command, root }, and returns hits (the dirty files) to block on.
+export default {
+  kind: 'command',
+  evaluate(rule, ctx) {
+    const targets = discardPaths(ctx.command);
+    if (!targets.length) return [];
+    const dirty = dirtyTargets(targets, ctx.root);
+    return dirty.map((f) => `would discard uncommitted edits to ${f} (stash first, or append \`# discard-ok\`)`);
+  },
+};
 
 // ── self-test ────────────────────────────────────────────────────────────────
 
@@ -227,9 +218,10 @@ function selfTest() {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log(ok ? 'PASS check-git-discard' : 'FAIL check-git-discard');
+  console.log(ok ? 'PASS git-hygiene/no-git-discard' : 'FAIL git-hygiene/no-git-discard');
   process.exit(ok ? 0 : 1);
 }
 
-if (process.argv[2] === '--test') selfTest();
-else runHook();
+// Guarded CLI: importing this (the engine) has no side-effects; `--test` is its proof.
+const isMain = process.argv[1] && process.argv[1].endsWith('no-git-discard.mjs');
+if (isMain && process.argv[2] === '--test') selfTest();

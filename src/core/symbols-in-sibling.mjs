@@ -6,7 +6,7 @@
 // Contract: kind 'content' → ctx = { path, content, root, exists, readText }.
 
 import { join } from 'node:path';
-import { escapeRe, expandTemplate } from '../_util.mjs';
+import { escapeRe, expandTemplate } from '../util.mjs';
 
 export async function exportedNames(content) {
   const { parse, Lang } = await import('@ast-grep/napi');

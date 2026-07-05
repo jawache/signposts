@@ -16,7 +16,6 @@
 //         node rules/local/justfile-docs.mjs --test             (self-test)
 
 import { readFileSync } from 'node:fs';
-import { ruleConfig } from '../_config.mjs';
 
 // Words that open a non-recipe construct at column 0.
 const RESERVED = new Set(['set', 'alias', 'export', 'import', 'mod', 'unexport']);
@@ -47,30 +46,6 @@ export function undocumentedRecipes(text, exempt = []) {
   return bad;
 }
 
-function runFiles(files) {
-  const { exempt = [] } = ruleConfig('justfile-docs'); // reads signposts.yaml
-  let failed = false;
-  for (const f of files) {
-    let text;
-    try { text = readFileSync(f, 'utf8'); } catch { continue; }
-    const bad = undocumentedRecipes(text, exempt);
-    if (bad.length) {
-      failed = true;
-      process.stderr.write(
-        `\n\x1b[31m✗ justfile recipe(s) missing a [doc("…")] attribute\x1b[0m\n` +
-        `  File: ${f}\n` +
-        bad.map((r) => `    • ${r.name}  (line ${r.line})`).join('\n') + `\n\n` +
-        `  \`just --list\` is the catalogue's help screen; without [doc] it falls\n` +
-        `  back to the last comment line, which reads as a mid-sentence fragment\n` +
-        `  for multi-line blocks. Add, directly above the recipe header:\n` +
-        `    [doc("One-line summary a stranger could act on.")]\n` +
-        `  Longer commentary stays in # comments above the attribute.\n\n` +
-        `  See docs/arch/architecture.md#justfile-is-the-command-source\n`,
-      );
-    }
-  }
-  process.exit(failed ? 2 : 0);
-}
 
 function selfTest() {
   const legal = [
@@ -137,8 +112,6 @@ export default {
 // execute against the engine's argv and exit the process mid-evaluate).
 const isMain = process.argv[1] && process.argv[1].endsWith('justfile-docs.mjs');
 if (isMain) {
-  const args = process.argv.slice(2);
-  if (args[0] === '--test') selfTest();
-  else if (args.length) runFiles(args);
+  if (process.argv[2] === '--test') selfTest();
   else process.exit(0);
 }

@@ -22,7 +22,7 @@
 
 import { readFileSync, appendFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
-import { evaluate } from '../../rules/_engine.mjs';
+import { evaluate } from '../engine.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 

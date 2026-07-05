@@ -12,10 +12,14 @@ default:
 install:
     npm ci
 
-[doc("Run the rules engine's self-test (every core script + when-routing + the shell contract) and the ast-grep pattern tests.")]
+[doc("Run the engine's self-test from the installed signposts package (core scripts + when-routing + the shell contract).")]
 test-rules:
-    ast-grep test --skip-snapshot-tests && node rules/_engine.mjs --test
+    node node_modules/signposts/src/engine.mjs --test
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:
     npx lefthook run pre-commit --all-files
+
+[doc("Pull updates for installed packs (npm update signposts for the core).")]
+refresh:
+    npx signposts refresh

@@ -24,10 +24,10 @@ agent-edit:
   parallel: true
   jobs:
     - name: engine
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/_engine.mjs --phase commit "$@"'
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node src/engine.mjs --phase commit "$@"'
 
 pre-commit:
   parallel: true
   jobs:
     - name: engine
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node rules/_engine.mjs --phase commit "$@"'
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node src/engine.mjs --phase commit "$@"'

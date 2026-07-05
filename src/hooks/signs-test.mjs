@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const HOOK = fileURLToPath(new URL('./signposts.mjs', import.meta.url))
+const HOOK = fileURLToPath(new URL('./signs.mjs', import.meta.url))
 const root = mkdtempSync(join(tmpdir(), 'sp-root-'))
 const home = mkdtempSync(join(tmpdir(), 'sp-home-'))
 

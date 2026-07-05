@@ -7,7 +7,7 @@
 // Config:  deny: ["**/*.generated.ts", "vendor/**"]   (path is the whole rule)
 // Contract: kind 'path' → ctx = { path, root, exists, readText }.
 
-import { matchAny } from '../_util.mjs';
+import { matchAny } from '../util.mjs';
 
 export default {
   kind: 'path',

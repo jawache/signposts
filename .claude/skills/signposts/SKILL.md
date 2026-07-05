@@ -1,7 +1,7 @@
 ---
 name: signposts
 description: ALWAYS invoke when the user says "/signposts", "/signposts reflect", "/signposts propagate", "/signposts install", "reflect on this session", "make this a rule", "add a rule / a sign / a signpost", "enforce this", "send this rule to my hub / upstream", "install signposts from <repo>", or wants to author / test / share a rule or a sign.
-allowed-tools: Read, Write, Edit, Glob, Grep, Task, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(just test-rules*), Bash(ast-grep test*), Bash(node rules/*), Bash(node .claude/skills/signposts/session-report.mjs *), Bash(node .claude/skills/signposts/pack-diff.mjs *), Bash(npx signposts *), Bash(git status*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git checkout*), Bash(gh pr*)
+allowed-tools: Read, Write, Edit, Glob, Grep, Task, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(just *), Bash(npx signposts *), Bash(git status*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git checkout*), Bash(gh pr*)
 ---
 
 # Signposts — reflect · propagate · install
@@ -11,9 +11,9 @@ from a deterministic script — so you never rediscover what a script can just t
 
 | Mode | What it does | Its fact-provider |
 |---|---|---|
-| **reflect** | read the session, propose new signs/rules, author + test them | `session-report.mjs` (+ the `coach` agent) |
+| **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ the `coach` agent) |
 | **propagate** | send a rule/sign to a repo you name (your hub, or upstream) | `git` / `gh` |
-| **install** | cherry-pick signs/rules from another repo into this one | `cli/pack-diff.mjs` |
+| **install** | cherry-pick signs/rules from another repo into this one | `npx signposts diff` |
 
 **The rule between the two halves:** the script emits facts (what drifted, what's in
 that repo, what collides); *you* apply the judgement (which to keep, how to genericise,
@@ -30,11 +30,10 @@ each is `rules/README.md` and the `docs/`. Read them; don't restate them.
 Run at the **end of a session**. Surfaces where the machinery let drift slip through, and
 turns each keeper into a sign or a rule.
 
-1. **Gather facts.** `node .claude/skills/signposts/session-report.mjs` from the repo root
-   — deterministic stats + a navigable drift index (hook fires/outcomes, justfile
-   bypasses, sign-coverage gaps, course-corrections), each with a transcript line.
-   `--around <line>` opens any cited spot. (It reads the transcript, not a diff — runnable
-   any time.)
+1. **Gather facts.** `npx signposts facts` from the repo root — deterministic stats + a
+   navigable drift index (hook fires/outcomes, justfile bypasses, sign-coverage gaps,
+   course-corrections), each with a transcript line. `npx signposts facts --around <line>`
+   opens any cited spot. (It reads the transcript, not a diff — runnable any time.)
 2. **Spawn `coach`** (Task) with that report. It reads the cited lines and returns
    candidate **rules** + **signs** — each a place the machinery let the agent go wrong.
    Coach writes nothing.
@@ -74,11 +73,10 @@ guardrails born in real work bubble up to be shared.
 Point at any repo — your hub, a teammate's project, an official pack — and pull what you
 want. Any repo with a `signposts.yaml` is installable; there's no separate pack format.
 
-1. **Diff.** `node .claude/skills/signposts/pack-diff.mjs <source-repo>` (add `--json` to
-   consume it) — reports,
-   per namespace, for both signs and rules: **new** (take freely), **COLLIDE** (you both
-   have the id, differing), **same** (already have), plus the script files each namespace
-   ships. Facts, deterministically.
+1. **Diff.** `npx signposts diff <source-repo>` (add `--json` to consume it) — reports, per
+   namespace, for both signs and rules: **new** (take freely), **COLLIDE** (you both have
+   the id, differing), **same** (already have), plus the script files each namespace ships.
+   Facts, deterministically.
 2. **Present the picker.** Walk the user through it: offer whole **namespaces** ("take all
    of `neon`") or individual **entries**. Show what each is.
 3. **Resolve collisions in conversation** — this is exactly where judgement beats a rigid

@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
 import { parse as parseYaml } from 'yaml'
-import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signposts-core.mjs'
+import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signs-core.mjs'
 
 const THRESHOLD = 200_000
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd()

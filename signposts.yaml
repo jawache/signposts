@@ -86,19 +86,39 @@ rules:
       exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
       message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
 
-    # no Claude/Anthropic attribution in prose — a SHELL own-script (rules/local/no-ai-attribution.sh),
-    # proving the shell calling contract (config on stdin, dest + content-file as argv).
-    - id: no-ai-attribution
-      use: local/no-ai-attribution
-      on: ["**/*.md"]
-      message: "This repo ships no Claude/Anthropic attribution — remove the marker line from the prose."
-
     # generated / vendored files — a content-free edit/commit block. `when: [edit, commit]`
     # is the default (omitted): ONE rule, BOTH triggers.
     - id: no-edit-generated
       use: core/protected-path
       deny: ["**/*.generated.ts", "vendor/**"]
       message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
+
+  # An installable pack you can pull into your own projects (`/signposts install` from
+  # this repo). A COMMAND rule: it blocks the Bash command before it runs, via the
+  # command-guard hook — no copied .sh, just data.
+  git-hygiene:
+    # No Claude/Anthropic attribution in commits / PRs / issues (replaces the old
+    # strip-claude-attribution.sh — same intent, now a rule).
+    - id: no-ai-attribution-in-commits
+      use: core/command-guard
+      ban:
+        - 'git commit[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
+        - 'git commit[\s\S]*[Gg]enerated with[\s\S]*[Cc]laude'
+        - 'git commit[\s\S]*(claude\.com/claude-code|🤖 Generated)'
+        - 'gh (pr|issue)[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
+        - 'gh (pr|issue)[\s\S]*(claude\.com/claude-code|🤖 Generated)'
+      message: |-
+        Commit / PR / issue body contains Claude or Anthropic attribution. Remove it
+        (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic
+        mention) and retry.
+
+    # Block a `git checkout -- <paths>` / `git restore <paths>` that would silently wipe
+    # UNCOMMITTED work. An own-script (rules/git-hygiene/no-git-discard.mjs) because it
+    # inspects live git state, not just a regex — but it fires through the SAME command
+    # hook, as a rule (was the bespoke check-git-discard.mjs). Append `# discard-ok` to opt out.
+    - id: no-git-discard
+      use: git-hygiene/no-git-discard
+      message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
 
 packs:
   - "@signposts/core"          # this repo IS the core pack

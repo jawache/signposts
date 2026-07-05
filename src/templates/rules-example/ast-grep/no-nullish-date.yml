@@ -1,0 +1,15 @@
+# An EXAMPLE ast-grep rule (delete once you get the shape). Any *.yml in rules/ast-grep/
+# is auto-discovered — no signposts.yaml entry needed. It matches a syntax pattern with a
+# real parser, so it never false-matches a string or comment.
+#
+# This one bans `?? new Date()` for date defaults: `??` only falls through on null/
+# undefined, so an empty string or a bad placeholder slips past — `||` is what you want.
+id: no-nullish-date
+language: tsx                 # tsx | typescript
+message: |
+  Use `||`, not `??`, for a date default — `??` lets empty strings / bad values through.
+    const published = row.published_at || new Date();   // not ?? new Date()
+rule:
+  any:
+    - pattern: $X ?? new Date($$$)
+    - pattern: $X ?? new Date

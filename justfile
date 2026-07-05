@@ -30,7 +30,7 @@ worktree branch:
 
 [doc("Run every rules/ check + self-test (ast-grep, the engine's core scripts + shell contract, justfile-docs, no-ai-attribution, git-discard, the signposts engine + session-report).")]
 test-rules:
-    ast-grep test --skip-snapshot-tests && node rules/_engine.mjs --test && node rules/local/justfile-docs.mjs --test && bash rules/local/no-ai-attribution.sh --test && node rules/check-git-discard.mjs --test && node .claude/hooks/signposts-core.mjs --test && node .claude/hooks/signposts-test.mjs && node .claude/skills/signposts/session-report.mjs --test && node .claude/skills/signposts/pack-diff.mjs --test && node cli/source.mjs --test
+    ast-grep test --skip-snapshot-tests && node src/engine.mjs --test && node rules/local/justfile-docs.mjs --test && node rules/git-hygiene/no-git-discard.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/cli/source.mjs --test
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:

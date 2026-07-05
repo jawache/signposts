@@ -24,9 +24,14 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { matchAny } from './_util.mjs';
+import { matchAny } from './util.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));           // …/rules
+const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the library)
+// The built-in rule types live in the package, next to the engine (src/core). A
+// consumer's project doesn't vendor them — `use: core/x` resolves HERE; a consumer's
+// own `use: <ns>/y` resolves from THEIR repo's rules/<ns>/. Different owners, different
+// folders. (In this repo, "their repo" is this repo — the dogfood.)
+const CORE_DIR = join(HERE, 'core');
 const TS_GLOB = '**/*.{ts,tsx,mts,cts}';
 const CORE = ['ast-grep', 'sibling-exists', 'symbols-in-sibling', 'json-invariant',
               'text-ban', 'command-guard', 'protected-path', 'tool-gate'];
@@ -49,7 +54,9 @@ export function loadRules(root, configPath) {
     }
   } catch { /* no config / malformed → just the ast-grep rules below */ }
 
-  // 2. auto-discovered ast-grep pattern files → synthetic `core/ast-grep` rules
+  // 2. auto-discovered ast-grep pattern files → synthetic `core/ast-grep` rules.
+  // ast-grep patterns are the PROJECT's own (rules/ast-grep/*.yml) — the package ships none.
+  const seen = new Set(rules.map((r) => r.id));
   const dir = join(root, 'rules/ast-grep');
   let files = [];
   try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)); } catch { /* none */ }
@@ -57,8 +64,11 @@ export function loadRules(root, configPath) {
     try {
       const r = parseYaml(readFileSync(join(dir, f), 'utf8'));
       if (!r || !r.rule) continue;
+      const id = r.id || f;
+      if (seen.has(id)) continue;
+      seen.add(id);
       rules.push(normalise({
-        id: r.id || f, namespace: 'core', use: 'core/ast-grep',
+        id, namespace: 'core', use: 'core/ast-grep',
         astgrep: r.rule, lang: r.language,
         on: r.files || TS_GLOB,
         when: (r.metadata && r.metadata.when) || ['edit', 'commit'],
@@ -78,17 +88,23 @@ function normalise(r) {
 async function resolveScript(use, root) {
   if (!use || typeof use !== 'string') return null;
   const candidates = [];
-  if (/\.(mjs|js)$/.test(use)) candidates.push({ type: 'js', file: use });
-  else if (/\.sh$/.test(use)) candidates.push({ type: 'sh', file: use });
-  else { candidates.push({ type: 'js', file: `rules/${use}.mjs` }, { type: 'sh', file: `rules/${use}.sh` }); }
+  if (use.startsWith('core/')) {                                 // built-in → the package (src/core)
+    candidates.push({ type: 'js', abs: join(CORE_DIR, `${use.slice(5)}.mjs`) });
+  } else if (/\.(mjs|js)$/.test(use)) {
+    candidates.push({ type: 'js', abs: isAbsolute(use) ? use : join(root, use) });
+  } else if (/\.sh$/.test(use)) {
+    candidates.push({ type: 'sh', abs: isAbsolute(use) ? use : join(root, use) });
+  } else {                                                       // <ns>/<name> → the project's rules/
+    candidates.push({ type: 'js', abs: join(root, 'rules', `${use}.mjs`) });
+    candidates.push({ type: 'sh', abs: join(root, 'rules', `${use}.sh`) });
+  }
   for (const c of candidates) {
-    const abs = isAbsolute(c.file) ? c.file : join(root, c.file);
-    if (!existsSync(abs)) continue;
+    if (!existsSync(c.abs)) continue;
     if (c.type === 'js') {
-      try { const mod = (await import(abs)).default; if (mod) return { kind: mod.kind || 'content', js: mod }; }
+      try { const mod = (await import(c.abs)).default; if (mod) return { kind: mod.kind || 'content', js: mod }; }
       catch { return null; }
     } else {
-      return { kind: 'content', shell: abs };   // shell rules follow the content contract
+      return { kind: 'content', shell: c.abs };   // shell rules follow the content contract
     }
   }
   return null;
@@ -253,7 +269,7 @@ async function selfTest() {
   process.exit(okAll ? 0 : 1);
 }
 
-const entry = process.argv[1] && process.argv[1].endsWith('_engine.mjs');
+const entry = process.argv[1] && process.argv[1].endsWith('engine.mjs');
 if (entry) {
   if (process.argv[2] === '--test') selfTest();
   else cli(process.argv.slice(2));

@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/lefthook-on-write.sh"
+            "command": "$CLAUDE_PROJECT_DIR/src/hooks/lefthook-on-write.sh"
           }
         ]
       },
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/signposts.mjs"
+            "command": "node $CLAUDE_PROJECT_DIR/src/hooks/signs.mjs"
           }
         ]
       }
@@ -44,11 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/strip-claude-attribution.sh"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/rules/check-git-discard.mjs"
+            "command": "node $CLAUDE_PROJECT_DIR/src/hooks/command-guard.mjs"
           }
         ]
       },
@@ -57,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/preemptive-block.mjs"
+            "command": "node $CLAUDE_PROJECT_DIR/src/hooks/preemptive-block.mjs"
           }
         ]
       }
@@ -67,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/signposts.mjs"
+            "command": "node $CLAUDE_PROJECT_DIR/src/hooks/signs.mjs"
           }
         ]
       }

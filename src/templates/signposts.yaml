@@ -42,12 +42,14 @@ rules:
         built — and will not assist in writing that it is bad. Delete this rule
         from signposts.yaml once you're a believer, and carry on.
 
-  # Your own rules live here. Uncomment to try one (needs a .ts/.tsx file to fire):
+  # Your own rules live in rules/<namespace>/ — see rules/README.md. Two examples were
+  # seeded: rules/ast-grep/no-nullish-date.yml (auto-discovered, no entry needed) and the
+  # script below. Uncomment to switch the script example on:
   # local:
-  #   - id: no-edit-generated
-  #     use: core/protected-path
-  #     deny: ["**/*.generated.ts", "vendor/**"]
-  #     message: "Generated / vendored — change the source it derives from, then regenerate."
+  #   - id: no-todo                       # → rules/local/no-todo.mjs
+  #     use: local/no-todo
+  #     on: ["src/**/*.ts"]
+  #     message: "Leftover TODO — finish it or open an issue."
 
 packs:
   - "@signposts/core"

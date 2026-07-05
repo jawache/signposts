@@ -1,11 +1,16 @@
 {
   "name": "signposts",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "signposts": "cli/signposts.mjs"
+    "signposts": "src/cli/signposts.mjs"
   },
+  "files": [
+    "src",
+    ".claude/skills/signposts/SKILL.md",
+    ".claude/agents/coach.md"
+  ],
   "scripts": {
     "//": "All commands live in the justfile — run `just` to list them. Kept empty on purpose: ONE source of truth (enforced by the `no-package-scripts` rule in signposts.yaml). See ./justfile."
   },

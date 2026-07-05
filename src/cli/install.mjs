@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSy
 import { join, dirname, relative } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { resolveSource } from './source.mjs';
-import { loadPacks, diffPacks } from '../.claude/skills/signposts/pack-diff.mjs';
+import { loadPacks, diffPacks } from '../skill/pack-diff.mjs';
 
 export function installPack({ source, namespace, target = process.cwd(), log = console.log }) {
   const resolved = resolveSource(source);
