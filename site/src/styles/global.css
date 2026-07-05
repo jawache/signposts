@@ -1,0 +1,84 @@
+/* Global chrome — resets, base type, the page shell (nav + footer), shared primitives.
+   Component-specific styling lives with its component; this is only what every page shares. */
+
+@import './fonts.css';
+@import './tokens.css';
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16.5px/1.7 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre, .mono { font-family: var(--font-mono); }
+
+a { color: var(--green); text-decoration: none; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 1.5rem; }
+
+/* ── nav ── */
+.nav {
+  border-bottom: 1px solid var(--hair);
+  background: rgba(247, 244, 236, .9);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+.nav .wrap { display: flex; align-items: center; gap: 1.6rem; padding: .9rem 1.5rem; font-size: .9rem; position: relative; }
+.brand {
+  display: flex; align-items: center; gap: .5rem;
+  font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--ink);
+}
+/* the fingerpost mark — a small green arrow-pentagon */
+.brand .post {
+  display: inline-block; width: 20px; height: 20px; background: var(--green);
+  clip-path: polygon(0 0, 76% 0, 100% 50%, 76% 100%, 0 100%);
+}
+.nav-menu { display: flex; align-items: center; gap: 1.6rem; flex: 1; }
+.nav-menu a { color: var(--mut); }
+.nav-menu a:hover { color: var(--ink); }
+.nav-menu .gh { margin-left: auto; color: var(--ink); border-bottom: 1.5px solid var(--green); }
+
+/* hamburger — hidden on desktop */
+.nav-toggle {
+  display: none; margin-left: auto; width: 40px; height: 40px; padding: 0;
+  background: none; border: 0; cursor: pointer; align-items: center; justify-content: center;
+}
+.nav-toggle .bars, .nav-toggle .bars::before, .nav-toggle .bars::after {
+  content: ''; display: block; width: 22px; height: 2px; border-radius: 2px;
+  background: var(--ink); transition: transform .2s ease, opacity .2s ease;
+}
+.nav-toggle .bars { position: relative; }
+.nav-toggle .bars::before { position: absolute; top: -7px; }
+.nav-toggle .bars::after { position: absolute; top: 7px; }
+.nav.open .nav-toggle .bars { background: transparent; }
+.nav.open .nav-toggle .bars::before { transform: translateY(7px) rotate(45deg); }
+.nav.open .nav-toggle .bars::after { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── footer ── */
+.site-footer { padding: 2.2rem 0 3.5rem; color: var(--mut); font-size: .9rem; }
+.site-footer .wrap { display: flex; gap: 2rem; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .nav .wrap { gap: 1rem; padding: .7rem 1.2rem; justify-content: space-between; }
+  .nav-toggle { display: inline-flex; }
+  /* links become a dropdown panel that overlays the page, opened by the hamburger */
+  .nav-menu {
+    position: absolute; top: 100%; left: 0; right: 0;
+    flex-direction: column; align-items: stretch; gap: 0;
+    background: var(--paper); border-bottom: 1px solid var(--hair);
+    box-shadow: 0 14px 26px rgba(32, 36, 31, .1);
+    max-height: 0; overflow: hidden; visibility: hidden;
+    transition: max-height .25s ease, visibility 0s linear .25s;
+  }
+  .nav.open .nav-menu { max-height: 82vh; overflow-y: auto; visibility: visible; transition: max-height .25s ease; }
+  .nav-menu a { padding: .95rem 1.3rem; font-size: 1.02rem; border-top: 1px solid var(--hair); }
+  .nav-menu .gh { margin-left: 0; border-bottom: 0; }
+}

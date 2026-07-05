@@ -70,6 +70,16 @@ signs:
         <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule.
         Author with /signposts — depth lives in docs/.
 
+    - id: site
+      globs: ["site/**"]
+      text: |-
+        The website (signposts.asim.dev). Port from the approved reference —
+        `.work/tasks/feat/website/landing-and-docs/spikes/spike-e-gary.html`; the palette,
+        type and animation specs are LANDED in that task's `design.md` — don't re-derive them.
+        British English; NO animation libraries (vanilla canvas + CSS + IntersectionObserver);
+        every animation needs a `prefers-reduced-motion` still. site/ is a standalone npm
+        project — drive it via `just site-dev` / `just site-build`, never root scripts.
+
     - id: work-journal
       globs: [".work/**"]
       text: |-

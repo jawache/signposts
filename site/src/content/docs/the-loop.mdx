@@ -1,0 +1,52 @@
+---
+title: The loop
+description: Signposts isn't a ruleset you install once and forget. It grows with your project — it learns your guardrails from the corrections you make, one session at a time.
+order: 2
+---
+
+<p class="lede">Signposts isn't a ruleset you install once and forget. It grows with your project — it learns your guardrails from the corrections you make, one session at a time.</p>
+
+Most "AI rules" tools hand you a fixed list and hope it fits. Signposts assumes the opposite: the guardrails worth having are the ones *your* project teaches you, in the moment you hit the problem. The job of Signposts is to capture each of those the moment it surfaces, and apply it forever after. That capture-and-apply cycle is the loop.
+
+## The cycle
+
+<Steps>
+<Step>
+**Scaffold.** Run `npx signposts` once in your repo. It lays down the engine, the git hooks, the one config file (`signposts.yaml`), and the core pack of signs and rules. From here it's armed.
+</Step>
+<Step>
+**Develop normally.** You work with your agent as you always do. Signposts steers in the background — <Chip kind="sign">sign</Chip> notes appear as the agent touches relevant files; <Chip kind="rule">rule</Chip> blocks stop known mistakes before they land.
+</Step>
+<Step>
+**Reflect.** At the end of a session you run `/signposts reflect`. A **coach** looks at what actually happened — what you corrected, what went sideways, what you had to explain twice.
+</Step>
+<Step>
+**The coach proposes a signpost — and gives you the choice.** For each issue it found it suggests a <Chip kind="sign">sign</Chip> (a nudge, for judgement calls), a <Chip kind="rule">rule</Chip> (a hard block, for clear-cut mistakes), or *both* — a sign so the agent gets it right first time, plus a rule to catch it if it drifts. You decide.
+</Step>
+<Step>
+**Apply it.** The coach authors and tests it — usually a few lines of config. From now on it steers every session, for you and anyone who clones the repo. The agent stops making that mistake.
+</Step>
+<Step>
+**Optionally, share it.** `/signposts propagate` sends a good signpost to a repo you choose — your own hub, or upstream as a PR. Others `install` it from there. A guardrail born in your project becomes one everybody benefits from.
+</Step>
+</Steps>
+
+<p class="muted">…then back to step 2. Each pass leaves your agent a little harder to derail.</p>
+
+## The skill that runs it
+
+The loop is driven by one skill, `/signposts`, with three modes — the coach (`reflect`), sharing up (`propagate`), and pulling in (`install`). The coach is the heart: it doesn't guess at rules in the abstract, it learns them from your real corrections. Full detail on [the skills page](/docs/skills).
+
+## Why the sign-or-rule choice matters
+
+Not every lesson should be a hard block. Some are judgement calls where a reminder is enough; forcing them would just get in the way. Others are clear-cut — there's a right answer and a wrong one — and a reminder isn't enough because the agent will drift back. The coach's value is that it surfaces the issue *and* frames the decision, instead of silently picking for you.
+
+| You hit… | Coach suggests | Because |
+| --- | --- | --- |
+| The agent keeps putting business logic in a "view" file | a <Chip kind="sign">sign</Chip> on that folder | It's a shape/taste call; a nudge in the right place is enough. |
+| The agent used `?? new Date()`, which silently breaks on empty strings | a <Chip kind="rule">rule</Chip> that blocks it | There's a correct form; a reminder would drift, a block won't. |
+| A command nearly wiped uncommitted work | a <Chip kind="rule">rule</Chip> — a command guard | Irreversible. It must be stopped before it runs, not flagged after. |
+
+## This is the differentiator
+
+Because signposts are authored where the need arises and then shared upward — through [a repo you own](/docs/packs) — the best guardrails bubble up from real work rather than being dictated from the top. Your stack is *yours* — reuse it across every repo, and let irrelevant rules lie dormant (a database rule costs nothing in a project with no database). That decentralised, learn-as-you-go authorship is what Signposts is really for.

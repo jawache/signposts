@@ -1,0 +1,194 @@
+---
+// The mental-model essay — the worldview behind Signposts, as a first-class page.
+// Source of truth: the task's mental-model.md (adapted faithfully, ideas + order preserved).
+// Styled in the site design language: § section numbers (rule-red mono), Fraunces headings,
+// sign=teal / rule=red carrying the two nouns in the just-in-time table.
+import Base from '../layouts/Base.astro';
+
+const title = 'The Signposts mental model';
+const description =
+  'The worldview behind Signposts: the agent is faithful but drifting, it sees your codebase through a flashlight, and front-loaded context decays. The remedy is just-in-time context — the right context, at the right place, at the exact moment it is needed.';
+---
+<Base title={`${title} — Signposts`} description={description} path="/mental-model/">
+  <main class="essay">
+    <p class="kicker">The idea</p>
+    <h1>The mental model</h1>
+    <p class="lede">Agents are brilliant but forgetful. The fix isn't louder instructions — it's
+    context delivered closer to the moment of use. This is the worldview the whole product is
+    built on.</p>
+
+    <section>
+      <p class="secno">§ 01 · THE STORY</p>
+      <h2>It leads with Gary</h2>
+      <p>Gary is the best developer you've ever worked with. He knows every API by heart, writes
+      beautiful code, never sleeps. There's just one thing: <b>Gary only remembers the last 500
+      things you tell him.</b></p>
+      <p>No matter how good Gary is, eventually chaos ensues. So you don't brief Gary with
+      everything upfront — that burns 400 of the 500 words, and it's forgotten by lunch anyway.
+      Instead you do two things:</p>
+      <ol class="two">
+        <li>You drop <b>breadcrumbs through the codebase</b>, so Gary picks up the context exactly
+        where and when he needs it.</li>
+        <li>You add <b>guardrails</b> he can bounce off when he forgets anyway.</li>
+      </ol>
+      <p>And here is the subtle part: <b>Gary isn't trying to be difficult.</b> He's brilliant and
+      forgetful, not malicious. He <em>wants</em> to do it right. So the guardrails don't need to be
+      prison walls — a firm reminder that redirects him is enough. Do this, and you can be confident
+      where Gary ends up.</p>
+      <p class="punch">Your AI coding agent is Gary.
+      <span class="u">Signposts is how you work with Gary.</span></p>
+      <p>The story earns its place because it does three jobs in one paragraph: it explains
+      <b>context drift</b> without jargon (Gary forgets); it explains <b>why front-loading fails</b>
+      (the 400 wasted words); and it explains <b>why the rails can be gentle</b> (he forgets, he
+      doesn't rebel — which is exactly why deny-with-a-written-reason works, and why a broken rule
+      letting the edit through is philosophically consistent, not a compromise).</p>
+    </section>
+
+    <section>
+      <p class="secno">§ 02 · THE AXIOM</p>
+      <h2>Faithful but drifting</h2>
+      <p>The agent is not careless or adversarial. On a fresh context it follows instructions
+      loyally. But as the context grows, the relative weight of any early instruction decays, and it
+      slides back into its default habits. The problem is not disobedience — it is <b>fading</b>. So
+      the fix is not louder instructions; it is instructions that arrive <b>closer to the moment of
+      use.</b></p>
+    </section>
+
+    <section>
+      <p class="secno">§ 03 · THE PICTURE</p>
+      <h2>The flashlight</h2>
+      <p>The agent doesn't see your codebase; it sees a small circle of light on a huge dark room.
+      Everything inside the beam is real to it; everything outside is assumption. ("Flashlight" was
+      nearly the product's name.) Two consequences follow:</p>
+      <ol class="two">
+        <li>Guidance living far away — one giant instructions file, a conventions doc — is
+        <em>outside the beam</em> almost all the time. Read once at hour zero, then it decays.</li>
+        <li>Whatever <em>is</em> in the beam has enormous influence: agents also gather context by
+        reading — the first few lines of a script to see what it does, the neighbouring files of an
+        area before writing there.</li>
+      </ol>
+    </section>
+
+    <section>
+      <p class="secno">§ 04 · THE REMEDY</p>
+      <h2>Just-in-time <span class="u">context</span></h2>
+      <p>Not just-in-time <em>instructions</em> — just-in-time <b>context</b>. The agent is
+      <em>already</em> pulling context just-in-time (that's how it works); Signposts works with that
+      grain instead of against it. <b>The right context, at the right place, at the exact moment it's
+      needed.</b></p>
+      <p>Under this term, signs and rules unify. A rule is not "enforcement" as a separate category —
+      it is just-in-time context with a harder delivery. There are <b>two moments of delivery, one
+      idea:</b></p>
+
+      <div class="jit">
+        <div class="jit-row">
+          <span class="lbl sign">On read → a sign</span>
+          <div>
+            <b>The breadcrumb.</b> The reliable precursor signal: agents read an area before they
+            write to it. The sign for that area drops into context at that moment — "mind the shape
+            here" — and is <b>re-injected as the context drifts</b> (every <code>drift_tokens</code>).
+            At token 600k it's as fresh as at token 0. It steers; it never blocks.
+          </div>
+        </div>
+        <div class="jit-row">
+          <span class="lbl rule">On write → a rule</span>
+          <div>
+            <b>The guardrail.</b> It drifted anyway. The rule blocks the bad write <em>before it
+            lands on disk</em>, and the block message <b>is</b> the context — what's wrong, what to do
+            instead — delivered at the single most teachable moment: the failed attempt. Backed up by
+            the same check at commit.
+          </div>
+        </div>
+      </div>
+
+      <p>Even a block is teaching. A rule never just says no; it hands back instructions for doing it
+      right. In theory you could run rules alone — but that denies the agent the chance to get it
+      right first time. <b>Signs give the first chance; rules give the guarantee.</b> Neither is
+      mandatory; a rule is the rarer, special case.</p>
+    </section>
+
+    <section>
+      <p class="secno">§ 05 · THE COROLLARY</p>
+      <h2>Tight startup context</h2>
+      <p>If proximity is the principle, the front-loaded thousand-rule prompt is the anti-pattern.
+      Session-start context should be very tight — nothing the agent doesn't need for the area it's
+      actually in. Signposts is a system for <b>moving guidance out of hour zero and into the moment
+      it's needed.</b></p>
+    </section>
+
+    <section>
+      <p class="secno">§ 06 · THE NAME</p>
+      <h2>Why "Signposts", not "Flashlight"</h2>
+      <p>Flashlight names the <em>limitation</em>; Signposts names the <em>remedy</em>. The road
+      metaphor carries the whole model natively: you don't memorise every road in the country
+      before you set off. The signage is on the road, at the junction, where the decision happens —
+      and where a sign isn't enough, there's a barrier. Co-located, just-in-time, layered
+      soft-to-hard.</p>
+    </section>
+
+    <section>
+      <p class="secno">§ 07 · THE MAP</p>
+      <h2>Story noun → product noun</h2>
+      <table class="vocab">
+        <thead><tr><th>Story</th><th>Product</th></tr></thead>
+        <tbody>
+          <tr><td>Gary</td><td>the AI coding agent</td></tr>
+          <tr><td>Gary forgets / 500 things</td><td>context drift / the context window</td></tr>
+          <tr><td>breadcrumbs</td><td><b>signs</b> — injected on read, re-injected every <code>drift_tokens</code></td></tr>
+          <tr><td>guardrails / barriers</td><td><b>rules</b> — pre-emptive block at edit + gate at commit</td></tr>
+          <tr><td>"confidence in where Gary ends up"</td><td>the product promise</td></tr>
+          <tr><td>the maze + fog of war</td><td>the codebase seen through the flashlight</td></tr>
+        </tbody>
+      </table>
+      <p class="foot">The landing page carries the compressed version of all this; the
+      <a href="/docs/">docs</a> are the reference. Ready to feel it? <code>npx signposts</code>.</p>
+    </section>
+  </main>
+
+  <style>
+    .essay { max-width: 720px; margin: 0 auto; padding: 3.4rem 1.5rem 4rem; }
+    .kicker {
+      display: inline-block; background: var(--green); color: #fff; font-weight: 600;
+      font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+      padding: .28rem 1rem .28rem .8rem; border-radius: 4px;
+      clip-path: polygon(0 0, 94% 0, 100% 50%, 94% 100%, 0 100%); margin-bottom: 1rem;
+    }
+    .essay h1 {
+      font-family: var(--font-display); font-weight: 600; font-size: clamp(2.4rem, 5vw, 3.4rem);
+      line-height: 1.08; letter-spacing: -.01em; margin: .2rem 0 1rem;
+    }
+    .essay .lede { font-size: 1.24rem; line-height: 1.6; color: #42473e; margin: 0 0 1rem; }
+    .essay section { border-top: 1px solid var(--hair); margin-top: 2.6rem; padding-top: 1.8rem; }
+    .secno { font-family: var(--font-mono); font-size: .75rem; letter-spacing: .14em; color: var(--rule); margin: 0 0 .3rem; }
+    .essay h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.9rem; letter-spacing: -.01em; margin: .2rem 0 1rem; }
+    .essay p { font-size: 1.06rem; line-height: 1.75; color: #2c312a; margin: 1rem 0; }
+    .essay p b { color: var(--ink); }
+    .essay .u { box-shadow: inset 0 -.16em 0 var(--underline); }
+    .essay .punch { font-family: var(--font-display); font-size: 1.4rem; line-height: 1.4; margin: 1.6rem 0; }
+    .essay ol.two { margin: 1rem 0; padding-left: 1.3rem; }
+    .essay ol.two li { font-size: 1.06rem; line-height: 1.7; color: #2c312a; margin: .5rem 0; padding-left: .3rem; }
+    .essay code { font-family: var(--font-mono); font-size: .85em; background: #ece7d8; border: 1px solid var(--line); border-radius: 5px; padding: .05rem .35rem; }
+
+    /* the two-moments table */
+    .jit { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: #fff; margin: 1.6rem 0; }
+    .jit-row { display: grid; grid-template-columns: 210px 1fr; gap: 1.2rem; padding: 1.4rem 1.6rem; }
+    .jit-row + .jit-row { border-top: 1px solid var(--hair); }
+    .jit-row > div { font-size: 1rem; line-height: 1.7; color: #2c312a; }
+    .lbl {
+      font-family: var(--font-mono); font-size: .72rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; padding: .3rem .7rem; border-radius: 4px; color: #fff;
+      align-self: start; height: fit-content;
+    }
+    .lbl.sign { background: var(--sign); } .lbl.rule { background: var(--rule); }
+
+    .vocab { border-collapse: collapse; width: 100%; margin: 1.2rem 0; font-size: 1rem; }
+    .vocab th, .vocab td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .vocab th { font-family: var(--font-mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
+    .vocab td { color: #2c312a; }
+    .foot { color: var(--mut); }
+
+    @media (max-width: 640px) {
+      .jit-row { grid-template-columns: 1fr; gap: .7rem; }
+    }
+  </style>
+</Base>

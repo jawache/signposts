@@ -1,0 +1,66 @@
+---
+title: Concepts — two halves of one anti-drift system
+description: Signposts has two kinds of steering — signs and rules. To understand why there are two, start with how an AI agent actually goes wrong.
+order: 3
+---
+
+<p class="lede">Signposts has two kinds of steering: <b>signs</b> and <b>rules</b>. To understand why there are two, start with how an AI agent actually goes wrong.</p>
+
+## The premise: the agent drifts
+
+An AI coding agent isn't being difficult when it ignores your conventions. The problem is **context drift**. On a fresh session it follows whatever guidance it has, faithfully. But as the conversation grows — tens, then hundreds of thousands of tokens — earlier guidance fades, and it slips back into generic habits. It's not malice; it's the context window doing what context windows do.
+
+So you have two needs: give the agent the best possible chance to *get it right the first time*, and a way to *catch it when it drifts anyway*. Those are the two halves.
+
+## <Chip kind="sign">sign</Chip> A sign — just-in-time context
+
+A sign is a note attached to an *area* of your codebase. Think of it like a **flashlight**: instead of one enormous rules file the agent skims once and forgets, the guidance for each area lives with that area and is lit up exactly when the agent is standing there.
+
+### It arrives on read
+
+Signposts injects an area's sign the moment the agent **reads** a file in that area. That timing is deliberate: in practice an agent almost never writes into an area it hasn't first read — so a read is the reliable signal that it's about to work there. The sign lands in context just before it's needed, not pages earlier.
+
+### It's re-injected as the context grows
+
+To fight drift directly, a sign is **re-injected every `X` tokens** (configurable — the `drift_tokens` setting). If you're 600k tokens deep and last touched a piece of code 500k tokens ago, the next time the agent works there the note is quietly refreshed. You're not relying on a single early mention surviving the whole session.
+
+<Note>
+**Why this keeps your starting context tight.** Because signs are delivered by area, on demand, you don't front-load the agent with a thousand rules — most of which are irrelevant to the task in front of it. The context it starts with stays small and on-point; the rest shows up just in time. (This just-in-time idea is why the project was nearly called *Flashlight*.)
+</Note>
+
+## <Chip kind="rule">rule</Chip> A rule — the backstop
+
+Signs give the agent a chance to do the right thing. Rules make sure the wrong thing can't slip through when it drifts anyway. A rule is a check that **blocks** — and the headline trick is *when*: it fires the instant the agent tries to write the offending code, **before the file is saved**.
+
+### Every block carries the fix
+
+A rule doesn't just say "no". It returns a **message explaining how to do it right**, fed straight back to the agent so it corrects itself on the spot. In that sense a rule is *also* guidance — one that only appears at the moment of the mistake. You could, in theory, run with rules alone and let the blocks teach. But then the agent only ever learns by hitting a wall; signs let it avoid the wall in the first place.
+
+### It's about confidence, not hope
+
+You can't rely on signs and simply hope they stick across a long session. Rules are the half that lets you *know* a class of mistake won't land — no matter how far the context has drifted, and even when there's no AI in the loop at all (a rule also runs at `git commit`).
+
+## How they work together
+
+Most guardrails want both halves: a sign so the agent gets it right early, and a rule to catch it if the growing context makes it slip. But it isn't all-or-nothing — you can have just signs, just rules, or both.
+
+|  | <Chip kind="sign">sign</Chip> | <Chip kind="rule">rule</Chip> |
+| --- | --- | --- |
+| Job | Get it right the first time | Catch it when it drifts |
+| Blocks? | No — a nudge | Yes — before the write, and at commit |
+| When you feel it | On reading an area (and re-injected over time) | The moment a banned change is attempted |
+| Good for | Shape & judgement calls; broad guidance | Clear-cut, costly, or irreversible mistakes |
+| How common | Many — they're cheap and dormant when irrelevant | Fewer — a rule is usually the special case |
+
+<p class="muted">Keep the starting context tight: lots of light-touch signs delivered just in time, a small number of rules for the things that really must not happen.</p>
+
+## One rule, two triggers
+
+A rule fires on both triggers by default (`when: [edit, commit]`) — one definition, two places:
+
+| Trigger | Where | What it does |
+| --- | --- | --- |
+| `edit` | Inside your agent, before a write | Pre-emptive block — reconstructs the would-be file, checks it, denies with the fix so the agent self-corrects. |
+| `commit` / `push` | Your git hooks | The backstop gate over staged files — runs even on a plain `git commit`, with no AI involved. |
+
+You only set `when:` when you want something other than both — e.g. a heavy whole-project check that can only run at commit. See [the config file](/docs/signposts-yaml) and [the rules](/docs/rules).

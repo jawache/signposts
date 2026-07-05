@@ -1,6 +1,10 @@
 # dependencies
 node_modules/
 
+# website build output + cache (site/ is a standalone Astro project)
+site/dist/
+site/.astro/
+
 # local working-docs journal — scratch, never committed (see .work/README.md).
 # No trailing slash: in a worktree .work is a SYMLINK to the main checkout's journal.
 .work

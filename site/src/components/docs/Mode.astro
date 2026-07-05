@@ -1,0 +1,6 @@
+---
+// One mode card. kind picks the top accent: sign = teal, rule = red, built = green, soon = amber.
+interface Props { kind?: 'sign' | 'rule' | 'built' | 'soon'; }
+const { kind } = Astro.props;
+---
+<div class={kind ? `mode ${kind}` : 'mode'}><slot /></div>

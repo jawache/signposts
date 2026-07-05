@@ -1,0 +1,32 @@
+---
+// Every docs page. One route over the `docs` collection: the glob id becomes the URL
+// (index → /docs/, rules/index → /docs/rules, rules/x → /docs/rules/x). The MDX body is
+// rendered inside Docs.astro; doc components are handed to MDX via the `components` prop,
+// so the .mdx files use <Chip>, <Card>, … without importing them per-file.
+import { getCollection, render } from 'astro:content';
+import Docs from '../../layouts/Docs.astro';
+import Chip from '../../components/docs/Chip.astro';
+import Card from '../../components/docs/Card.astro';
+import Grid from '../../components/docs/Grid.astro';
+import Modes from '../../components/docs/Modes.astro';
+import Mode from '../../components/docs/Mode.astro';
+import Note from '../../components/docs/Note.astro';
+import Steps from '../../components/docs/Steps.astro';
+import Step from '../../components/docs/Step.astro';
+
+export async function getStaticPaths() {
+  const docs = await getCollection('docs');
+  return docs.map((entry) => ({
+    // root index.mdx → id "index" → no rest param → /docs/
+    params: { id: entry.id === 'index' ? undefined : entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const components = { Chip, Card, Grid, Modes, Mode, Note, Steps, Step };
+---
+<Docs entry={entry}>
+  <Content components={components} />
+</Docs>

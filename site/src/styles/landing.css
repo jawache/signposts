@@ -1,0 +1,96 @@
+/* Landing-page section styles — the static sections (hero, thesis/plates, session heading,
+   YAML bridge, loop, get-started). Ported from spike-e-gary.html; the two interactive pieces
+   (maze, terminal) carry their own styles in their components. Nav/footer live in global.css. */
+
+/* ── hero: the Gary story ── */
+.hero { padding: 4.2rem 0 2.4rem; text-align: center; }
+.hero .kicker {
+  display: inline-block; background: var(--green); color: #fff;
+  font-weight: 600; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase;
+  padding: .3rem 1.1rem .3rem .9rem; border-radius: 4px;
+  clip-path: polygon(0 0, 96% 0, 100% 50%, 96% 100%, 0 100%);
+}
+h1 {
+  font-family: var(--font-display); font-weight: 600; font-size: clamp(3rem, 7vw, 4.8rem);
+  line-height: 1.05; margin: 1.1rem 0 1.2rem; letter-spacing: -.01em;
+}
+.hero .story { font-size: 1.22rem; color: #42473e; max-width: 56ch; margin: 0 auto; text-align: center; }
+.hero .story b { color: var(--ink); }
+.hero .punch { font-family: var(--font-display); font-size: 1.35rem; margin: 1.4rem auto 0; max-width: 44ch; }
+.hero .punch .u { box-shadow: inset 0 -.16em 0 var(--underline); }
+
+/* ── bridge line + two-plate ── */
+.thesis { padding: 2.2rem 0 3.4rem; text-align: center; }
+.thesis h2 { font-family: var(--font-display); font-weight: 600; font-size: 2.1rem; margin: 0 0 .8rem; }
+.thesis p { color: #494e45; max-width: 60ch; margin: .4rem auto; font-size: 1.08rem; }
+.thesis p b { color: var(--ink); }
+
+.plate {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 2.2rem auto 0; max-width: 880px;
+  border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: #fff; text-align: left;
+}
+.plate > div { padding: 1.7rem 1.8rem; display: flex; flex-direction: column; }
+.plate > div + div { border-left: 1px solid var(--hair); }
+.lbl {
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; padding: .2rem .7rem; border-radius: 3px; color: #fff;
+}
+.lbl.sign { background: var(--sign); } .lbl.rule { background: var(--rule); }
+.plate h3 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 600; margin: .9rem 0 .5rem; }
+.plate p { color: #494e45; font-size: .97rem; }
+/* margin-top:auto pushes the "when" footer to the bottom so both plates' footers align */
+.plate .when { font-size: .86rem; color: var(--mut); border-top: 1px dashed var(--hair); margin-top: auto; padding-top: .85rem; }
+.plate h3 + p { margin-bottom: 1rem; }
+.plate .when b { color: var(--ink); }
+
+/* ── real-session section ── */
+.section { padding: 3.4rem 0; border-top: 1px solid var(--hair); }
+.secno { font-family: var(--font-mono); font-size: .78rem; color: var(--rule); letter-spacing: .14em; }
+h2.sec { font-family: var(--font-display); font-weight: 600; font-size: 2rem; margin: .3rem 0 1rem; letter-spacing: -.01em; }
+p.lead { color: #494e45; max-width: 62ch; font-size: 1.05rem; }
+
+.bridge {
+  margin-top: 2.4rem; display: grid; grid-template-columns: .95fr 1.05fr; gap: 2rem;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 1.8rem 2rem; align-items: center;
+}
+.bridge h3 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin: 0 0 .5rem; }
+.bridge p { color: #494e45; margin: .3rem 0; font-size: .98rem; }
+.bridge pre {
+  background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+  padding: 1rem 1.2rem; font-size: .8rem; line-height: 1.8; margin: 0; overflow-x: auto;
+}
+.y-key { color: #8fd0a8; } .y-str { color: var(--term-gold); }
+
+/* ── the loop — three phases: set up once · develop⟳reflect · share ── */
+.phases { display: grid; gap: 1.3rem; margin: 2rem 0 0; max-width: 680px; position: relative; }
+.phase { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 1.1rem 1.4rem 1.2rem; }
+/* the middle phase is the actual repeating loop — mark it with the brand green + a cycle glyph */
+.phase.is-loop { border-color: var(--green); box-shadow: 0 6px 20px rgba(0, 112, 60, .07); }
+.ph-label {
+  font-family: var(--font-mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--mut); display: block; margin-bottom: .55rem;
+}
+.phase.is-loop .ph-label { color: var(--green); }
+.ph-label .cyc { font-size: 1.05em; }
+.ph-step { display: grid; grid-template-columns: 6.5rem 1fr; gap: .8rem; padding: .5rem 0; align-items: baseline; }
+.ph-step + .ph-step { border-top: 1px solid var(--line); }
+.ph-step b { font-family: var(--font-display); font-size: 1.08rem; font-weight: 600; }
+.ph-step span { color: var(--mut); font-size: .95rem; }
+@media (max-width: 560px) {
+  .ph-step { grid-template-columns: 1fr; gap: .1rem; }
+}
+
+/* ── get started ── */
+.getstarted {
+  background: var(--green); border-radius: 16px; color: #fff; text-align: center;
+  padding: 3rem 2rem; margin: 1.5rem 0 0;
+}
+.getstarted h2 { font-family: var(--font-display); color: #fff; margin: 0 0 .6rem; font-size: 2rem; }
+.getstarted p { color: #d8eadf; max-width: 52ch; margin: .4rem auto 1.6rem; }
+.getstarted .npx { display: inline-block; background: #10140f; color: var(--term-gold); border-radius: 10px; padding: .75rem 1.4rem; font-size: 1.05rem; }
+.getstarted .npx .d { color: var(--term-dim); }
+
+@media (max-width: 840px) {
+  .bridge, .plate { grid-template-columns: 1fr; }
+  .plate > div + div { border-left: none; border-top: 1px solid var(--hair); }
+}

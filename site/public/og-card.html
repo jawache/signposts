@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Source for the OG social card. Rendered at 1200×630 and rasterised to og.png.
+     Not linked from the site; kept in public/ as the card's editable source. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: 'Fraunces'; src: local('Fraunces'); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #f7f4ec; color: #20241f; padding: 72px 80px;
+    font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column;
+    justify-content: space-between; position: relative; overflow: hidden;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 34px; }
+  .post { width: 34px; height: 34px; background: #00703c; clip-path: polygon(0 0, 76% 0, 100% 50%, 76% 100%, 0 100%); }
+  .kicker {
+    display: inline-block; background: #00703c; color: #fff; font-weight: 700; font-size: 20px;
+    letter-spacing: .08em; text-transform: uppercase; padding: 10px 26px 10px 22px; border-radius: 6px;
+    clip-path: polygon(0 0, 97% 0, 100% 50%, 97% 100%, 0 100%); align-self: flex-start;
+  }
+  h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 600; font-size: 92px; line-height: 1.02; letter-spacing: -.02em; margin: 26px 0 22px; }
+  p { font-size: 30px; line-height: 1.45; color: #42473e; max-width: 900px; }
+  .row { display: flex; gap: 14px; margin-top: 30px; }
+  .lbl { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #fff; padding: 8px 16px; border-radius: 5px; }
+  .lbl.sign { background: #1f6f7a; } .lbl.rule { background: #b3372b; }
+  .foot { display: flex; justify-content: space-between; align-items: flex-end; font-size: 22px; color: #6b7065; }
+  .foot .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="brand"><span class="post"></span>Signposts</div>
+    <h1>Guardrails for<br>AI coding agents</h1>
+    <p>Just-in-time context: signs steer as your agent reads, rules block before a bad write lands. A committed file, not a service.</p>
+    <div class="row"><span class="lbl sign">Sign · steers</span><span class="lbl rule">Rule · blocks</span></div>
+  </div>
+  <div class="foot"><span>by Asim Hussain</span><span class="mono">signposts.asim.dev</span></div>
+</body>
+</html>

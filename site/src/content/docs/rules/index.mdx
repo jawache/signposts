@@ -1,0 +1,41 @@
+---
+title: The core scripts
+description: A rule names a script with use and carries its config inline. Signposts ships a handful of core scripts that cover the ground; pick the one that matches what you're stopping.
+order: 6
+---
+
+<p class="lede">A rule names a <strong>script</strong> with <code>use:</code> and carries its config inline. Signposts ships a handful of core scripts that cover the ground; pick the one that matches what you're stopping.</p>
+
+Everything is a script — no special cases, nothing auto-magic. `use:` is always a path: a core one (`core/<name>`) or [your own](/docs/authoring) (`<namespace>/<name>`).
+
+## Pick by what you're stopping
+
+| You want to stop… | `use:` |
+| --- | --- |
+| A banned code shape in TS/TSX (e.g. `?? new Date()`) | [core/ast-grep](/docs/rules/ast-grep) |
+| A file that's missing a required companion (e.g. its test) | [core/sibling-exists](/docs/rules/sibling-exists) |
+| An exported symbol never referenced in its sibling test | [core/symbols-in-sibling](/docs/rules/symbols-in-sibling) |
+| A structured file breaking a shape rule (e.g. `package.json`) | [core/json-invariant](/docs/rules/json-invariant) |
+| A banned word or pattern in text/prose | [core/text-ban](/docs/rules/text-ban) |
+| A dangerous shell command | [core/command-guard](/docs/rules/command-guard) |
+| Any hand-edit of a protected path (generated, vendored) | [core/protected-path](/docs/rules/protected-path) |
+| A whole-project tool failing (import graph, coverage, types) | [core/tool-gate](/docs/rules/tool-gate) |
+
+## Two families
+
+<Modes>
+<Mode kind="built">
+### Native (in-process)
+
+All but the last. Signposts owns the logic; the config is in your `signposts.yaml`. They run **in-process**, so they fire **pre-emptively** on edit and at commit. (This is why [ast-grep](/docs/rules/ast-grep) is a core script, not a tool-gate — it can block before the write lands.)
+</Mode>
+<Mode kind="soon">
+### Tool-delegated
+
+[core/tool-gate](/docs/rules/tool-gate) only. The *tool* owns its config file (e.g. dependency-cruiser, `tsc`); Signposts just runs it and blocks on failure. Commit/push only — you can't run a whole-project build on every keystroke.
+</Mode>
+</Modes>
+
+<Note>
+**On `when:`.** Native scripts default to `[edit, commit]` — leave it off. A tool-gate must set `when: [commit]` (it's too heavy to run pre-emptively). That's the only place `when:` earns its keep. Rules are [grouped by namespace](/docs/signposts-yaml) in your config.
+</Note>

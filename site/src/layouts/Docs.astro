@@ -1,0 +1,89 @@
+---
+// The docs layout: site chrome (Base = Nav + Footer + meta) wrapped around a persistent
+// left sidebar (all pages in `order`, Rules subpages nested) and a reading column with a
+// prev/next footer. Sidebar stacks above the content on mobile (≤820px).
+import Base from './Base.astro';
+import PrevNext from '../components/docs/PrevNext.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import '../styles/docs.css';
+
+interface Props { entry: CollectionEntry<'docs'>; }
+const { entry } = Astro.props;
+
+// Short sidebar / prev-next labels (the frontmatter titles are long). Keyed by glob id.
+const LABELS: Record<string, string> = {
+  index: 'Overview',
+  quickstart: 'Quickstart',
+  'the-loop': 'The loop',
+  concepts: 'Concepts',
+  skills: 'Skills',
+  'signposts-yaml': 'Config',
+  rules: 'Rules',
+  'rules/ast-grep': 'core/ast-grep',
+  'rules/sibling-exists': 'core/sibling-exists',
+  'rules/symbols-in-sibling': 'core/symbols-in-sibling',
+  'rules/json-invariant': 'core/json-invariant',
+  'rules/text-ban': 'core/text-ban',
+  'rules/command-guard': 'core/command-guard',
+  'rules/protected-path': 'core/protected-path',
+  'rules/tool-gate': 'core/tool-gate',
+  signs: 'Signs',
+  authoring: 'Authoring',
+  packs: 'Packs',
+  wiring: 'Wiring',
+  troubleshooting: 'Troubleshooting',
+};
+
+const href = (id: string) => (id === 'index' ? '/docs/' : `/docs/${id}`);
+const label = (id: string) => LABELS[id] ?? id;
+
+const all = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+const current = entry.id;
+const idx = all.findIndex((e) => e.id === current);
+const prevEntry = idx > 0 ? all[idx - 1] : null;
+const nextEntry = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
+const prev = prevEntry ? { href: href(prevEntry.id), label: label(prevEntry.id) } : null;
+const next = nextEntry ? { href: href(nextEntry.id), label: label(nextEntry.id) } : null;
+
+const { title, description } = entry.data;
+const path = current === 'index' ? '/docs/' : `/docs/${current}/`;
+---
+<Base title={`${title} — Signposts`} description={description} path={path}>
+  <div class="docs-shell">
+    <aside class="docs-side" id="docs-side">
+      <button class="side-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">
+        <span class="st-label">Docs</span>
+        <span class="st-current">{label(current)}</span>
+        <span class="st-caret" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="side-nav" id="docs-nav">
+        <p class="side-title">Docs</p>
+        <ul>
+          {all.map((e) => (
+            <li class={e.data.group ? 'nested' : undefined}>
+              <a href={href(e.id)} aria-current={e.id === current ? 'page' : undefined}>{label(e.id)}</a>
+            </li>
+          ))}
+        </ul>
+        <div class="side-foot">
+          <a href="/mental-model/">The mental model &rarr;</a>
+        </div>
+      </div>
+    </aside>
+    <main class="docs-main">
+      <article class="doc">
+        <h1>{title}</h1>
+        <slot />
+        <PrevNext prev={prev} next={next} />
+      </article>
+    </main>
+  </div>
+  <script>
+    const side = document.getElementById('docs-side');
+    const toggle = side?.querySelector<HTMLButtonElement>('.side-toggle');
+    toggle?.addEventListener('click', () => {
+      const open = side!.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+  </script>
+</Base>

@@ -1,0 +1,41 @@
+---
+title: core/symbols-in-sibling — exports must show up in the sibling
+description: Correlation across two files — every symbol a module exports must be referenced in its partner file (typically the test). Catches untested exports.
+order: 6.3
+group: Rules
+---
+
+<p class="lede">Correlation across two files: every symbol a module exports must be referenced in its partner file (typically the test). Catches untested exports.</p>
+
+## What it catches
+
+An exported function, class, or const that the sibling test never mentions — a sign it's untested. It parses the module to find its exports, then checks they appear in the partner. This is the parser-as-library family: it reasons across files, not just within one line.
+
+## Config
+
+```yaml
+rules:
+  - id: exports-are-tested
+    use: core/symbols-in-sibling
+    on: "src/domain/**/*.ts"
+    sibling: "{dir}/{name}.test.ts"   # where the exports must be referenced
+    message: "Each exported symbol must be referenced in its test. Red → green."
+```
+
+| Field | What it does |
+| --- | --- |
+| `on` | Glob(s) for the modules to check. |
+| `sibling` | The partner whose text must mention each export — same `{dir}/{name}/{base}/{path}` templating as [core/sibling-exists](/docs/rules/sibling-exists). |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+// user.ts          export function getUser(){…}  export function delUser(){…}
+// user.test.ts     test(getUser…)                 // delUser never referenced
+                                                    ✗ blocked: 'delUser' untested
+```
+
+<Note>
+**Reference, not assertion.** It checks the export is *mentioned* in the partner — a cheap, fast proxy for "is it tested", not a coverage tool. For true coverage, reach for a [core/tool-gate](/docs/rules/tool-gate).
+</Note>

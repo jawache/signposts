@@ -1,0 +1,112 @@
+---
+title: Authoring a rule
+description: Most rules are config over a script Signposts already ships. When none fits, you write your own — and the contract for that is worth understanding properly.
+order: 8
+---
+
+<p class="lede">Most rules are config over a script Signposts already ships. When none fits, you write your own — and the contract for that is worth understanding properly.</p>
+
+(Authoring a <Chip kind="sign">sign</Chip> is separate and much simpler — it's just a note on an area. See [writing signs](/docs/signs).)
+
+## 1 · A rule from a core script — config only
+
+Add an entry under `rules:` naming a [core script](/docs/rules) with `use:` and its config. No code.
+
+```yaml
+rules:
+  local:
+    - id: domain-has-test
+      use: core/sibling-exists
+      on: "src/domain/**/*.ts"
+      sibling: "{dir}/{name}.test.ts"
+      message: "Every domain file needs a sibling test."
+```
+
+The whole entry is handed to `core/sibling-exists` **verbatim** — it reads `sibling`, `core/ast-grep` reads `rule`, and so on. `use:` is just a script; there's no registry and no glue.
+
+## 2 · Your own script — when no core fits
+
+Point `use:` at a script you write. It lives in *your* namespace folder — `rules/<namespace>/` (core scripts live in `rules/core/`). It can be JavaScript or a shell script.
+
+```yaml
+rules:
+  neon:
+    - id: no-raw-pool
+      use: neon/no-raw-pool        # → rules/neon/no-raw-pool.mjs
+      on: "src/**/*.ts"
+      forbid: "new Pool("          # ← your own config, whatever you like
+```
+
+### What your script is handed
+
+This is the whole contract — four things, and knowing *why* each is passed is the point:
+
+| What | Always? | Why |
+| --- | --- | --- |
+| **the config** | yes | your rule entry, verbatim — it's how the script knows its parameters (`forbid`, `sibling`, `deny`…). |
+| **the destination path** | yes | the logical path the file will live at (`src/db/pool.ts`). The truth for messages and for path logic — *even at edit time when nothing is there yet*. Never a temp path. |
+| **the content** | content rules | the reconstructed would-be bytes — what you actually inspect. |
+| **the content-file path** | shell only | where to *read* those bytes on disk: a **temp file at edit**, the **real file at commit**. |
+
+<Note>
+The **destination path** and the **content-file path** are different things. At edit time the file isn't on disk yet, so a shell script reads the bytes from a temp file while still reasoning about the real destination. At commit they're the same file. Your script never has to know which trigger it's on.
+</Note>
+
+### JavaScript template
+
+A JS script gets the content in memory — no temp file, nothing to read from disk:
+
+```js
+// rules/neon/no-raw-pool.mjs
+export default {
+  kind: 'content',                  // content | path | command | project
+  evaluate(rule, ctx) {
+    // rule = your config, verbatim   → rule.forbid === "new Pool("
+    // ctx  = { path, content, root, phase, exists(p), readText(p) }
+    if (!ctx.content.includes(rule.forbid)) return [];      // [] = pass
+    const line = ctx.content.slice(0, ctx.content.indexOf(rule.forbid)).split('\n').length;
+    return [`${ctx.path}:${line}  uses ${rule.forbid} — use the shared db client`];
+  },
+};
+```
+
+- `kind` tells the engine what to feed you: `content` (the bytes), `path` (just the destination — for path-shape rules), `command` (a Bash string), or `project` (nothing per-file — you're a whole-project [tool-gate](/docs/rules/tool-gate)).
+- Return an **array of hit strings**. Empty = pass; anything in it = block, and the strings become the reason shown to the agent.
+- `ctx.readText` / `ctx.exists` let you look at *other* files on disk (a sibling test, an index) — the reconstructed file is the one in `ctx.content`.
+
+### Shell template
+
+A shell script can't take a JS object, so the engine passes the config as JSON on stdin and the two paths as arguments. Same rule, both triggers — the engine points `$2` at a temp file on edit and the real file on commit:
+
+```bash
+# rules/neon/no-raw-pool.sh
+#   $1 = destination path   (src/db/pool.ts — logical)
+#   $2 = content-file path  (temp file @edit, the real file @commit)
+#   stdin = the rule config as JSON
+#   env: SIGNPOSTS_ROOT, SIGNPOSTS_PHASE
+# non-zero exit + a message on stderr = block
+forbid=$(jq -r .forbid)                 # read your config off stdin
+if grep -q "$forbid" "$2"; then
+  echo "$1 uses $forbid — use the shared db client" >&2
+  exit 1
+fi
+```
+
+### Per-file or whole-project?
+
+The one design choice that decides your `kind` and your triggers:
+
+- **Per-file** (you only need the one changed file) → it runs **pre-emptively** on edit and at commit. Default `when`, leave it off.
+- **Whole-project** (you need the whole tree in a consistent state — an import graph, coverage) → it's a `kind: 'project'` [tool-gate](/docs/rules/tool-gate), `when: [commit]`. It can't run per keystroke, so it's commit-only.
+
+<Note>
+**Two musts for your own script.** (1) **Guard its CLI** so importing it has no side-effects. (2) Ship a **`--test`** with a legal and an illegal sample — that's the rule's proof and its documentation. `just test-rules` runs it.
+</Note>
+
+## 3 · It belongs to a namespace
+
+Your rule lives under a namespace in `signposts.yaml` (`local` for your own ad-hoc rules; a name like `neon` if it's a coherent set you might share). The namespace is what [install and propagate](/docs/packs) move as a unit — its rules *and* its signs together.
+
+## Let the coach write it — and share it
+
+You rarely start from a blank file. Run `/signposts reflect` at session end and the coach proposes the rule (or sign) from what actually happened, then authors and tests it. To share it, `/signposts propagate` sends it to a repo you choose — your own hub, or upstream as a PR. See [the skills](/docs/skills) and [packs](/docs/packs).

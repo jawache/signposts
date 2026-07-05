@@ -1,0 +1,41 @@
+---
+title: core/text-ban — forbid a pattern in text
+description: Block a regular expression anywhere in a file's text. The right tool for prose, config, and literal strings — anything that isn't a code shape.
+order: 6.5
+group: Rules
+---
+
+<p class="lede">Block a regular expression anywhere in a file's text. The right tool for prose, config, and literal strings — anything that isn't a code <em>shape</em>.</p>
+
+## What it catches
+
+A banned literal or pattern: a hardcoded hex colour in stylesheets, a leftover marker, a phrase you never want shipped. It reports the line number of each hit.
+
+## Config
+
+```yaml
+rules:
+  - id: no-raw-hex
+    use: core/text-ban
+    on: "src/**/*.css"
+    ban:
+      - "#[0-9a-fA-F]{3,6}\\b"     # raw hex — use a theme token instead
+    message: "Use a --color-* theme token, not a raw hex value."
+```
+
+| Field | What it does |
+| --- | --- |
+| `on` | Glob(s) for the files to scan. |
+| `ban` | A regex, or a list of regexes. A match on any line is a violation (reported with its line number). |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+color: var(--color-accent);   ✓ passes
+color: #1a73e8;               ✗ blocked: line N matches /#[0-9a-fA-F]{3,6}/
+```
+
+<Note>
+**Text, not syntax.** `core/text-ban` is a regex over raw text, so it can match inside strings and comments. For a true code shape (where you want to ignore strings and comments) use [core/ast-grep](/docs/rules/ast-grep) instead.
+</Note>

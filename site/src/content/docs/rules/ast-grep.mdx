@@ -1,0 +1,45 @@
+---
+title: core/ast-grep — ban or require a code shape
+description: Match a syntactic pattern in TS/TSX with a real parser — so it never false-matches on a string or a comment. The lowest-effort rule.
+order: 6.1
+group: Rules
+---
+
+<p class="lede">Match a syntactic pattern in TS/TSX with a real parser — so it never false-matches on a string or a comment. The lowest-effort rule.</p>
+
+## What it catches
+
+A specific shape of code: `?? new Date()`, a banned import, a forbidden API call. It uses <a href="https://ast-grep.github.io/" target="_blank" rel="noopener">ast-grep</a> patterns, which match the syntax tree, not text — `"$X ?? new Date"` in a string literal won't trip it.
+
+## The patterns are files
+
+Unlike other rules, ast-grep patterns live as **files** in `rules/ast-grep/*.yml` — not inline in `signposts.yaml`. That's deliberate: the same files are used by `ast-grep scan` and by the test runner (`just test-rules`), so there's one source of truth for a pattern.
+
+```yaml
+# rules/ast-grep/date-default-no-nullish.yml
+id: date-default-no-nullish
+language: tsx                 # tsx | typescript
+message: |
+  Use `||`, not `??`, for date defaults — `??` lets empty strings through.
+rule:
+  any:
+    - pattern: $X ?? new Date($$$)
+    - pattern: $X ?? new Date
+```
+
+The `core/ast-grep` runner picks up every file in that folder. To add a code-pattern rule you just drop another `.yml` in — no `signposts.yaml` entry needed.
+
+## How it runs — in-process, so it's pre-emptive
+
+ast-grep is a Rust tool, but it ships a **native Node binding** (`@ast-grep/napi`) — the same engine, callable in-process from Node. Signposts hands it the reconstructed would-be file *as a string* and gets matches back — no subprocess, no temp file. That's what lets it run on **every edit, pre-emptively**, as well as at commit.
+
+<Note>
+**Why ast-grep isn't a tool-gate.** It checks *one file's* syntax and has a fast in-process binding, so it runs before the write lands. A whole-project tool like dependency-cruiser has neither property — it walks the entire graph and can't run per keystroke — so that's a [tool-gate](/docs/rules/tool-gate) (commit-only). The line is per-file vs whole-project, not "ast-grep vs the rest".
+</Note>
+
+### Legal vs illegal
+
+```
+const a = row.published_at || new Date();   // ✓ passes
+const b = row.published_at ?? new Date();   // ✗ blocked (edit + commit)
+```

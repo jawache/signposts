@@ -1,0 +1,69 @@
+---
+title: The config file — signposts.yaml
+description: Everything Signposts needs lives in one file at your repo root. A handful of sections, each with a single consumer, so nothing is wired in two places.
+order: 5
+---
+
+<p class="lede">Everything Signposts needs lives in one file at your repo root. A handful of sections, each with a single consumer, so nothing is wired in two places.</p>
+
+| Section | Holds | Read by |
+| --- | --- | --- |
+| `project` | Stack identity — a name and description. | the CLI |
+| `config` | Engine runtime settings — currently `drift_tokens` (the sign re-injection cadence). | the sign injector |
+| `signs` | Your <Chip kind="sign">sign</Chip> notes, **grouped by namespace**. | the sign injector |
+| `rules` | Your <Chip kind="rule">rule</Chip> blocks, **grouped by namespace**. | the engine |
+| `packs` | The installed packs + versions, so `refresh` can update them. | the CLI |
+| `install` | What to copy, which deps to add, how to arm it. | the CLI |
+
+## Grouped by namespace
+
+Both `signs:` and `rules:` are grouped by **namespace** — the pack each belongs to. `core` is the built-in pack; `local` is your own ad-hoc stuff; a name like `neon` is a coherent set you might share. A namespace is what [install and propagate](/docs/packs) move as one unit — its signs *and* rules together.
+
+## A worked example
+
+```yaml
+project:
+  name: my-core
+  description: My personal dev guardrails. Reused on every repo; irrelevant rules sleep.
+
+config:
+  drift_tokens: 200000          # re-inject a sign after ~this many tokens of drift
+
+signs:
+  local:
+    - id: db-area
+      globs: ["src/db/**"]
+      text: |-
+        Queries go through the repository layer, never inline in a route.
+
+rules:
+  local:
+    - id: no-edit-generated
+      use: core/protected-path
+      deny: ["**/*.generated.ts", "vendor/**"]
+      message: "Generated / vendored — change the source, then regenerate."
+  imports:
+    - id: boundaries           # a tool-gate is heavy → commit-only, so set when:
+      use: core/tool-gate
+      run: "npx depcruise src --config .dependency-cruiser.cjs"
+      carries: [".dependency-cruiser.cjs"]
+      when: [commit]
+
+packs:
+  - "@signposts/core"          # the baked-in pack
+install:
+  activate: ["npm install"]    # arms the gate (lefthook writes .git/hooks/*)
+```
+
+## How a rule reads
+
+Each entry names a **script** with `use:` and carries that script's config inline. The whole entry is handed to the script **verbatim**.
+
+- `use: core/<name>` — a [core script](/docs/rules); or `<namespace>/<name>` for [your own](/docs/authoring).
+- `on:` — the glob(s) it applies to (some scripts use `deny:` or `run:` instead).
+- `when:` — defaults to `[edit, commit]`; **omit it** unless you need to override (a tool-gate that's `[commit]` only).
+- `message:` — the reason, fed back to the agent on a block.
+
+<Note>
+**Code patterns are files, not inline.** ast-grep rules stay as `rules/ast-grep/*.yml` (so `ast-grep scan` and the test runner use the same files); the `core/ast-grep` runner executes them in-process. See [core/ast-grep](/docs/rules/ast-grep). Everything else is a normal `rules:` entry.
+</Note>

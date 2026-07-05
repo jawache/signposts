@@ -1,0 +1,6 @@
+---
+// A callout. Default = a brand-green note; variant="status" = an amber status box.
+interface Props { variant?: 'note' | 'status'; }
+const { variant = 'note' } = Astro.props;
+---
+<div class={variant === 'status' ? 'note status' : 'note'}><slot /></div>

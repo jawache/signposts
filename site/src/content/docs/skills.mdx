@@ -1,0 +1,58 @@
+---
+title: Running it — the CLI and the skill
+description: Signposts has two surfaces, split by a simple question — does the step need judgement? If not, it's a deterministic CLI command. If it does, it's a mode of the /signposts skill.
+order: 4
+---
+
+<p class="lede">Signposts has two surfaces, split by a simple question: does the step need judgement? If not, it's a deterministic CLI command. If it does, it's a mode of the <code>/signposts</code> skill.</p>
+
+|  | Deterministic — `npx signposts` | Judgement — `/signposts` |
+| --- | --- | --- |
+| Does | drops files, computes facts | reads facts, converses, decides |
+| Commands | `scaffold` · `refresh` · the fetch/diff helpers | `reflect` · `propagate` · `install` |
+
+The rule between them: the CLI never guesses, and the skill never rediscovers what a script could just tell it. A helper script emits the facts (what changed, what's in another repo, what collides); the skill applies the judgement.
+
+## The CLI — `npx signposts`
+
+- `npx signposts` — **scaffold**: drop the engine, hooks, config, and the core pack into a repo, and arm the gate. One-time. ([Quickstart](/docs/quickstart).)
+- `npx signposts refresh` — pull updates for the packs you've installed, tracked in your `packs:` list.
+- Under the hood it also exposes the **fetch / diff / apply** helpers the skill calls — e.g. "summarise what's in *that* repo versus mine" — so the AI doesn't burn tokens working it out.
+
+## The skill — `/signposts <mode>`
+
+One skill, three modes. Each leans on a deterministic helper for facts, then does the part only judgement can.
+
+### `/signposts reflect` — the coach
+
+Run it at the **end of a session**. A helper hands it the session's real history — what you corrected, what you re-explained, what a rule blocked — and the coach proposes new signposts: <em>"this drift → a <Chip kind="sign">sign</Chip>"</em> or <em>"this mistake → a <Chip kind="rule">rule</Chip>"</em>, or both. You accept, and it authors and tests them. This is the engine of [the loop](/docs/the-loop).
+
+### `/signposts propagate` — send a rule to a repo
+
+Lift a rule or sign out of this project and **send it to a repo you name** — genericising the bits that were specific to you. That repo can be *your own*, even private: keep a personal rules repo as your **hub**, and propagate the good ones there. (Or target an upstream pack and it opens a PR.) You don't need a public repo to reuse your work.
+
+### `/signposts install` — cherry-pick from a repo
+
+Point it at any repo — your hub, a teammate's project, an official pack. A helper diffs *their* signposts against *yours* — what's new, what collides, which namespaces — and the skill walks you through an **interactive picker**: take the whole `neon` namespace, or individual entries. Collisions are talked through, not resolved by a rigid rule — this is exactly where an AI is good.
+
+## The hub loop
+
+Put together, the three modes route your best guardrails through a repo you own:
+
+<Steps>
+<Step>
+**`reflect`** in project A surfaces a rule worth keeping.
+</Step>
+<Step>
+**`propagate`** sends it to your private hub repo.
+</Step>
+<Step>
+**`install`** pulls it into projects B, C, D — and anyone you trust can install from your hub too.
+</Step>
+</Steps>
+
+<p class="muted">Guardrails you discover in real work flow outward on their own, through a repo you control — no central catalogue, no public anything required.</p>
+
+<Note>
+**What's *not* in the tool.** Signposts stays tightly focused on scaffold + the `/signposts` skill (plus the `coach` agent it spawns). The broader planning journal (`/work`) and the code-review agents (`codeops · secops · devops · docops`) are a different job from steering the agent, so they live *globally* in a personal **workbench** repo (your `~/.claude`) that applies across every project — not shipped per-repo by Signposts.
+</Note>

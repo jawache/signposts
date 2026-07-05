@@ -1,0 +1,40 @@
+---
+title: core/command-guard — block a dangerous command
+description: Stop a shell command before it runs. This one works on the command the agent is about to execute, not on a file.
+order: 6.6
+group: Rules
+---
+
+<p class="lede">Stop a shell command before it runs. This one works on the command the agent is about to execute, not on a file.</p>
+
+## What it catches
+
+A command matching a banned pattern — a force-push to a protected branch, a recursive delete, a destructive reset. Because it fires *before* the command runs, it can prevent the irreversible.
+
+## Config
+
+```yaml
+rules:
+  - id: no-force-push-main
+    use: core/command-guard
+    ban:
+      - "git\\s+push\\s+.*--force(?!-with-lease).*\\bmain\\b"
+      - "rm\\s+-rf\\s+/"
+    message: "Force-pushing main is blocked. Use --force-with-lease on a feature branch."
+```
+
+| Field | What it does |
+| --- | --- |
+| `ban` | A regex, or list, matched against the command string. A match blocks it. (No `on:` — the target is the command, not a path.) |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+git push origin feature/x           ✓ passes
+git push --force origin main        ✗ blocked
+```
+
+<Note>
+**When you need live state, write a script.** Some guards must reason about the world — e.g. "is this `git checkout --` about to wipe *uncommitted* changes?". That needs to inspect git status, beyond a regex, so it's a small [own-script](/docs/authoring) rather than a config-only `command-guard`. Use `core/command-guard` for the clear-cut, state-free bans.
+</Note>

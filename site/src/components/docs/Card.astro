@@ -1,0 +1,9 @@
+---
+// A linking card: k = title, d = description (may carry inline <code>). Used inside <Grid>.
+interface Props { href: string; k: string; d: string; }
+const { href, k, d } = Astro.props;
+---
+<a class="card" href={href}>
+  <span class="k" set:html={k}></span>
+  <span class="d" set:html={d}></span>
+</a>

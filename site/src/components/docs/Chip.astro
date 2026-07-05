@@ -1,0 +1,6 @@
+---
+// A two-mode chip. sign = teal, rule = red (always); soon = amber, built = green.
+interface Props { kind: 'sign' | 'rule' | 'soon' | 'built'; }
+const { kind } = Astro.props;
+---
+<span class={`chip ${kind}`}><slot /></span>

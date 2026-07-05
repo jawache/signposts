@@ -1,0 +1,52 @@
+---
+title: Keep your AI coding agent on the rails
+description: Signposts catches the mistakes your AI coding agent makes before they land — and learns new guardrails from you as you work.
+order: 0
+---
+
+<p class="lede">Signposts catches the mistakes your AI coding agent makes <em>before they land</em> — and learns new guardrails from you as you work.</p>
+
+Every agent has habits you keep correcting: the wrong date default, hand-editing a generated file, a command that wipes uncommitted work. Signposts turns each of those corrections into a **signpost** — a small, durable piece of steering that lives in your repo and applies on every future session, for you or anyone who clones it.
+
+## A signpost is a sign or a rule
+
+Every signpost does one of two jobs. The difference is whether it *blocks*.
+
+<Modes>
+<Mode kind="sign">
+<Chip kind="sign">sign</Chip>
+
+### A nudge
+
+A note the agent reads the moment it touches a relevant file — "mind the shape here". It steers; it never blocks. Good for guidance that's a judgement call, not a hard line.
+</Mode>
+<Mode kind="rule">
+<Chip kind="rule">rule</Chip>
+
+### A block
+
+A check that **blocks** the mistake. The headline trick: it fires the instant the agent tries to write the bad code — *before the file is saved* — with a written reason, so the agent fixes itself. A second check backs it up at `git commit`.
+</Mode>
+</Modes>
+
+Signs and rules are two halves of one job: beating **context drift**. Early in a session an agent follows guidance faithfully; as the context grows, it slips. A <Chip kind="sign">sign</Chip> gives it the best chance to get things right first time — delivered *just in time*, the moment it reads a file in that area — and a <Chip kind="rule">rule</Chip> catches it when it drifts anyway. Use either alone, but they're strongest together. [The mental model →](/docs/concepts)
+
+## It learns your guardrails — the loop
+
+Signposts isn't a fixed ruleset you install once. You `npx signposts` to scaffold it, develop normally, and run `/signposts reflect` at the end of a session; a **coach** reads what happened and proposes new signposts — *"this drift → a sign"* or *"this mistake → a rule"*. You pick, you apply, and it steers every session after. [See the loop →](/docs/the-loop)
+
+## All the pages
+
+<Grid>
+<Card href="/docs/quickstart" k="Quickstart" d="<code>npx signposts</code> and watch the agent get blocked + self-correct." />
+<Card href="/docs/the-loop" k="The loop" d="How you use it day-to-day — and how it learns from you." />
+<Card href="/docs/concepts" k="Concepts" d="Sign vs rule, context drift, just-in-time context." />
+<Card href="/docs/skills" k="Skills" d="Running it — <code>npx signposts</code> and the <code>/signposts</code> skill." />
+<Card href="/docs/signposts-yaml" k="The config file" d="One <code>signposts.yaml</code>, section by section." />
+<Card href="/docs/rules" k="Rules" d="The core scripts — pick one, fill in config, done." />
+<Card href="/docs/signs" k="Signs" d="Writing just-in-time guidance for an area of your code." />
+<Card href="/docs/authoring" k="Authoring" d="Write your own rule — the calling contract, JS & shell." />
+<Card href="/docs/packs" k="Packs" d="Share & reuse rules across repos — install from any repo." />
+<Card href="/docs/wiring" k="How it wires" d="Hooks → engine → git hooks, and how config reaches a script." />
+<Card href="/docs/troubleshooting" k="Troubleshooting" d="Why a rule isn't firing, the debug trace, and the FAQ." />
+</Grid>

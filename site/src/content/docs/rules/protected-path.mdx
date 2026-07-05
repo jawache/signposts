@@ -1,0 +1,37 @@
+---
+title: core/protected-path — block edits to certain paths
+description: Forbid hand-edits to files that shouldn't be touched by hand at all — generated output, vendored code, anything machine-owned. The simplest rule; it only looks at the path.
+order: 6.7
+group: Rules
+---
+
+<p class="lede">Forbid hand-edits to files that shouldn't be touched by hand at all — generated output, vendored code, anything machine-owned. The simplest rule: it only looks at the path.</p>
+
+## What it catches
+
+Any attempt to edit or commit a file under a protected glob. It reads no content — the path alone decides — so it's instant and unambiguous.
+
+## Config
+
+```yaml
+rules:
+  - id: no-edit-generated
+    use: core/protected-path
+    deny: ["**/*.generated.ts", "vendor/**"]
+    message: "Generated / vendored — change the source it derives from, then regenerate."
+```
+
+| Field | What it does |
+| --- | --- |
+| `deny` | Glob(s) for the protected paths. Editing or committing a matching file is blocked. (Uses `deny:` instead of `on:` — the path is the whole rule.) |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+src/app/page.ts            ✓ passes
+src/api.generated.ts       ✗ blocked
+vendor/lib/thing.js        ✗ blocked
+```
+
+This is the rule used in the [two-triggers demo](/docs/the-loop): one line, default `when`, blocks the agent pre-emptively *and* blocks a plain `git commit`. It's also the kind of rule behind the [first-run demo](/docs/quickstart) (`signposts-is-bad.yaml`).

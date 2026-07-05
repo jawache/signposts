@@ -1,0 +1,41 @@
+---
+title: core/json-invariant — assert a structured file's shape
+description: Hold a JSON file to a shape rule — like keeping package.json scripts empty. Parses the file properly, so formatting doesn't matter.
+order: 6.4
+group: Rules
+---
+
+<p class="lede">Hold a JSON file to a shape rule — like "<code>package.json</code> scripts must stay empty". Parses the file properly, so formatting doesn't matter.</p>
+
+## What it catches
+
+A structured config file drifting from its intended shape. The starter example: keeping `package.json` `scripts` empty so the justfile stays the single command source.
+
+## Config
+
+```yaml
+rules:
+  - id: no-package-scripts
+    use: core/json-invariant
+    on: "package.json"
+    assert: { path: scripts, keysPrefixedWith: "//" }
+    message: "package.json scripts must stay empty — commands live in the justfile."
+```
+
+| Field | What it does |
+| --- | --- |
+| `on` | Glob(s) for the JSON file(s) to check. |
+| `assert.path` | A dotted path into the JSON to inspect (e.g. `scripts`, `compilerOptions.paths`). |
+| `assert.keysPrefixedWith` | Every key at that path must start with this prefix (here, only `//` comment keys are allowed). Anything else is a violation. |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+{ "scripts": { "//": "see justfile" } }            ✓ passes
+{ "scripts": { "//": "x", "dev": "vite" } }        ✗ blocked: "scripts.dev"
+```
+
+<Note>
+**Could this be ast-grep?** Possibly — there are JSON/YAML grammars, so some structured-file checks could fold into [core/ast-grep](/docs/rules/ast-grep). Today `core/json-invariant` is the simple path for JSON; a bespoke structured-file rule (YAML, the justfile) is a small [own-script](/docs/authoring) until it earns a place in core.
+</Note>

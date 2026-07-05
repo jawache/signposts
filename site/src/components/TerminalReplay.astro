@@ -1,0 +1,87 @@
+---
+// "Here's Gary, five minutes ago" — a real-session terminal replay. Transcript lines
+// reveal one-by-one; four narration cards light in sync and are clickable to rewind.
+// Ported from the reference (spike-e-gary.html, lines 408–437). DOM + CSS transitions only.
+// prefers-reduced-motion → all lines shown, step 4 lit, no autoplay (clicks still seek).
+---
+<div class="stage">
+  <div class="term">
+    <div class="bar"><i></i><i></i><i></i><span class="t">claude — your repo</span></div>
+    <pre id="termlines"><span class="tl"><span class="t-who">●</span> Edit(src/db/schema.generated.ts)</span><span class="tl">  <span class="t-red">✗ blocked — no-edit-generated</span></span><span class="tl">  <span class="t-dim">"Generated — change the source, then regenerate."</span></span><span class="tl"><span class="t-who">●</span> <span class="t-grn">Understood — editing the source instead.</span></span><span class="tl"><span class="t-who">●</span> Edit(src/db/schema.prisma)  <span class="t-grn">✓</span></span><span class="tl"><span class="t-who">●</span> Bash(npx prisma generate)   <span class="t-grn">✓</span></span><span class="tl">  <span class="t-dim">— the bad write never landed.</span></span></pre>
+  </div>
+  <div class="steps" id="steps">
+    <div class="stp"><span class="n">1</span><div><b>Gary goes to hand-edit a generated file</b><span>a mistake you've corrected a dozen times</span></div></div>
+    <div class="stp"><span class="n">2</span><div><b>A rule blocks the write — before it hits disk</b><span>with a written reason, not just a "no"</span></div></div>
+    <div class="stp"><span class="n">3</span><div><b>He reads the reason and changes course</b><span>no interruption, no babysitting</span></div></div>
+    <div class="stp"><span class="n">4</span><div><b>He fixes the real source instead</b><span>no bad bytes, no cleanup</span></div></div>
+  </div>
+</div>
+
+<style>
+  .stage { display: grid; grid-template-columns: 1.08fr .92fr; gap: 2rem; align-items: center; margin-top: 2rem; }
+  .term { background: var(--code-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(32, 36, 31, .22); }
+  .term .bar { display: flex; align-items: center; gap: .45rem; padding: .65rem .9rem; background: #10140f; }
+  .term .bar i { width: 10px; height: 10px; border-radius: 50%; background: #2c352d; display: block; }
+  .term .bar .t { margin-left: .4rem; color: #5e6f63; font-family: var(--font-mono); font-size: .72rem; }
+  .term pre { margin: 0; padding: 1.1rem 1.25rem 1.3rem; font-size: .83rem; line-height: 2.05; color: var(--code-ink); overflow-x: auto; font-family: var(--font-mono); }
+  .tl { display: block; opacity: 0; transform: translateY(4px); transition: opacity .35s, transform .35s; }
+  .tl.on { opacity: 1; transform: none; }
+  .t-red { color: var(--term-red); font-weight: 600; } .t-grn { color: var(--term-grn); } .t-dim { color: var(--term-dim); } .t-who { color: var(--term-gold); }
+  .steps { display: flex; flex-direction: column; gap: .7rem; }
+  .stp {
+    display: grid; grid-template-columns: 2.4rem 1fr; gap: .9rem; align-items: start;
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--line);
+    border-radius: 10px; padding: .85rem 1rem; opacity: .42; transition: all .35s; cursor: pointer;
+  }
+  .stp:hover { opacity: .75; }
+  .stp.on { opacity: 1; border-left-color: var(--green); box-shadow: 0 6px 18px rgba(32, 36, 31, .07); }
+  .stp .n {
+    font-family: var(--font-mono); font-size: .8rem; color: var(--green);
+    background: var(--green-soft); border-radius: 6px; text-align: center; padding: .25rem 0; font-weight: 600;
+  }
+  .stp b { display: block; font-size: .98rem; }
+  .stp span { color: var(--mut); font-size: .88rem; }
+  .stp.done .n { background: var(--green); color: #fff; }
+  @media (max-width: 840px) { .stage { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  /* ============ terminal replay — click a step to rewind ============ */
+  (function () {
+    const lines = [...document.querySelectorAll<HTMLElement>('#termlines .tl')];
+    const steps = [...document.querySelectorAll<HTMLElement>('#steps .stp')];
+    if (!lines.length || !steps.length) return;
+    const map = [0, 1, 1, 2, 3, 3, 3];                       // line -> step
+    // pause AFTER each line. The 4th value lingers on "changes course" (card 3) so the jump to
+    // card 4 ("fixes the real source") doesn't feel rushed.
+    const delay = [1400, 2600, 2400, 3200, 1600, 1500, 1800];
+    let shown = 0, timer: any = null;                        // shown = number of lines visible
+    function render() {
+      lines.forEach((l, i) => l.classList.toggle('on', i < shown));
+      const cur = shown > 0 ? map[shown - 1] : -1;
+      steps.forEach((s, si) => {
+        s.classList.toggle('on', si === cur);
+        s.classList.toggle('done', si < cur);
+      });
+    }
+    function tick() {
+      if (shown >= lines.length) { timer = setTimeout(() => { shown = 0; render(); timer = setTimeout(tick, 900); }, 4200); return; }
+      shown++; render();
+      timer = setTimeout(tick, delay[shown - 1]);
+    }
+    function seek(step: number) {
+      clearTimeout(timer);
+      shown = map.indexOf(step) + 1;                          // first line of that step
+      render();
+      timer = setTimeout(tick, delay[shown - 1]);
+    }
+    steps.forEach((s, si) => s.addEventListener('click', () => seek(si)));
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      shown = lines.length; render();                         // all lines; step 4 (last) lit; no autoplay
+    } else {
+      const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { tick(); io.disconnect(); } }, { threshold: .35 });
+      io.observe(document.querySelector('.stage')!);
+    }
+  })();
+</script>

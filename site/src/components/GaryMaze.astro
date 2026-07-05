@@ -1,0 +1,243 @@
+---
+// The Gary maze — a top-down pixel game in an arcade cabinet. Canvas + vanilla JS,
+// ported near-verbatim from the approved reference (spike-e-gary.html, lines 262–406).
+// No animation libraries. Starts on scroll-into-view; REPLAY button; loops.
+// prefers-reduced-motion → a meaningful still (fog partly lifted, sign+barrier+goal, static caption).
+---
+<div class="game" id="game">
+  <div class="wrap">
+    <div class="cab">
+      <div class="screen">
+        <canvas id="cv" width="320" height="176"></canvas>
+        <div class="dlg"><span id="dlgtext"></span><span class="cur"></span></div>
+      </div>
+      <div class="below">
+        <span>HOW SIGNPOSTS WORKS — 25 SEC</span>
+        <button id="replay">↻ REPLAY</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .game { padding: 1.2rem 0 3rem; }
+  .cab {
+    max-width: 880px; margin: 0 auto; background: #141814; border-radius: 16px;
+    padding: 14px 14px 12px; box-shadow: 0 24px 60px rgba(32, 36, 31, .3);
+  }
+  .screen { position: relative; border-radius: 8px; overflow: hidden; background: #0b0d0b; }
+  canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+  .dlg {
+    position: absolute; left: 3%; right: 3%; bottom: 4%; background: rgba(8, 10, 8, .92);
+    border: 2px solid #e8e4d5; border-radius: 4px; padding: .7rem .9rem;
+    font-family: var(--font-game); font-size: clamp(7px, 1.25vw, 11px);
+    line-height: 1.9; color: #e8e4d5; min-height: 3.2em;
+  }
+  .dlg .cur {
+    display: inline-block; width: .6em; height: 1em; background: #e8e4d5;
+    vertical-align: text-bottom; animation: blink 1s steps(1) infinite; margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .cab .below {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 4px 0; font-family: var(--font-game); font-size: 8px; color: #7a857b;
+  }
+  .cab .below button {
+    background: none; border: 1px solid #3a453c; color: #a8b5a9; border-radius: 4px;
+    padding: .45rem .8rem; font: inherit; cursor: pointer;
+  }
+  .cab .below button:hover { color: #fff; border-color: #7a857b; }
+  @media (prefers-reduced-motion: reduce) {
+    .dlg .cur { animation: none; }
+  }
+</style>
+
+<script>
+  /* ============ the Gary maze ============ */
+  (function () {
+    const cv = document.getElementById('cv') as HTMLCanvasElement | null;
+    if (!cv) return;
+    const ctx = cv.getContext('2d')!;
+    const T = 8, COLS = 40, ROWS = 22;
+
+    /* ---- map ---- */
+    const map = Array.from({ length: ROWS }, () => Array(COLS).fill(1));
+    function carve(x1: number, y1: number, x2: number, y2: number) {
+      for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) map[y][x] = 0;
+    }
+    carve(2, 10, 4, 12);            // start room
+    carve(2, 11, 13, 11);           // corridor A →
+    carve(12, 5, 12, 11);           // vertical ↑
+    carve(12, 5, 31, 5);            // corridor top → (barrier at 28)
+    carve(24, 5, 24, 13);           // vertical ↓ (the correct turn)
+    carve(24, 13, 34, 13);          // corridor →
+    carve(34, 13, 34, 17);          // down to goal
+    carve(33, 16, 36, 18);          // goal room
+    carve(5, 6, 5, 11); carve(7, 11, 7, 15); carve(13, 11, 17, 11);      // decoys
+    carve(18, 2, 18, 5); carve(29, 9, 29, 13); carve(36, 13, 38, 13);
+
+    const SIGN = { x: 13, y: 10 }, BARRIER = { x: 28, y: 5 }, GOAL = { x: 34.5, y: 17 };
+
+    /* ---- sprites ---- */
+    const PAL: Record<string, string> = { h: '#3a2c1e', s: '#e8b58a', w: '#f2ede2', l: '#41556b', o: '#141814' };
+    const G1 = ["..hh..", "hhhhhh", ".ssss.", "w.ss.w", "wwwwww", ".wwww.", ".l..l.", ".l..l."];
+    const G2 = ["..hh..", "hhhhhh", ".ssss.", "w.ss.w", "wwwwww", ".wwww.", "..l.l.", ".l..l."];
+    function sprite(frame: string[], px: number, py: number) {
+      const rows = frame;
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 6; x++) {
+        const c = rows[y][x]; if (c === '.') continue;
+        ctx.fillStyle = PAL[c] || c; ctx.fillRect(px + x + 1, py + y, 1, 1);
+      }
+    }
+
+    /* ---- state ---- */
+    type Tick = { tick(dt: number): boolean; t?: number };
+    let gary: { x: number, y: number }, seq: Tick[], si: number,
+      signGlow: number, flash: number, shake: number, win: number,
+      fadeIn: number, sparks: any[], walkT: number, dir: number, beacon: number;
+    const dlg = document.getElementById('dlgtext')!;
+    let typeTimer: any = null;
+    function say(t: string) {
+      clearInterval(typeTimer); dlg.textContent = '';
+      let i = 0; typeTimer = setInterval(() => { dlg.textContent = t.slice(0, ++i); if (i >= t.length) clearInterval(typeTimer); }, 22);
+    }
+    const B1 = "MEET GARY. BRILLIANT DEV. REMEMBERS ONLY THE LAST 500 THINGS.",
+      B1b = "GARY — GET TO THE END OF THE MAZE ►",
+      B2 = "A SIGN — RIGHT WHERE HE NEEDS IT. GARY TURNS.",
+      B3 = "HE DRIFTED. A RULE BOUNCES HIM BACK. NO HARM DONE.",
+      B4 = "GARY ARRIVES EXACTLY WHERE YOU WANTED ★";
+
+    const walk = (tx: number, ty: number, sp = 5): Tick => ({
+      tick(dt) {
+        const dx = tx - gary.x, dy = ty - gary.y, d = Math.hypot(dx, dy), step = sp * dt;
+        dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? -1 : 1) : dir;
+        walkT += dt;
+        if (d <= step) { gary.x = tx; gary.y = ty; return true; }
+        gary.x += dx / d * step; gary.y += dy / d * step; return false;
+      }
+    });
+    const pause = (ms: number): Tick => ({ t: 0, tick(dt) { this.t! += dt * 1000; return this.t! >= ms; } });
+    const call = (fn: () => void): Tick => ({ tick() { fn(); return true; } });
+
+    function build(): Tick[] {
+      return [
+        call(() => say(B1)), pause(2400),
+        call(() => { say(B1b); beacon = 1; }), pause(2200),
+        call(() => { beacon = 0; }),
+        walk(12, 11),
+        call(() => { signGlow = 1; say(B2); }), pause(2000),
+        walk(12, 5), walk(27.1, 5),
+        call(() => { flash = 1; shake = 1; say(B3); }), pause(1500),
+        walk(24, 5), pause(400),
+        walk(24, 13), walk(34, 13), walk(34, 17),
+        call(() => { win = 1; say(B4); burst(); }), pause(3200),
+        { tick() { reset(); return false; } }   // replaces seq; return false so the new seq starts at step 0
+      ];
+    }
+    function reset() {
+      gary = { x: 3, y: 11 }; seq = build(); si = 0; signGlow = 0; flash = 0; shake = 0;
+      win = 0; fadeIn = 1; sparks = []; walkT = 0; dir = 1; beacon = 0;
+    }
+    function burst() {
+      for (let i = 0; i < 26; i++) sparks.push({
+        x: GOAL.x * T + 4, y: GOAL.y * T, vx: (Math.random() - 0.5) * 46, vy: -Math.random() * 52 - 8,
+        t: 0, c: ['#ffd166', '#7ed6a2', '#f2ede2'][i % 3]
+      });
+    }
+
+    /* ---- render ---- */
+    function draw(dt: number) {
+      // floor + walls
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+        if (map[y][x]) { // hedge wall
+          ctx.fillStyle = '#1c3325'; ctx.fillRect(x * T, y * T, T, T);
+          if (y + 1 < ROWS && !map[y + 1][x]) { ctx.fillStyle = '#2c4d36'; ctx.fillRect(x * T, y * T + T - 2, T, 2); }
+          if ((x * 7 + y * 13) % 5 === 0) { ctx.fillStyle = '#254029'; ctx.fillRect(x * T + 2, y * T + 2, 2, 2); }
+        } else { // sandy path
+          ctx.fillStyle = '#c9b287'; ctx.fillRect(x * T, y * T, T, T);
+          if ((x * 3 + y * 11) % 7 === 0) { ctx.fillStyle = '#bda67c'; ctx.fillRect(x * T + 3, y * T + 4, 2, 1); }
+        }
+      }
+      // sign (arrow points up the vertical corridor)
+      const sx = SIGN.x * T, sy = SIGN.y * T;
+      ctx.fillStyle = '#6b4a2b'; ctx.fillRect(sx + 3, sy + 2, 2, 6);
+      ctx.fillStyle = signGlow ? '#2fa05a' : '#1f7a44'; ctx.fillRect(sx, sy, 8, 4);
+      ctx.fillStyle = '#fff'; ctx.fillRect(sx + 3, sy + 1, 2, 2); ctx.fillRect(sx + 2, sy + 2, 1, 1); ctx.fillRect(sx + 5, sy + 2, 1, 1);
+      if (signGlow) { ctx.fillStyle = 'rgba(126,214,162,.28)'; ctx.fillRect(sx - 3, sy - 3, 14, 12); }
+      // barrier (striped gate)
+      const bx = BARRIER.x * T, by = BARRIER.y * T;
+      for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#f2ede2' : '#b3372b'; ctx.fillRect(bx + 1, by + i * 2, 6, 2); }
+      if (flash > 0) { ctx.fillStyle = `rgba(255,90,74,${flash * .55})`; ctx.fillRect(bx - 6, by - 6, 20, 20); flash = Math.max(0, flash - dt * 2.2); }
+      // goal flag
+      const gx = GOAL.x * T, gy = GOAL.y * T, wave = Math.sin(performance.now() / 240) > 0 ? 0 : 1;
+      ctx.fillStyle = '#8d99a6'; ctx.fillRect(gx, gy - 6, 1, 12);
+      ctx.fillStyle = '#ffd166'; ctx.fillRect(gx + 1, gy - 6, 5, 3); ctx.fillRect(gx + 1, gy - 3, 4 - wave, 1);
+      // gary (+shake)
+      let ox = 0; if (shake > 0) { ox = Math.sin(performance.now() / 22) * shake * 2; shake = Math.max(0, shake - dt * 2); }
+      const frame = (Math.floor(walkT * 7) % 2) ? G1 : G2;
+      const spx = Math.round(gary.x * T - 4 + ox), spy = Math.round(gary.y * T - 4);
+      ctx.save();
+      // face left: mirror horizontally around Gary's centre (spx + 3). The spike's original
+      // 3-op transform reflected around the wrong pivot and flung the sprite off-canvas when
+      // walking left — this keeps him in place.
+      if (dir < 0) { const pivot = spx + 3; ctx.translate(pivot * 2, 0); ctx.scale(-1, 1); }
+      sprite(frame, spx, spy);
+      ctx.restore();
+      // sparks
+      sparks.forEach(s => {
+        s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 60 * dt;
+        ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, 1.5, 1.5);
+      });
+      sparks = sparks.filter(s => s.t < 1.6);
+      // fog of war
+      const cx = gary.x * T + 4, cy = gary.y * T, R1 = win ? 300 : 30, R2 = win ? 520 : 58;
+      const g = ctx.createRadialGradient(cx, cy, R1, cx, cy, R2);
+      g.addColorStop(0, 'rgba(6,8,7,0)'); g.addColorStop(1, 'rgba(6,8,7,.93)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, COLS * T, ROWS * T);
+      // goal beacon through the fog
+      if (!win) {
+        const p = beacon ? .55 + .3 * Math.sin(performance.now() / 160)
+          : .25 + .15 * Math.sin(performance.now() / 420);
+        const gg = ctx.createRadialGradient(gx, gy - 2, 1, gx, gy - 2, beacon ? 22 : 16);
+        gg.addColorStop(0, `rgba(255,209,102,${p})`); gg.addColorStop(1, 'rgba(255,209,102,0)');
+        ctx.fillStyle = gg; ctx.fillRect(gx - 16, gy - 18, 32, 32);
+      }
+      if (fadeIn > 0) { ctx.fillStyle = `rgba(6,8,7,${fadeIn})`; ctx.fillRect(0, 0, COLS * T, ROWS * T); fadeIn = Math.max(0, fadeIn - dt * 1.4); }
+    }
+
+    let last = performance.now(), playing = false;
+    function frame(now: number) {
+      const dt = Math.min(.05, (now - last) / 1000); last = now;
+      if (seq[si] && seq[si].tick(dt)) si++;
+      draw(dt);
+      requestAnimationFrame(frame);
+    }
+    function start() { if (playing) return; playing = true; reset(); requestAnimationFrame(frame); }
+
+    /* ---- reduced motion: a meaningful still, no autoplay ---- */
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function still() {
+      // Gary partway, at the correct turn; sign glowing; fog partly lifted so sign+barrier+goal read.
+      gary = { x: 24, y: 9 }; seq = []; si = 0; signGlow = 1; flash = 0; shake = 0;
+      win = 0; fadeIn = 0; sparks = []; walkT = 0; dir = 1; beacon = 1;
+      const cx = gary.x * T + 4, cy = gary.y * T;
+      const g0 = ctx.createRadialGradient(cx, cy, 150, cx, cy, 340);  // wide, gentle fog
+      draw(0);
+      // over-paint a wider fog so more of the maze is visible than mid-run
+      g0.addColorStop(0, 'rgba(6,8,7,0)'); g0.addColorStop(1, 'rgba(6,8,7,.55)');
+      ctx.fillStyle = g0; ctx.fillRect(0, 0, COLS * T, ROWS * T);
+      dlg.textContent = 'A SIGN TURNS GARY; A RULE BOUNCES HIM BACK — HE ARRIVES WHERE YOU WANTED.';
+    }
+
+    document.getElementById('replay')!.addEventListener('click', () => {
+      playing = false; start();   // an explicit click always plays, even under reduced motion
+    });
+
+    if (reduce.matches) {
+      still();
+    } else {
+      const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { start(); io.disconnect(); } }, { threshold: .4 });
+      io.observe(cv);
+    }
+  })();
+</script>

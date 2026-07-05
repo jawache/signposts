@@ -1,0 +1,40 @@
+---
+title: core/tool-gate — run an external tool, block on failure
+description: Hand a whole-project check off to a real tool — an import-graph linter, a type-checker, a coverage run — and block if it fails. The one tool-delegated rule.
+order: 6.8
+group: Rules
+---
+
+<p class="lede">Hand a whole-project check off to a real tool — an import-graph linter, a type-checker, a coverage run — and block if it fails. The one <em>tool-delegated</em> rule.</p>
+
+## What it catches
+
+Whatever the tool catches. Some checks need to see the whole project, not one file: a transitive import boundary, the type graph, a coverage threshold. `core/tool-gate` runs the command and blocks on a non-zero exit.
+
+## Config
+
+```yaml
+rules:
+  - id: import-boundaries
+    use: core/tool-gate
+    run: "npx depcruise src --config .dependency-cruiser.cjs"
+    carries: [".dependency-cruiser.cjs"]   # config file that travels with the rule
+    when: [commit]                          # heavy → commit-only (the one place when: is needed)
+    message: "An import boundary was crossed — see the dependency-cruiser output."
+```
+
+| Field | What it does |
+| --- | --- |
+| `run` | The command to run. A non-zero exit is a violation; its output is surfaced. |
+| `carries` | The tool's own config file(s). The *tool* owns the rules; Signposts vendors the file so install / propagate / refresh treat the rule and its config as one unit. |
+| `when` | **Required here:** `[commit]` or `[push]` — a tool-gate can't run pre-emptively (see below). |
+
+## Why it's different
+
+- **Commit/push only.** You can't run a whole-project build or graph-walk on every keystroke, so a tool-gate never runs pre-emptively at edit time. It's the only rule where you must set `when:`.
+- **The tool owns its config.** Signposts doesn't reinvent dependency-cruiser's or `tsc`'s rule language — it orchestrates (run + block) and vendors the config via `carries:`.
+- **Least portable to share.** A native script is self-contained; a tool-gate drags a project-specific config along, so [propagating](/docs/authoring) it upstream takes the most judgement.
+
+<Note>
+**Split by reach.** A *direct* import ban is a [core/ast-grep](/docs/rules/ast-grep) rule (native, pre-emptive). A *transitive-graph* boundary — "X must not reach Y through any chain" — is a tool-gate (commit-time). Same intent, two rules.
+</Note>

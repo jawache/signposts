@@ -1,0 +1,51 @@
+---
+title: Troubleshooting & FAQ
+description: Why a rule isn't firing, why one's over-blocking, the debug trace, and answers to the common questions.
+order: 11
+---
+
+## "My new rule isn't blocking anything"
+
+Most often one of these:
+
+- **The hook isn't live yet.** A newly added agent hook isn't active in the session that added it — your agent captures hooks at startup. **Start a fresh session** and try again. The commit-time gate doesn't have this caveat.
+- **A script errored and failed safe.** By design a broken rule exits cleanly and lets the edit through, so a bug looks like "nothing happened". Run `just test-rules` — a failing self-test points straight at it. To watch the hook live, set `SIGNPOSTS_DEBUG=1` and check the trace log.
+- **`when:` excludes the trigger.** If you set `when: [commit]` it won't fire pre-emptively. Leave `when:` off to get the default `[edit, commit]`.
+- **The `on:` glob doesn't match.** Check the path pattern against the real file path (relative to the repo root).
+
+## "It's blocking things it shouldn't"
+
+- **Tighten `on:`** (or `deny:` / `ban:`) so the rule only fires where you mean it to.
+- **Add a legal sample to the script's `--test`** that covers the case being false-flagged — then fix the script until it passes.
+- For a deliberate one-off, the rule's message always tells you the way out (e.g. a safety guard's explicit escape).
+
+## The debug trace
+
+```
+# the agent hook, run with SIGNPOSTS_DEBUG=1, logs each stage:
+  …  invoked · stdin 633B
+  …  Write: reconstructed src/feed.ts (113B)
+  …  eval → DENY (1)
+```
+
+## FAQ
+
+### Can I run with only signs, or only rules?
+
+Yes. They're independent halves. Many setups are mostly signs with a handful of rules for the things that truly must not happen. [Concepts →](/docs/concepts)
+
+### Does any of my code leave the machine?
+
+No. Every check runs locally, in-process, inside the hook. Nothing is sent anywhere.
+
+### Will the pre-emptive check slow my agent down?
+
+No meaningfully — scripts parse the reconstructed file in-process (no temp files, no spawned linters). It's built to sit on every write.
+
+### What if I don't use git hooks?
+
+The edit-time block still works (it's an agent hook). You lose the commit-time backstop — the half that catches mistakes made without the agent.
+
+### A rule is irrelevant to this repo — do I delete it?
+
+No need. A rule whose `on:` glob never matches simply sleeps. Carrying your whole stack everywhere is the intended model.

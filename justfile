@@ -42,3 +42,15 @@ test: test-rules test-e2e
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:
     npx lefthook run pre-commit --all-files
+
+# ── website (site/) ─────────────────────────────────────────────────────────────
+
+# The site is a STANDALONE npm project in site/ (not a workspace of this root package —
+# the root is the publishable signposts CLI). Recipes cd in and drive its own npm scripts.
+[doc("Run the website dev server (Astro, site/) at http://localhost:4321.")]
+site-dev:
+    cd site && npm run dev
+
+[doc("Build the website (site/) to site/dist — static output for Cloudflare.")]
+site-build:
+    cd site && npm run build

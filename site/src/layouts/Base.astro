@@ -1,0 +1,50 @@
+---
+// The base page shell — <head> meta, global styles, nav + footer around a slot.
+// Every page (landing, mental-model, docs) renders inside this.
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Absolute-from-root path for canonical + OG url, e.g. "/docs/quickstart/". */
+  path?: string;
+}
+
+const {
+  title = 'Signposts — guardrails for AI coding agents',
+  description = 'Signposts steers AI coding agents with just-in-time context: signs that guide as it reads, rules that block before a bad write lands. A committed file, not a service.',
+  path = '/',
+} = Astro.props;
+
+const canonical = new URL(path, Astro.site).href;
+const ogImage = new URL('/og.png', Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:site_name" content="Signposts" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content={ogImage} />
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="generator" content={Astro.generator} />
+</head>
+<body>
+  <Nav />
+  <slot />
+  <Footer />
+</body>
+</html>

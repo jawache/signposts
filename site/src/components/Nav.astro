@@ -1,0 +1,37 @@
+---
+// The sticky, paper-blur top nav. Brand fingerpost mark + section links.
+// On mobile the links collapse behind a hamburger toggle (vanilla JS, no libraries).
+const GITHUB = 'https://github.com/jawache/signposts';
+---
+<nav class="nav" id="site-nav">
+  <div class="wrap">
+    <a class="brand" href="/"><span class="post"></span>Signposts</a>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-menu">
+      <span class="bars"></span>
+    </button>
+    <div class="nav-menu" id="nav-menu">
+      <a href="/#game">How it works</a>
+      <a href="/#session">Signs &amp; rules</a>
+      <a href="/#loop">The loop</a>
+      <a href="/docs/">Docs</a>
+      <a href="/#start">Get started</a>
+      <a class="gh" href={GITHUB}>GitHub</a>
+    </div>
+  </div>
+</nav>
+<script>
+  const nav = document.getElementById('site-nav');
+  const btn = nav?.querySelector<HTMLButtonElement>('.nav-toggle');
+  const menu = document.getElementById('nav-menu');
+  btn?.addEventListener('click', () => {
+    const open = nav!.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  // tapping a link closes the menu (anchor links don't reload the page)
+  menu?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('a')) {
+      nav!.classList.remove('open');
+      btn?.setAttribute('aria-expanded', 'false');
+    }
+  });
+</script>

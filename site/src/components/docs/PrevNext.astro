@@ -1,0 +1,10 @@
+---
+// The prev / next footer, computed from `order` by the Docs layout.
+interface Link { href: string; label: string; }
+interface Props { prev?: Link | null; next?: Link | null; }
+const { prev, next } = Astro.props;
+---
+<nav class="pn">
+  {prev ? <a href={prev.href}>&larr; {prev.label}</a> : <span class="muted">Signposts docs</span>}
+  {next ? <a href={next.href}>{next.label} &rarr;</a> : <span></span>}
+</nav>

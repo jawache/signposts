@@ -1,0 +1,17 @@
+/* Self-hosted fonts (no Google Fonts CDN) — the four faces from the design system.
+   Fraunces + Inter as variable fonts; IBM Plex Mono + Press Start 2P as static weights.
+   Family names below are what @fontsource registers; referenced via --font-* in tokens.css. */
+
+/* Display / headings — Fraunces (variable: optical size + weight) */
+@import '@fontsource-variable/fraunces';
+
+/* Body / UI — Inter (variable weight) */
+@import '@fontsource-variable/inter';
+
+/* Code / labels / § numbers — IBM Plex Mono */
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+/* Game frame ONLY (dialogue box, HUD) — Press Start 2P */
+@import '@fontsource/press-start-2p';

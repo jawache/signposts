@@ -1,0 +1,37 @@
+/* Design tokens — the single source of colour, type and layout values.
+   Exact values from the landed design system (the task's design.md / spike-e-gary.html).
+   Sign = teal, rule = red, always: these two carry the product's two nouns everywhere. */
+
+:root {
+  /* ── palette ── */
+  --paper: #f7f4ec;        /* page background (warm paper) */
+  --ink: #20241f;          /* text */
+  --mut: #6b7065;          /* muted text */
+  --line: #e2ddcf;         /* borders */
+  --hair: #d6d1c1;         /* hairlines */
+
+  --green: #00703c;        /* THE brand accent — UK motorway green */
+  --green-soft: #e3efe7;   /* soft green fills */
+  --underline: #c4dccd;    /* heading underline highlight */
+
+  --sign: #1f6f7a;         /* teal — everything "sign / breadcrumb" */
+  --rule: #b3372b;         /* red — everything "rule / guardrail", § numbers */
+
+  --code-bg: #171c18;      /* terminal / code blocks */
+  --code-ink: #cfdcd2;
+
+  /* terminal transcript accents */
+  --term-gold: #e9c46a;
+  --term-grn: #7ed6a2;
+  --term-red: #ff8a7a;
+  --term-dim: #71816f;
+
+  /* ── type ── */
+  --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-game: 'Press Start 2P', monospace;
+
+  /* ── layout ── */
+  --maxw: 1000px;
+}

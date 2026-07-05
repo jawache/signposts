@@ -1,0 +1,57 @@
+---
+title: How it wires together
+description: Three small mechanisms, one config file. You don't wire signposts into triggers by hand — a rule's when does it, and a sign's globs do.
+order: 10
+---
+
+<p class="lede">Three small mechanisms, one config file. You don't wire signposts into triggers by hand — a rule's <code>when:</code> does it, and a sign's <code>globs:</code> do.</p>
+
+<div class="lane">
+<h3><Chip kind="rule">rule</Chip> · edit-time (the pre-emptive block)</h3>
+<div class="flow">
+<span class="box">agent tries Edit/Write</span><span class="arrow">→</span>
+<span class="box hl">PreToolUse hook</span><span class="arrow">→</span>
+<span class="box">reconstruct would-be file</span><span class="arrow">→</span>
+<span class="box hl">engine · phase edit</span><span class="arrow">→</span>
+<span class="box stop">deny + the fix</span><span class="arrow">→</span>
+<span class="box">agent self-corrects</span>
+</div>
+<p class="muted">The file never touches disk. The deny message is fed back to the agent, which retries correctly.</p>
+</div>
+
+<div class="lane">
+<h3><Chip kind="rule">rule</Chip> · commit-time (the backstop)</h3>
+<div class="flow">
+<span class="box">git commit</span><span class="arrow">→</span>
+<span class="box hl">lefthook</span><span class="arrow">→</span>
+<span class="box hl">engine · phase commit</span><span class="arrow">→</span>
+<span class="box stop">exit 2 — commit blocked</span>
+</div>
+<p class="muted">Same engine, same rules — over the staged files, with no agent in the loop.</p>
+</div>
+
+<div class="lane">
+<h3><Chip kind="sign">sign</Chip> · read-time (just-in-time context)</h3>
+<div class="flow">
+<span class="box">agent reads a file</span><span class="arrow">→</span>
+<span class="box hl">PostToolUse hook</span><span class="arrow">→</span>
+<span class="box">match area globs</span><span class="arrow">→</span>
+<span class="box soft">inject the sign</span>
+</div>
+<p class="muted">Re-injected every <code>drift_tokens</code> as the context grows.</p>
+</div>
+
+## How config reaches a script
+
+The engine reads `rules:` from `signposts.yaml`. For each entry it loads the script named by `use:` and calls it with the entry **verbatim** as the rule config, plus the file (in-memory at edit, from disk at commit). One uniform path:
+
+| Step | What happens |
+| --- | --- |
+| 1 · resolve | `use: core/ast-grep` → the core script; `use: neon/x` → your stack script. No special cases — even code patterns are a script. |
+| 2 · pass config | The whole YAML entry is handed to the script as-is. The script reads its own fields (`rule`, `sibling`, `deny`, …). |
+| 3 · feed the target | The script's `kind` says what it needs — file content, just the path, the command, or the whole project. |
+
+## Two things that always hold
+
+- **Fail-safe.** If a script or the hook itself errors, it exits cleanly and lets the edit through. A broken rule can never wedge your agent — it just stops enforcing until fixed.
+- **All local, in-process.** Rules run inside the hook (no temp files, nothing sent anywhere). The pre-emptive check is fast enough to sit on every write — which is exactly why [ast-grep is a core script](/docs/rules/ast-grep), not a tool-gate: it runs in-process, so it can block before the write. A whole-project tool can't, so it's commit-only.

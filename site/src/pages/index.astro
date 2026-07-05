@@ -1,0 +1,125 @@
+---
+// The landing page. Static prose sections + two ported animation components, per design.md
+// structure. Copy lives here (designed prose, not a CMS). Ported from spike-e-gary.html.
+import Base from '../layouts/Base.astro';
+import GaryMaze from '../components/GaryMaze.astro';
+import TerminalReplay from '../components/TerminalReplay.astro';
+import '../styles/landing.css';
+---
+<Base>
+  <!-- ── hero: the Gary story ── -->
+  <header class="hero">
+    <div class="wrap">
+      <span class="kicker">Guardrails for AI coding agents</span>
+      <h1>Meet Gary.</h1>
+      <p class="story">Gary is the best developer you've ever worked with. Knows every API by
+      heart, writes beautiful code, never sleeps. There's just one thing: <b>Gary only
+      remembers the last 500 things you tell him.</b></p>
+      <p class="story" style="margin-top:.8rem">Brief him with everything upfront and you've
+      burned 400 of those — forgotten by lunch anyway. No matter how brilliant Gary is,
+      eventually: chaos.</p>
+      <p class="punch">Your AI coding agent is Gary.<br><span class="u">Signposts is how you
+      work with Gary.</span></p>
+    </div>
+  </header>
+
+  <!-- ── the maze game ── -->
+  <GaryMaze />
+
+  <!-- ── just-in-time context + two-plate ── -->
+  <div class="thesis">
+    <div class="wrap">
+      <h2>Just-in-time context</h2>
+      <p>You don't memorise every road in the country before you set off. The signage is on the
+      road, at the junction, where the decision happens.</p>
+      <p>Signposts does the same for Gary: <b>the right context, at the right place, at the exact
+      moment it's needed.</b> Two moments matter:</p>
+      <div class="plate">
+        <div>
+          <span class="lbl sign">Sign — when he reads</span>
+          <h3>The breadcrumb</h3>
+          <p>Agents read an area before they write to it. The moment Gary reads a matching file,
+          the sign for that area drops into his context — "mind the shape here" — and is
+          re-delivered as his memory fades. It steers; it never blocks.</p>
+          <p class="when"><b>Gives him the chance to get it right first time.</b></p>
+        </div>
+        <div>
+          <span class="lbl rule">Rule — when he drifts</span>
+          <h3>The guardrail</h3>
+          <p>Gary isn't being difficult — he just forgets. So the rail doesn't need to be a
+          prison wall: it blocks the bad write <em>before it lands</em> and hands back a written
+          reason. Gary reads it, course-corrects, carries on.</p>
+          <p class="when"><b>Catches him when he forgets anyway.</b></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── real session: terminal replay + YAML bridge ── -->
+  <section class="section" id="session">
+    <div class="wrap">
+      <p class="secno">FOR EXAMPLE</p>
+      <h2 class="sec">A rule catching Gary, step by step</h2>
+      <p class="lead">A real session: Gary goes to hand-edit a generated file, a rule blocks the
+      write before it hits the disk, and he reads the reason and fixes the real source instead.</p>
+
+      <TerminalReplay />
+
+      <div class="bridge">
+        <div>
+          <h3>That rule? Four lines of YAML.</h3>
+          <p>Every guardrail is a plain entry in one committed <code>signposts.yaml</code> in
+          your repo. No service, no server — it travels with the code, and applies to anyone
+          (and any agent) who clones it.</p>
+        </div>
+        <pre><span class="y-key">rules:</span>
+  <span class="y-key">local:</span>
+    - <span class="y-key">id:</span> no-edit-generated
+      <span class="y-key">use:</span> core/protected-path
+      <span class="y-key">deny:</span> [<span class="y-str">"**/*.generated.ts"</span>]
+      <span class="y-key">message:</span> <span class="y-str">"Generated — change the source,
+                then regenerate."</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── the loop ── -->
+  <section class="section" id="loop">
+    <div class="wrap">
+      <p class="secno">THE LOOP</p>
+      <h2 class="sec">It learns the rails from you</h2>
+      <p class="lead">Signposts isn't a fixed ruleset you install once. You set it up once, then
+      it grows: develop and reflect on repeat, every session — and share what works when you want
+      to.</p>
+      <div class="phases">
+        <div class="phase">
+          <span class="ph-label">Set up · once</span>
+          <div class="ph-step"><b>Scaffold</b><span><code>npx signposts</code> lays down a known-good setup in any repo.</span></div>
+        </div>
+        <div class="phase is-loop">
+          <span class="ph-label">Then, every session <span class="cyc">⟳</span></span>
+          <div class="ph-step"><b>Develop</b><span>Work normally — signs steer, rules block.</span></div>
+          <div class="ph-step"><b>Reflect</b><span>A coach reads the session and proposes new signs + rules. Keep the good ones — they steer every session after.</span></div>
+        </div>
+        <div class="phase">
+          <span class="ph-label">Share · when you want</span>
+          <div class="ph-step"><b>Propagate</b><span>Push your keepers up to a public repo, so others can pull them.</span></div>
+          <div class="ph-step"><b>Install</b><span>Cherry-pick rules from any repo you trust into yours — no central catalogue.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── get started ── -->
+  <section class="section" id="start">
+    <div class="wrap">
+      <div class="getstarted">
+        <h2>Start in one command</h2>
+        <p>It scaffolds a known-good setup — with a cheeky demo rule, so you see a block (and a
+        self-correct) on day one. From there, grow your own rails as you work, and cherry-pick
+        from any repo you trust.</p>
+        <span class="npx mono"><span class="d">$</span> npx signposts</span>
+      </div>
+    </div>
+  </section>
+</Base>

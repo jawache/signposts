@@ -1,0 +1,24 @@
+---
+// 404 — styled in the site language, with a fingerpost pointing back.
+import Base from '../layouts/Base.astro';
+---
+<Base title="Not found — Signposts" description="That page took a wrong turn.">
+  <main class="nf">
+    <span class="kicker">404 · wrong turn</span>
+    <h1>No sign this way.</h1>
+    <p>That page doesn't exist — or it moved. Gary would tell you to check the map.</p>
+    <p class="links"><a href="/">Home</a> · <a href="/docs/">Docs</a> · <a href="/mental-model/">The mental model</a></p>
+  </main>
+  <style>
+    .nf { max-width: 620px; margin: 0 auto; padding: 5rem 1.5rem 6rem; text-align: center; }
+    .kicker {
+      display: inline-block; background: var(--rule); color: #fff; font-weight: 600;
+      font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+      padding: .28rem 1rem .28rem .8rem; border-radius: 4px;
+      clip-path: polygon(0 0, 94% 0, 100% 50%, 94% 100%, 0 100%);
+    }
+    h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(2.4rem, 6vw, 3.6rem); margin: 1.1rem 0 .8rem; letter-spacing: -.01em; }
+    p { font-size: 1.1rem; color: #42473e; }
+    .links { margin-top: 1.6rem; font-family: var(--font-mono); font-size: .95rem; }
+  </style>
+</Base>

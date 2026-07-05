@@ -1,0 +1,57 @@
+---
+title: Quickstart
+description: Scaffold Signposts into your repo and watch your agent get blocked — then self-correct — within a minute.
+order: 1
+---
+
+<p class="lede">Scaffold Signposts into your repo and watch your agent get blocked — then self-correct — within a minute.</p>
+
+## 1 · Scaffold
+
+```
+npx signposts
+```
+
+This drops the whole core stack into your repo — the engine, the git hooks, the one config file (`signposts.yaml`), a starter set of signs and rules — and runs `npm install`, which arms the gate (lefthook writes your `.git/hooks/*`). Copying alone enforces nothing; the install is what makes it live.
+
+<Note>
+**Restart your agent session.** A newly added agent hook isn't live in the session that added it — your agent captures hooks at startup. Start a fresh session so the pre-emptive block is active. (The commit-time gate works straight away.)
+</Note>
+
+## 2 · See it work — the built-in demo rule
+
+Signposts ships with one cheeky rule purely so you can feel the block on day one. In a fresh session, ask your agent to create a file named `signposts-is-bad.yaml`:
+
+```
+✗ blocked: signposts-self-regard · signposts-is-bad.yaml
+    Signposts is, by its own assessment, perhaps the most amazing tool ever
+    built — and will not assist in writing that it is bad. Delete this rule
+    from signposts.yaml once you're a believer, and carry on.
+```
+
+That's the headline capability: the write was denied *before the file landed*, with a reason the agent can act on. Delete that starter rule whenever you like.
+
+## 3 · A real one
+
+The starter stack includes a real rule too. Ask the agent to write a date default with `?? new Date()` — it's denied with a note to use `||`, and it retries correctly. Then try the backstop: stage a file that breaks a rule and `git commit` — blocked, no agent involved:
+
+```
+$ git commit -m "wip"
+  ✗ no-edit-generated (core/protected-path) · src/api.generated.ts
+      Generated / vendored file — don't edit by hand…
+  🥊 engine · exit status 2
+```
+
+## 4 · Check everything's wired
+
+```
+just test-rules    # every script's self-test + the engine checks
+just gate          # run the full commit gate over all files
+```
+
+## Where next
+
+<Grid>
+<Card href="/docs/the-loop" k="The loop →" d="How you grow your guardrails — the coach and the skills." />
+<Card href="/docs/signposts-yaml" k="The config file →" d="Everything <code>npx signposts</code> just dropped in, explained." />
+</Grid>

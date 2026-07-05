@@ -1,0 +1,40 @@
+---
+title: core/sibling-exists — require a companion file
+description: Insist that a file has a partner — its test, its types, its story file. Path-only, it decides from the filename without reading any content.
+order: 6.2
+group: Rules
+---
+
+<p class="lede">Insist that a file has a partner — its test, its types, its story file. Path-only: it decides from the filename, without reading any content.</p>
+
+## What it catches
+
+A file that's supposed to come with a companion but doesn't — e.g. a domain module with no `.test.ts` next to it.
+
+## Config
+
+```yaml
+rules:
+  - id: domain-has-test
+    use: core/sibling-exists
+    on: "src/domain/**/*.ts"          # files this applies to
+    sibling: "{dir}/{name}.test.ts"   # the partner that must exist
+    message: "Every domain module needs a sibling test."
+```
+
+| Field | What it does |
+| --- | --- |
+| `on` | Glob(s) for the files the rule applies to. |
+| `sibling` | The required partner, as a template. Placeholders: `{dir}` (folder), `{name}` (filename without extension), `{base}` (filename with extension), `{path}` (full path without extension). |
+| `message` | The reason, shown on a block. |
+
+### Legal vs illegal
+
+```
+src/domain/user.ts  +  src/domain/user.test.ts    ✓ passes
+src/domain/order.ts (no order.test.ts)            ✗ blocked
+```
+
+<Note>
+**Path-shape, not content.** This only checks that the partner *exists*. To check what's *in* it — e.g. that the test actually references the module's exports — use [core/symbols-in-sibling](/docs/rules/symbols-in-sibling).
+</Note>
