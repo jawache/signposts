@@ -13,7 +13,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import {
   DEV_DEPENDENCIES, ACTIVATE, SKILL_SURFACE, copyFile, readText, writeText, exists,
 } from './pack.mjs';
@@ -49,17 +49,23 @@ export function scaffold({ packRoot, target, activate = true, log = console.log 
 }
 
 function runActivate(target, packRoot, log) {
-  const linked = isDevLinked();
-  if (linked) {
-    // Pre-publish: signposts isn't on the registry, so link the dev build instead.
-    log(`• activate: dev-link mode (signposts is npm-linked, not yet published)`);
-    sh('npm link signposts', target, log);
-    log(`  linked signposts → your dev build. For the commit gate you also need lefthook:`);
-    log(`  run \`npm install\` once signposts is published, or \`npm i -D lefthook\` to test now.`);
-  } else {
-    log(`• activate: ${ACTIVATE.join(' && ')}`);
-    for (const cmd of ACTIVATE) if (sh(cmd, target, log) !== 0) { log(`  ! ${cmd} failed — arm manually.`); break; }
+  // Dev mode = the CLI is running from source (not from an installed node_modules copy).
+  // Then signposts isn't published, so link the local build BY PATH — no registry, no
+  // dependence on a global `npm link` (which nvm/login-shell differences can hide).
+  if (!packRoot.includes(`${sep}node_modules${sep}`)) return devLinkActivate(target, packRoot, log);
+  log(`• activate: npm install`);
+  if (sh('npm install', target) !== 0) log(`  ! npm install failed — arm manually with \`npm install\`.`);
+}
+
+function devLinkActivate(target, packRoot, log) {
+  log(`• activate: dev mode — linking your local build (signposts isn't published yet)`);
+  if (sh(`npm link "${packRoot}"`, target) !== 0) {
+    log(`  ! link failed — run this in the project by hand:  npm link "${packRoot}"`);
+    return;
   }
+  log(`  ✓ linked → node_modules/signposts. The PRE-EMPTIVE block is live after you restart the session.`);
+  log(`  (The commit gate needs lefthook, which npm can't install while signposts is unpublished —`);
+  log(`   it arms cleanly once signposts is published; \`npm install\` will pull lefthook then.)`);
 }
 
 // ── merge helpers (weave, never clobber; idempotent) ──────────────────────────
@@ -131,7 +137,3 @@ function walk(dir, base = '') {
 // ── utilities ─────────────────────────────────────────────────────────────────
 function safeJson(s) { if (!s) return null; try { return JSON.parse(s); } catch { return null; } }
 function sh(cmd, cwd, log) { const r = spawnSync('bash', ['-lc', cmd], { cwd, stdio: 'inherit' }); return r.status ?? 1; }
-function isDevLinked() {
-  const r = spawnSync('bash', ['-lc', 'npm ls -g --depth=0 --link=true 2>/dev/null | grep -q "signposts@"'], { encoding: 'utf8' });
-  return r.status === 0;
-}
