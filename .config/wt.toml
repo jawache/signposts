@@ -1,9 +1,5 @@
 # Worktrunk project config — https://worktrunk.dev
 #
-# Manual flow only: `wt switch -c <branch>` (or `wt switch -x code -c <branch>`)
-# creates the worktree and runs the pre-start hook below. We don't use `wt merge`;
-# land work with a plain `git rebase main` + fast-forward.
-
 # Runs once on worktree creation, in the new worktree's root, blocking post-start
 # until done. Three steps:
 #   1. copy-ignored — copies the gitignored setup artifacts a fresh worktree lacks
