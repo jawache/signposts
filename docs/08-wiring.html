@@ -73,6 +73,29 @@
     <p class="muted">Re-injected every <code>drift_tokens</code> as the context grows.</p>
   </div>
 
+  <div class="lane">
+    <h3><span class="chip rule">scan</span> · on-demand (the whole-tree audit)</h3>
+    <div class="flow">
+      <span class="box"><code>npx signposts scan</code></span><span class="arrow">→</span>
+      <span class="box hl">engine · phase&nbsp;scan</span><span class="arrow">→</span>
+      <span class="box">every per-file rule, whole tree</span><span class="arrow">→</span>
+      <span class="box soft">report the violations</span>
+    </div>
+    <p class="muted">The third door into the same engine — but it <strong>never blocks</strong> (always
+    exits 0). Edit and commit stop new violations; scan reveals the ones already there (adopting a rule on
+    an old repo, or pre-sizing a proposed rule). See <a href="10-skills.html">the CLI</a>.</p>
+  </div>
+
+  <h2>The engine keeps its own event log</h2>
+  <p>Every evaluation appends one line to a local, <strong>gitignored</strong> log at
+  <code>.signposts/log/&lt;session&gt;.jsonl</code>: a <code>run</code> with per-rule tallies, a
+  <code>deny</code> per violation, and a <code>sign</code> per injection. It's the deterministic ground
+  truth behind <code>npx signposts facts</code> and its HTML report card — per-rule fires,
+  <strong>edit-catches vs commit-leaks</strong>, rules that never fired. It stays on your machine (it's for
+  your own metrics, never sent anywhere), and — like every hook path — writing it is fail-safe: an
+  unwritable log can never block an edit. The report card reads <em>numbers</em> from here and
+  <em>narrative</em> from the transcript, kept strictly apart.</p>
+
   <h2>How config reaches a script</h2>
   <p>The engine reads <code>rules:</code> from <code>signposts.yaml</code>. For each entry it loads the
   script named by <code>use:</code> and calls it with the entry <strong>verbatim</strong> as the rule

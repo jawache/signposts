@@ -40,11 +40,18 @@
   <ul>
     <li><code>npx signposts</code> — <strong>scaffold</strong>: drop the engine, hooks, config, and the
       core pack into a repo, and arm the gate. One-time. (<a href="01-quickstart.html">Quickstart</a>.)</li>
-    <li><code>npx signposts refresh</code> — pull updates for the packs you've installed, tracked in your
-      <code>packs:</code> list.</li>
+    <li><code>npx signposts scan</code> — <strong>audit the whole tree</strong> against your rules. Reports,
+      never blocks — see the debt an existing repo already carries, or how many hits a proposed rule has.
+      (<a href="08-wiring.html">the third trigger</a>.)</li>
+    <li><code>npx signposts install &lt;src&gt; [ns]</code> — cherry-pick a pack from a git repo, an npm
+      scope, <strong>or a local folder</strong>; <code>uninstall --pack &lt;ns&gt;</code> reverses one.</li>
+    <li><code>npx signposts refresh</code> — pull updates for installed packs (three-way merge; keeps your
+      local tweaks), tracked in your <code>packs:</code> list.</li>
+    <li><code>npx signposts facts [--html]</code> — the deterministic session report the coach reads:
+      per-rule catches vs commit-leaks, never-fired rules, drift pointers. <code>--html</code> writes a
+      shareable <strong>report card</strong> to <code>.signposts/reports/</code>.</li>
     <li>Under the hood it also exposes the <strong>fetch / diff / apply</strong> helpers the skill calls —
-      e.g. "summarise what's in <em>that</em> repo versus mine" — so the AI doesn't burn tokens working
-      it out.</li>
+      so the AI doesn't burn tokens working it out.</li>
   </ul>
 
   <h2>The skill — <code>/signposts &lt;mode&gt;</code></h2>
@@ -56,7 +63,9 @@
   you corrected, what you re-explained, what a rule blocked — and the coach proposes new signposts:
   <em>"this drift → a <span class="chip sign">sign</span>"</em> or <em>"this mistake → a
   <span class="chip rule">rule</span>"</em>, or both. You accept, and it authors and tests them. This is
-  the engine of <a href="02-the-loop.html">the loop</a>.</p>
+  the engine of <a href="02-the-loop.html">the loop</a>. The facts it reads are deterministic — hard
+  numbers from the engine's <a href="08-wiring.html">event log</a>, not guessed from the transcript — and
+  <code>npx signposts facts --html</code> renders them as a session <strong>report card</strong>.</p>
 
   <h3><code>/signposts propagate</code> — send a rule to a repo</h3>
   <p>Lift a rule or sign out of this project and <strong>send it to a repo you name</strong> — genericising
@@ -65,7 +74,8 @@
   and it opens a PR.) You don't need a public repo to reuse your work.</p>
 
   <h3><code>/signposts install</code> — cherry-pick from a repo</h3>
-  <p>Point it at any repo — your hub, a teammate's project, an official pack. A helper diffs
+  <p>Point it at any repo — your hub (even a private one, or a sibling folder on disk), a teammate's
+  project, an official pack. A helper diffs
   <em>their</em> signposts against <em>yours</em> — what's new, what collides, which namespaces — and the
   skill walks you through an <strong>interactive picker</strong>: take the whole <code>neon</code>
   namespace, or individual entries. Collisions are talked through, not resolved by a rigid rule — this is

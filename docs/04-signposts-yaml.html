@@ -33,7 +33,8 @@
     <tr><td><code>config</code></td><td>Engine runtime settings — currently <code>drift_tokens</code> (the sign re-injection cadence).</td><td>the sign injector</td></tr>
     <tr><td><code>signs</code></td><td>Your <span class="chip sign">sign</span> notes, <strong>grouped by namespace</strong>.</td><td>the sign injector</td></tr>
     <tr><td><code>rules</code></td><td>Your <span class="chip rule">rule</span> blocks, <strong>grouped by namespace</strong>.</td><td>the engine</td></tr>
-    <tr><td><code>packs</code></td><td>The installed packs + versions, so <code>refresh</code> can update them.</td><td>the CLI</td></tr>
+    <tr><td><code>settings</code></td><td class="muted">Optional. Host-permission entries a pack carries, per namespace — merged into <code>.claude/settings.json</code> on install.</td><td>the CLI (install)</td></tr>
+    <tr><td><code>packs</code></td><td>The installed packs + what each owns, so <code>refresh</code> / <code>uninstall --pack</code> can track them.</td><td>the CLI</td></tr>
     <tr><td><code>install</code></td><td>What to copy, which deps to add, how to arm it.</td><td>the CLI</td></tr>
   </table>
 
@@ -93,6 +94,25 @@ install:
   <code>rules/ast-grep/*.yml</code> (so <code>ast-grep scan</code> and the test runner use the same
   files); the <code>core/ast-grep</code> runner executes them in-process. See
   <a href="05-rules/ast-grep.html">core/ast-grep</a>. Everything else is a normal <code>rules:</code> entry.</div>
+
+  <h2>Packs a pack carries — <code>settings:</code> and the <code>packs:</code> ledger</h2>
+  <p>A pack can carry <strong>host permissions</strong> the engine can't enforce (denying a read, an MCP
+  tool call) via an optional <code>settings:</code> block — install merges them into
+  <code>.claude/settings.json</code>. And <code>packs:</code> records what each install owns, so refresh and
+  <code>uninstall --pack</code> know exactly what to touch. A plain string entry is still valid; install
+  writes the richer object form:</p>
+  <pre><code>settings:
+  neon:
+    permissions:
+      deny: ["Read(./.env.keys)"]      # enforced by the host, delivered by the pack
+
+packs:
+  - "@signposts/core"                  # legacy string — fine
+  - source: "github:you/hub#main"      # object form, written by install
+    namespaces: [neon]
+    settings: { deny: ["Read(./.env.keys)"] }   # the ledger uninstall reverses
+    installed: "2026-07-06"</code></pre>
+  <p>See <a href="11-packs.html">Packs &amp; distribution</a> for the install / refresh / uninstall flow.</p>
 
   <div class="pn"><a href="10-skills.html">← Skills</a><a href="05-rules/index.html">The rules →</a></div>
 </main>

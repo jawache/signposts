@@ -15,13 +15,15 @@ import { join, dirname, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
 import { parse as parseYaml } from 'yaml'
 import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signs-core.mjs'
+import { logEvent } from '../log.mjs'
 
 const THRESHOLD = 200_000
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd()
 
 try {
   const input = JSON.parse(readFileSync(0, 'utf8'))
-  const stateFile = statePath(input.session_id || 'unknown', input.agent_id || 'main')
+  const session = input.session_id || 'unknown'
+  const stateFile = statePath(session, input.agent_id || 'main')
 
   if ((input.hook_event_name || '') === 'PostCompact') {
     writeState(stateFile, {}) // reset — everything re-briefs after a compaction
@@ -40,16 +42,19 @@ try {
   if (!picks.length) process.exit(0)
 
   const blocks = []
+  const injected = []
   for (const p of picks) {
     const entry = signs.find((e) => e.id === p.id)
     const base = entry?.text ?? readRepoFile(entry?.file) ?? ''
     const body = [base, renderAvoid(entry?.avoid)].filter(Boolean).join('\n\n') // note + its avoid-list
     if (!body) continue
     blocks.push(`# signpost: ${p.id} (${p.reason})\n${body}`)
+    injected.push(p)
     state[p.id] = tokensSoFar
   }
   if (!blocks.length) process.exit(0)
   writeState(stateFile, state)
+  for (const p of injected) logEvent(ROOT, session, { kind: 'sign', sign: p.id, reason: p.reason }) // ground truth for the report card
 
   process.stdout.write(
     JSON.stringify({

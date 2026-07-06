@@ -11,9 +11,14 @@ from a deterministic script — so you never rediscover what a script can just t
 
 | Mode | What it does | Its fact-provider |
 |---|---|---|
-| **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ the `coach` agent) |
+| **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ `--html` report card; + the `coach` agent) |
 | **propagate** | send a rule/sign to a repo you name (your hub, or upstream) | `git` / `gh` |
-| **install** | cherry-pick signs/rules from another repo into this one | `npx signposts diff` |
+| **install** | cherry-pick signs/rules from another repo (git/npm/**local folder**) into this one | `npx signposts diff` |
+
+Two more deterministic helpers you can reach for in any mode: **`npx signposts scan`** (audit
+the whole tree against the rules — reports, never blocks: see what an existing repo already
+violates, or how many hits a rule you're about to add would have) and **`npx signposts
+uninstall --pack <ns>`** (reverse one installed pack).
 
 **The rule between the two halves:** the script emits facts (what drifted, what's in
 that repo, what collides); *you* apply the judgement (which to keep, how to genericise,
@@ -30,17 +35,21 @@ each is `rules/README.md` and the `docs/`. Read them; don't restate them.
 Run at the **end of a session**. Surfaces where the machinery let drift slip through, and
 turns each keeper into a sign or a rule.
 
-1. **Gather facts.** `npx signposts facts` from the repo root — deterministic stats + a
-   navigable drift index (hook fires/outcomes, justfile bypasses, sign-coverage gaps,
-   course-corrections), each with a transcript line. `npx signposts facts --around <line>`
-   opens any cited spot. (It reads the transcript, not a diff — runnable any time.)
+1. **Gather facts.** `npx signposts facts` from the repo root — **hard numbers from the
+   engine's event log** (per-rule catches@edit vs leaks@commit, never-fired rules, signs
+   injected, any rule-weakening flags) plus a navigable drift index from the transcript
+   (justfile bypasses, sign-coverage gaps, course-corrections), each with a transcript line.
+   `--around <line>` opens any cited spot; `--html` writes a shareable report card to
+   `.signposts/reports/`. (Numbers are deterministic; narrative is heuristic — labelled.)
 2. **Spawn `coach`** (Task) with that report. It reads the cited lines and returns
    candidate **rules** + **signs** — each a place the machinery let the agent go wrong.
    Coach writes nothing.
 3. **Dispose each candidate** via the authoring reference below — prefer a **rule** when
    it's mechanically checkable; a **sign** for shape/judgement a check can't make.
    Rejecting one is fine — say why.
-4. **Test** — `just test-rules` green for anything you added.
+4. **Test + size.** `just test-rules` green for anything you added; for a new rule, `npx
+   signposts scan` shows how many pre-existing hits it already has (200 needs a different
+   rollout than 3).
 
 The richest signal is the **course-corrections**: each is a spot a sign or rule would have
 caught. Aim to leave with at least one of each when the session earned them.
@@ -70,8 +79,12 @@ guardrails born in real work bubble up to be shared.
 
 ## Mode: `install` — cherry-pick from any repo
 
-Point at any repo — your hub, a teammate's project, an official pack — and pull what you
-want. Any repo with a `signposts.yaml` is installable; there's no separate pack format.
+Point at any repo — your hub, a teammate's project, an official pack — **or a local folder on
+disk** (`../my-hub`, the common private-repo case) — and pull what you want. Any repo with a
+current-shape `signposts.yaml` is installable; there's no separate pack format. (An older-layout
+repo is refused with a pointer to cherry-pick by hand.) Reverse one later with
+`npx signposts uninstall --pack <ns>` — it removes the namespace's entries, scripts, and any
+permissions it added, and nothing else.
 
 1. **Diff.** `npx signposts diff <source-repo>` (add `--json` to consume it) — reports, per
    namespace, for both signs and rules: **new** (take freely), **COLLIDE** (you both have
@@ -82,9 +95,11 @@ want. Any repo with a `signposts.yaml` is installable; there's no separate pack 
 3. **Resolve collisions in conversation** — this is exactly where judgement beats a rigid
    rule. For each COLLIDE, show both versions and ask: keep mine, take theirs, or merge.
    Don't silently clobber.
-4. **Apply the picks.** Copy `rules/<namespace>/…` scripts in, and merge the chosen entries
-   into your `signs:`/`rules:` groups. Add the source to `packs:` so `npx signposts refresh`
-   tracks it.
+4. **Apply the picks.** `npx signposts install <src> <ns>` does the deterministic apply: copies
+   `rules/<namespace>/…`, merges the entries into your `signs:`/`rules:` groups (comments
+   preserved), merges any host-permissions the pack carries into `.claude/settings.json`, and
+   records what it owns in `packs:` so `refresh` (three-way merge) and `uninstall --pack` can
+   track it.
 5. **Test + arm.** `just test-rules` green; the new rules fire on next edit/commit.
 
 ---

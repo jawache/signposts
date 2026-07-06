@@ -8,6 +8,10 @@ node_modules/
 # per-worktree dev port, written by the wt pre-start hook (.config/wt.toml)
 .wt-port
 
+# engine event log + report cards + refresh base snapshots — local telemetry,
+# never committed (per-session JSONL under .signposts/log/; see docs/08-wiring).
+.signposts/
+
 # local-only agent settings (per-machine permission grants etc.)
 .claude/settings.local.json
 

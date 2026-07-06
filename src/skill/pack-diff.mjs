@@ -21,7 +21,9 @@ import { parse as parseYaml } from 'yaml';
 export function loadPacks(root) {
   let doc = {};
   try { doc = parseYaml(readFileSync(join(root, 'signposts.yaml'), 'utf8')) || {}; } catch { /* none */ }
-  return { signs: grouped(doc.signs), rules: grouped(doc.rules), root };
+  // `settings:` (optional) carries host-permission entries per namespace — travels with
+  // the namespace on install (merged into .claude/settings.json). Shape: ns → { permissions: { deny, allow } }.
+  return { signs: grouped(doc.signs), rules: grouped(doc.rules), settings: (doc.settings && typeof doc.settings === 'object') ? doc.settings : {}, root };
 }
 function grouped(section) {
   const out = {};
@@ -32,7 +34,7 @@ function grouped(section) {
 }
 
 // stable stringify (sorted keys) so formatting never masquerades as a difference.
-function canon(v) {
+export function canon(v) {
   if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`;
   if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',')}}`;
   return JSON.stringify(v);

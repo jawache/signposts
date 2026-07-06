@@ -22,18 +22,21 @@ import { scaffold } from './scaffold.mjs';
 import { refresh } from './refresh.mjs';
 import { installPack } from './install.mjs';
 import { uninstall } from './uninstall.mjs';
+import { scan } from './scan.mjs';
 
 // PACK_ROOT = the package root. Running from this repo it's the repo root; installed via
 // npm it's node_modules/signposts. Either way: two up from src/cli/.
 const PACK_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function parse(argv) {
-  const opts = { cmd: null, target: process.cwd(), activate: true, dryRun: false, args: [] };
+  const opts = { cmd: null, target: process.cwd(), activate: true, dryRun: false, json: false, pack: null, args: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--target') opts.target = resolve(argv[++i]);
+    else if (a === '--pack') opts.pack = argv[++i];
     else if (a === '--no-activate') opts.activate = false;
     else if (a === '--dry-run') opts.dryRun = true;
+    else if (a === '--json') opts.json = true;
     else if (a === '--help' || a === '-h') opts.cmd = 'help';
     else if (!opts.cmd && !a.startsWith('-')) opts.cmd = a;
     else if (!a.startsWith('-')) opts.args.push(a);          // positional args after the command
@@ -48,8 +51,10 @@ Usage:
   npx signposts                       scaffold the core pack into this repo and arm the gate
   npx signposts install <src> [ns]    install a pack from git / npm / a local repo
                                       (github:you/neon · @acme/guardrails · ./hub)
+  npx signposts scan                  check the whole tree against your rules (reports, never blocks)
   npx signposts refresh               pull updates for installed packs (keeps your edits)
   npx signposts uninstall             remove Signposts: delete its files + unwire the hooks
+  npx signposts uninstall --pack <ns> remove one installed pack namespace (yaml, scripts, permissions)
   npx signposts facts [...]           session facts (the coach's input)
   npx signposts diff <src>            diff a repo's packs against yours
   npx signposts --help
@@ -78,11 +83,13 @@ try {
     if (!opts.args[0]) { console.error('usage: npx signposts install <source> [namespace]'); process.exit(1); }
     installPack({ source: opts.args[0], namespace: opts.args[1], target: opts.target });
   }
+  else if (opts.cmd === 'scan') scan({ root: opts.target, json: opts.json });
   else if (opts.cmd === 'refresh') refresh({ target: opts.target });
-  else if (opts.cmd === 'uninstall') uninstall({ target: opts.target, dryRun: opts.dryRun });
+  else if (opts.cmd === 'uninstall') uninstall({ target: opts.target, dryRun: opts.dryRun, pack: opts.pack });
   else if (!opts.cmd || opts.cmd === 'scaffold') scaffold({ packRoot: PACK_ROOT, target: opts.target, activate: opts.activate, dryRun: opts.dryRun });
   else { console.error(`Unknown command: ${opts.cmd}\n`); help(); process.exit(1); }
 } catch (e) {
-  console.error(`signposts: ${e?.stack || e}`);
+  // a clean one-liner for the user; the full stack only when SIGNPOSTS_DEBUG is set.
+  console.error(`signposts: ${process.env.SIGNPOSTS_DEBUG ? (e?.stack || e) : (e?.message || e)}`);
   process.exit(1);
 }

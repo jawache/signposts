@@ -145,6 +145,7 @@ async function main() {
     files: [file.path],
     root: ROOT,
     getContent: () => file.content,
+    logCtx: { root: ROOT, session: input.session_id },
   });
   trace(`eval → ${violations.length ? `DENY (${violations.length})` : 'allow'}`);
   if (violations.length) deny(denyReason(violations));

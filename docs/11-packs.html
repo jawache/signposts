@@ -54,33 +54,70 @@ rules:
   pull — by namespace or by entry. See <a href="10-skills.html">the skill</a>. The deterministic form,
   when you already know what you want:</p>
   <pre><code>npx signposts install github:you/your-project           # browse what's there
-npx signposts install github:you/your-project  neon     # take the neon namespace</code></pre>
+npx signposts install github:you/your-project  neon     # take the neon namespace
+npx signposts install ../my-hub  neon                   # …or from a sibling folder on disk</code></pre>
   <p>It copies <code>rules/neon/</code> and merges the <code>neon</code> group from both
-  <code>signs:</code> and <code>rules:</code> — the whole pack, in one move.</p>
+  <code>signs:</code> and <code>rules:</code> — the whole pack, in one move. Comments in your
+  <code>signposts.yaml</code> are preserved (the merge edits the document in place, it doesn't
+  re-serialise from scratch). To remove a pack later: <code>npx signposts uninstall --pack neon</code>
+  — it drops the namespace's yaml groups, its <code>rules/neon/</code>, and any permissions it added,
+  leaving your own config untouched.</p>
+  <div class="note"><strong>Install reads the current layout only.</strong> An older repo (flat
+  <code>signs:</code>/<code>rules:</code> lists, or the legacy <code>advisory:</code> key) is refused with a
+  clear message — open it with <code>/signposts install</code> (the skill) and cherry-pick by hand. No
+  silent half-install.</div>
 
   <h2>The hub: your own repo as the spine</h2>
   <p>You don't need a public anything. Keep a personal rules repo (private is fine) as your hub:
   <code>reflect</code> finds a rule in a project → <code>propagate</code> sends it to the hub →
   <code>install</code> pulls it into your other projects. Trusted teammates can install from the hub too.</p>
 
-  <h2>Two distribution doors</h2>
-  <p>The same pack ships either way — pick by how much ceremony you want.</p>
+  <h2>Three install doors</h2>
+  <p>The same pack installs any of three ways — pick by how much ceremony you want.</p>
   <table>
-    <tr><th></th><th>Git <span class="muted">(default)</span></th><th>npm-scoped <span class="muted">(at scale)</span></th></tr>
-    <tr><td>Source</td><td><code>github:you/pack#v1</code>, or private over SSH</td><td><code>@signposts/neon</code> · <code>@acme/guardrails</code></td></tr>
-    <tr><td>Publish step</td><td>just <code>git push</code> (tag to pin)</td><td><code>npm publish</code></td></tr>
-    <tr><td>Versioning</td><td>tags / refs</td><td>semver (<code>@^2</code>)</td></tr>
-    <tr><td>Private</td><td>a private repo</td><td>a private registry</td></tr>
-    <tr><td>Best for</td><td>you · personal · quick · private</td><td>official packs · companies · access control</td></tr>
+    <tr><th></th><th>Local path <span class="muted">(private / quick)</span></th><th>Git <span class="muted">(default)</span></th><th>npm-scoped <span class="muted">(at scale)</span></th></tr>
+    <tr><td>Source</td><td><code>../my-hub</code> · <code>/abs/path</code></td><td><code>github:you/pack#v1</code>, or private over SSH</td><td><code>@signposts/neon</code> · <code>@acme/guardrails</code></td></tr>
+    <tr><td>Publish step</td><td>none — install straight from disk</td><td>just <code>git push</code> (tag to pin)</td><td><code>npm publish</code></td></tr>
+    <tr><td>Versioning</td><td>whatever's on disk</td><td>tags / refs</td><td>semver (<code>@^2</code>)</td></tr>
+    <tr><td>Best for</td><td>private repos · one cleaned-up hub folder you install everywhere from</td><td>you · personal · shared</td><td>official packs · companies · access control</td></tr>
   </table>
-  <p>Official packs live under the project's <code>@signposts/*</code> scope; a company publishes under
-  its own (<code>@acme/*</code>); you just push a repo.</p>
+  <p>Same cherry-pick semantics for all three — only the fetch differs. The local door fits the common
+  case: most rule-bearing repos are private, and the natural workflow is "tidy one local hub, install from
+  there". Official packs live under <code>@signposts/*</code>; a company publishes under its own
+  (<code>@acme/*</code>); you just push (or point at) a repo.</p>
 
-  <h2>Refresh tracks what you installed</h2>
-  <p>Your config records installed packs so <code>npx signposts refresh</code> can pull updates:</p>
+  <h2>A pack can carry host permissions</h2>
+  <p>Some guardrails aren't enforceable by the engine — denying a <em>read</em>, or an MCP tool call, is
+  the host's job (Claude Code's <code>.claude/settings.json</code>), not ours. A pack can carry those so you
+  don't hand-edit settings after every install. Add a <code>settings:</code> block, per namespace:</p>
+  <pre><code>settings:
+  neon:
+    permissions:
+      deny:  ["Read(./.env.keys)"]   # the host blocks the read; Signposts just delivers the entry
+      allow: []                       # optional</code></pre>
+  <p>On install these merge into <code>.claude/settings.json</code>, and exactly what was added is recorded
+  as the pack's ledger in <code>packs:</code> (below), so <code>uninstall --pack</code> removes precisely
+  those entries — never a hand-written one, never one another installed pack still needs.</p>
+
+  <h2>Refresh keeps your local tweaks</h2>
+  <p>Your config records installed packs so <code>npx signposts refresh</code> can pull updates. Install
+  writes an <em>object</em> entry — the source, the namespaces it owns, the permissions ledger, and the
+  date (a plain string still works for a legacy entry):</p>
   <pre><code>packs:
-  - "@signposts/neon@^2"                 # npm, semver-tracked
-  - "github:you/signposts-mystyle#v1"    # git, ref-tracked</code></pre>
+  - "@signposts/neon@^2"                    # legacy string — still valid
+  - source: "github:you/signposts-mystyle#v1"
+    namespaces: [mystyle]
+    settings: { deny: ["Read(./.env.keys)"] }   # exactly what install added
+    installed: "2026-07-06"</code></pre>
+  <p>Refresh does a <strong>three-way merge</strong> against a snapshot install took (kept under a
+  gitignored <code>.signposts/base/&lt;ns&gt;/</code>): it compares what the pack originally shipped, what's
+  in your repo now, and what the pack ships today. Only upstream changed → take theirs; only you changed →
+  keep yours; <em>both</em> changed → it surfaces a conflict and touches nothing (for a script it drops a
+  <code>&lt;file&gt;.upstream</code> sidecar beside yours — never conflict markers in a live rule). That's
+  what makes "install, then tune it locally" safe to combine with "stay current".</p>
+  <div class="note"><strong>Fresh clone?</strong> <code>.signposts/</code> is gitignored, so the base
+  snapshot isn't in the repo. Refresh notices and keeps your local versions with a notice — re-install the
+  pack to re-arm merging.</div>
 
   <div class="note"><strong>core is a pack too.</strong> The baked-in scripts and starter rules ship as
   the <code>core</code> namespace — same mechanism as <code>neon</code> or your own. Nothing is special;

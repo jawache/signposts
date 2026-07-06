@@ -18,10 +18,12 @@ synthesises them into the wrap-up. You own proposals to **`rules/` (new checks)*
 ## Your input is a navigable index — read the pointers, judge for yourself
 
 `npx signposts facts` hands you (run it if you weren't given it):
-**hard stats** (hook fires/outcomes, justfile hit-rate, signpost coverage, diff flags), a
-**session map** (the user turns, line-numbered), and **drift sites** — course-corrections,
-hook-caught-and-fixed, bypasses, edit loops, retries, rule/hook errors — each with a
-**transcript line number** + local tool-use context.
+**hard numbers from the engine's event log** (per-rule evaluated · **caught@edit vs
+leaked@commit** · **rules that never fired** · signs injected · any **rule-weakening
+flags**) — deterministic, not transcript-scraped; a **session map** (the user turns,
+line-numbered); and **drift sites** from the transcript — course-corrections, bypasses,
+edit loops, retries — each with a **transcript line number** + local tool-use context
+(clearly labelled heuristic).
 
 It located these deterministically so you don't grep (grep can't tell a real hook fire from
 us *discussing* hooks — the whole reason the script exists). The judgement is yours:
@@ -55,6 +57,15 @@ Coverage (touched areas with/without a matching sign; drift despite one). Propos
 the note text — under the inclusion rule (the `/signposts` skill is its source of truth):
 shape / judgement / un-enforced constraint only — never restate a check, no pointers to
 checks. Propose a **new sign** only for a touched area that earned proactive guidance.
+
+### Rule self-edits (weaken-after-deny)
+If facts carries **rule-weakening flags** (a rule fired, then a guardrail file —
+`signposts.yaml` · `rules/**` · `.claude/settings.json` — was edited just after),
+`--around <editLine>` the cited edit and judge **intent**: authoring a *new* sign/rule, or
+tightening one, is healthy — say so in one line and move on. But an edit that **loosens or
+deletes the very rule/permission that just blocked the agent** is the drift this guard
+exists to catch — surface it plainly (rule id + the edit) so the human decides. The flag is
+a pointer, never a verdict; no flags → say nothing.
 
 ### Bottom line
 One sentence: is the signposts machinery working, and the single highest-value change.

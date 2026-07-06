@@ -7,7 +7,12 @@
 #   rules:    your RULES — blocks, grouped by namespace. Each names a SCRIPT via `use:`
 #             (a path: core/<name> or <namespace>/<name>) + its config, run at edit
 #             (pre-emptively) and at commit.
-#   packs:    the installed packs + versions, so `npx signposts refresh` can update them.
+#   settings: (optional) host-permission entries a pack carries, per namespace — merged
+#             into .claude/settings.json on install (the host enforces reads + MCP tool
+#             calls the engine never sees). Shape: <ns>: { permissions: { deny, allow } }.
+#   packs:    the installed packs, so `npx signposts refresh` / `uninstall --pack` can
+#             track them. A plain string is legacy; install now writes an OBJECT entry
+#             ({ source, namespaces, settings, installed }) so uninstall knows what it owns.
 #   install:  what to copy / arm — read by the CLI.
 #
 # Author with /signposts reflect. Full guide: the Signposts docs.
@@ -20,13 +25,24 @@ config:
   drift_tokens: 200000        # re-inject a sign after ~this many tokens of drift
 
 signs:
-  # Your just-in-time guidance, grouped by namespace. Uncomment to try one:
+  # A soft guard on the guardrails themselves — ships with every scaffold. Never blocks
+  # (the AI must be able to author rules); it just reminds, and the coach flags a
+  # deny-then-weaken sequence at wrap-up.
+  core:
+    - id: rules-self-edit
+      globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
+      text: |-
+        You are editing the guardrails themselves. If this edit weakens or removes a
+        rule/permission IN RESPONSE to just being blocked by it — stop and confirm with
+        the user first. Authoring new signposts is always fine; loosening one to get an
+        edit through is the user's call, not yours.
+
+  # Your own just-in-time guidance, grouped by namespace. Uncomment to try one:
   # local:
   #   - id: db-area
   #     globs: ["src/db/**"]
   #     text: |-
   #       Queries go through the repository layer, never inline in a route.
-  {}
 
 rules:
   # ─── QUICK-START TOUR ────────────────────────────────────────────────────────

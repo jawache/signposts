@@ -21,10 +21,11 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, isAbsolute, relative, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { matchAny } from './util.mjs';
+import { logEvent } from './log.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the library)
 // The built-in rule types live in the package, next to the engine (src/core). A
@@ -129,12 +130,40 @@ function rel(file, root) {
   return isAbsolute(file) ? relative(root, file) : file;
 }
 
+// Per-rule fire tallies for the event log. `evaluated` = times the rule actually
+// ran against a file (post on/ignore filter); `hits` = times it produced a
+// violation. A rule with evaluated===0 across all sessions is a retire candidate.
+function makeTally() {
+  const tally = new Map();
+  return {
+    tally,
+    record(rule, n) {
+      let t = tally.get(rule.id);
+      if (!t) { t = { id: rule.id, evaluated: 0, hits: 0 }; tally.set(rule.id, t); }
+      t.evaluated += 1; if (n > 0) t.hits += 1;
+    },
+  };
+}
+
+// Emit one `run` tally + one `deny` per violation, when a logCtx is supplied.
+// Scan passes null (it is itself the report). logEvent never throws.
+function logRun(logCtx, phase, files, tally, violations) {
+  if (!logCtx || !logCtx.root) return;
+  const { root, session } = logCtx;
+  logEvent(root, session, { kind: 'run', phase, files: Array.isArray(files) ? files.length : 0, rules: [...tally.values()] });
+  for (const v of violations) {
+    logEvent(root, session, { kind: 'deny', phase, rule: v.rule.id, ns: v.rule.namespace || null, path: v.path, hits: (v.hits || []).slice(0, 1) });
+  }
+}
+
 // ── evaluate file-oriented rules for a phase ──────────────────────────────────
 // files: repo paths to check. getContent(file)->string reconstructs the would-be
 // bytes (in-memory at edit; disk read at commit) for content rules.
-export async function evaluate({ phase, files, root, getContent, configPath }) {
+// logCtx {root, session}: when set, append run/deny events; scan passes null.
+export async function evaluate({ phase, files, root, getContent, configPath, logCtx = null }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const violations = [];
+  const { tally, record } = makeTally();
 
   for (const rule of rules) {
     const s = await resolveScript(rule.use, root);
@@ -142,36 +171,48 @@ export async function evaluate({ phase, files, root, getContent, configPath }) {
 
     if (s.kind === 'project') {                                // tool-gate: run once for the phase
       if (!s.js) continue;
-      try { const hits = await s.js.evaluate(rule, { root }); if (hits.length) violations.push({ rule, path: null, hits }); }
+      try { const hits = await s.js.evaluate(rule, { root }); record(rule, hits.length); if (hits.length) violations.push({ rule, path: null, hits }); }
       catch { /* fail safe */ }
       continue;
     }
 
     for (const abs of files) {
-      const path = rel(abs, root);
-      if (rule.on && !matchAny(path, [].concat(rule.on))) continue;
-      if (rule.ignore && matchAny(path, [].concat(rule.ignore))) continue;   // opt paths out (e.g. *.test.ts)
-
-      if (s.shell) {                                            // shell contract (dest + content-file argv)
-        try { const hits = runShell(s.shell, rule, { path, abs, root, phase, getContent }); if (hits.length) violations.push({ rule, path, hits }); }
-        catch { /* fail safe */ }
-        continue;
-      }
-
-      const ctx = {                                            // JS contract
-        path, root, phase,
-        exists: (p) => existsSync(p),
-        readText: (p) => { try { return readFileSync(p, 'utf8'); } catch { return null; } },
-      };
-      if (s.kind === 'content') {
-        try { ctx.content = getContent(abs); } catch { continue; }
-        if (ctx.content == null) continue;
-      }
-      try { const hits = await s.js.evaluate(rule, ctx); if (hits && hits.length) violations.push({ rule, path, hits }); }
-      catch { /* a stumbling rule never breaks the gate */ }
+      const res = await runFileRule(s, rule, abs, root, phase, getContent);
+      if (!res) continue;                                      // out of scope (on / ignore / no content)
+      record(rule, res.hits.length);
+      if (res.hits.length) violations.push({ rule, path: res.path, hits: res.hits });
     }
   }
+
+  logRun(logCtx, phase, files, tally, violations);
   return violations;
+}
+
+// Run one resolved per-file rule against one file. Returns { path, hits } (hits may
+// be empty = evaluated-no-hit), or null when the file is out of scope (on/ignore
+// filter, or content unavailable). Shared by evaluate() and scanTree() so both paths
+// apply the SAME matching + fail-safe semantics.
+async function runFileRule(s, rule, abs, root, phase, getContent) {
+  const path = rel(abs, root);
+  if (rule.on && !matchAny(path, [].concat(rule.on))) return null;
+  if (rule.ignore && matchAny(path, [].concat(rule.ignore))) return null;   // opt paths out (e.g. *.test.ts)
+
+  if (s.shell) {                                               // shell contract (dest + content-file argv)
+    try { return { path, hits: runShell(s.shell, rule, { path, abs, root, phase, getContent }) }; }
+    catch { return { path, hits: [] }; }                       // a stumbling rule never breaks the gate
+  }
+
+  const ctx = {                                               // JS contract
+    path, root, phase,
+    exists: (p) => existsSync(p),
+    readText: (p) => { try { return readFileSync(p, 'utf8'); } catch { return null; } },
+  };
+  if (s.kind === 'content') {
+    try { ctx.content = getContent(abs); } catch { return null; }
+    if (ctx.content == null) return null;
+  }
+  try { const hits = await s.js.evaluate(rule, ctx); return { path, hits: (hits && hits.length) ? hits : [] }; }
+  catch { return { path, hits: [] }; }
 }
 
 // The shell calling contract: config JSON on stdin, dest path + content-file path as
@@ -204,16 +245,71 @@ function runShell(shellPath, rule, { path, abs, root, phase, getContent }) {
 }
 
 // ── evaluate command-guard rules against a Bash command string ────────────────
-export async function evaluateCommand({ command, phase = 'edit', root, configPath }) {
+export async function evaluateCommand({ command, phase = 'edit', root, configPath, logCtx = null }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const out = [];
+  const { tally, record } = makeTally();
   for (const rule of rules) {
     const s = await resolveScript(rule.use, root);
     if (!s || s.kind !== 'command' || !s.js) continue;
-    try { const hits = await s.js.evaluate(rule, { command, root }); if (hits.length) out.push({ rule, hits }); }
+    try { const hits = await s.js.evaluate(rule, { command, root }); record(rule, hits.length); if (hits.length) out.push({ rule, hits }); }
     catch { /* fail safe */ }
   }
+  logRun(logCtx, phase, [], tally, out.map((v) => ({ rule: v.rule, path: null, hits: v.hits })));
   return out;
+}
+
+// ── scan the whole tree (the THIRD trigger — reports, never blocks, never logs) ──
+// Runs every per-file rule over the whole tree as if each file were being written,
+// and reports the violations. Command + project rules have nothing per-file to scan,
+// so their ids are returned in `skipped`. Unlike evaluate(), scan does NOT filter on
+// `when:` — a rule scoped `when:[commit]` is still scanned. logCtx is intentionally
+// absent: scan is itself the report, so logging it would double-count fires.
+export async function scanTree({ root, configPath }) {
+  const files = listTrackedFiles(root);
+  const rules = loadRules(root, configPath);
+  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
+  const byRule = {};
+  const skipped = [];
+  let violations = 0, scannedRules = 0;
+
+  for (const rule of rules) {
+    const s = await resolveScript(rule.use, root);
+    if (!s) continue;
+    if (s.kind === 'command' || s.kind === 'project') { skipped.push(rule.id); continue; } // nothing per-file
+    scannedRules++;
+    for (const abs of files) {
+      const res = await runFileRule(s, rule, abs, root, 'scan', getContent);
+      if (!res || !res.hits.length) continue;
+      (byRule[rule.id] ||= []).push({ path: res.path, hits: res.hits, message: rule.message, use: rule.use, ns: rule.namespace });
+      violations++;
+    }
+  }
+  return { byRule, counts: { files: files.length, rules: scannedRules, violations }, skipped };
+}
+
+// Files to scan: prefer `git ls-files` (respects .gitignore, includes staged-not-yet-
+// committed files, fast); fall back to a recursive walk when git is unavailable.
+function listTrackedFiles(root) {
+  try {
+    const out = execSync('git ls-files', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const files = out.split('\n').map((f) => f.trim()).filter(Boolean);
+    if (files.length) return files;
+  } catch { /* not a git repo → walk */ }
+  return walkTree(root, root, []);
+}
+
+function walkTree(root, dir, acc) {
+  const SKIP = new Set(['node_modules', '.signposts', '.work', '.git']);
+  let entries = [];
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const e of entries) {
+    if (SKIP.has(e.name)) continue;
+    const abs = join(dir, e.name);
+    if (e.isDirectory()) walkTree(root, abs, acc);
+    else if (e.isFile()) acc.push(relative(root, abs));
+  }
+  return acc;
 }
 
 export function formatViolation(v) {
@@ -235,7 +331,8 @@ async function cli(argv) {
   }
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
-  const violations = await evaluate({ phase, files, root, getContent, configPath });
+  // lefthook runs outside any Claude session — commit/push events land in commit.jsonl.
+  const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });
   if (violations.length === 0) process.exit(0);
   process.stderr.write('\n' + violations.map(formatViolation).join('\n\n') + '\n\n');
   process.exit(2);
@@ -290,6 +387,19 @@ async function selfTest() {
     writeFileSync(join(tmp, 'rules/examples/ast-grep/nsrule.yml'), 'id: ns-astgrep\nlanguage: typescript\nrule:\n  pattern: var $X = $Y\n');
     const nsFound = loadRules(tmp, join(tmp, 'no-config.yaml')).some((r) => r.id === 'ns-astgrep');
     results.push({ name: 'ast-grep discovered under rules/<ns>/ast-grep', pass: nsFound });
+
+    // 6. scanTree: whole-tree scan reports EXACTLY the offender; a command rule is skipped, not run.
+    const scanRoot = mkdtempSync(join(tmpdir(), 'sg-scan-'));
+    writeFileSync(join(scanRoot, 'signposts.yaml'),
+      'rules:\n  local:\n    - id: ban-todo\n      use: core/text-ban\n      on: ["**/*.md"]\n      ban: "TODO"\n' +
+      '    - id: cmd\n      use: core/command-guard\n      ban: ["rm -rf"]\n');
+    writeFileSync(join(scanRoot, 'bad.md'), 'intro\nleft a TODO here\n');
+    writeFileSync(join(scanRoot, 'clean.md'), 'all good\n');
+    const scan = await scanTree({ root: scanRoot, configPath: join(scanRoot, 'signposts.yaml') });
+    results.push({ name: 'scanTree reports the one offender', pass: (scan.byRule['ban-todo'] || []).length === 1 && scan.byRule['ban-todo'][0].path === 'bad.md' });
+    results.push({ name: 'scanTree counts one violation, one per-file rule', pass: scan.counts.violations === 1 && scan.counts.rules === 1 });
+    results.push({ name: 'scanTree skips the command rule', pass: scan.skipped.includes('cmd') });
+    try { rmSync(scanRoot, { recursive: true, force: true }); } catch { /* ignore */ }
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
   }

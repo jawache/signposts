@@ -23,7 +23,7 @@ async function main() {
   const command = input?.tool_input?.command;
   if (!command) return;
 
-  const hits = await evaluateCommand({ command, phase: 'edit', root: ROOT });
+  const hits = await evaluateCommand({ command, phase: 'edit', root: ROOT, logCtx: { root: ROOT, session: input.session_id } });
   if (!hits.length) return;
 
   const blocks = hits.map((h) => {

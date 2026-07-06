@@ -25,6 +25,19 @@ config:
   drift_tokens: 200000      # re-inject a sign after ~this many tokens of drift
 
 signs:
+  # The core sign — ships to every install. A SOFT guard on the guardrails themselves:
+  # Signposts must stay editable by the AI (reflect authors rules — that's the product),
+  # so this never blocks. It just injects a reminder the moment the agent touches a rule
+  # file, and the coach flags a deny-then-weaken sequence at wrap-up (see coach.md).
+  core:
+    - id: rules-self-edit
+      globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
+      text: |-
+        You are editing the guardrails themselves. If this edit weakens or removes a
+        rule/permission IN RESPONSE to just being blocked by it — stop and confirm with
+        the user first. Authoring new signposts is always fine; loosening one to get an
+        edit through is the user's call, not yours.
+
   # This repo's own just-in-time guidance — the `local` namespace (guidance for
   # working ON signposts, not something we ship in the core pack).
   local:
