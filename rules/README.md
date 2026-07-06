@@ -105,7 +105,8 @@ One `signposts.yaml` at the repo root, each section with a single consumer:
 | `config:` | `signposts.mjs` hook | engine runtime config (`drift_tokens`) |
 | `signs:` | `signposts.mjs` hook | the **signs**, grouped by namespace (glob → note) |
 | `rules:` | the engine | the **rules**, grouped by namespace — each names a script + config + `when:` |
-| `packs:` | the CLI | installed packs + versions (for `refresh`) |
+| `settings:` | the CLI (install) | optional host-permission entries a pack carries, per namespace → merged into `.claude/settings.json` |
+| `packs:` | the CLI | installed packs + what each owns (object form), for `refresh` / `uninstall --pack` |
 | `install:` | the CLI | files → destinations, `devDependencies`, `activate` commands |
 
 **A rule entry:**

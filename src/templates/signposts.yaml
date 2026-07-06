@@ -68,6 +68,16 @@ rules:
       use: examples/no-hardcoded-secret
       on: ["src/**/*.{ts,tsx,js,mjs}"]
 
+  # A keeper (NOT part of the tour — don't delete with `examples`). The engine's event log
+  # lives in .signposts/ (gitignored local telemetry); this blocks committing it even via
+  # `git add -f`.
+  core:
+    - id: no-commit-engine-log
+      use: core/protected-path
+      deny: [".signposts/**"]
+      when: [commit]
+      message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
+
   # ─── YOUR RULES ──────────────────────────────────────────────────────────────
   # Add your own namespaces here (use: core/<name> for a built-in, or use: <ns>/<name>
   # for a script in rules/<ns>/). See rules/README.md.

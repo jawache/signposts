@@ -25,7 +25,8 @@ const LOG_DIR = ['.signposts', 'log'];
 
 // A session id becomes a filename — keep it to a safe charset. The 'nosession'
 // fallback happens HERE, so call sites can pass whatever the host handed them.
-function sanitise(s) {
+// Exported so the report card sanitises session ids identically to the log.
+export function sanitise(s) {
   return String(s || 'nosession').replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
@@ -120,9 +121,14 @@ export function selfTest() {
     const ro = mkdtempSync(join(tmpdir(), 'sg-ro-'));
     logEvent(ro, 'seed', { kind: 'run' });               // create .signposts/log
     try {
-      chmodSync(join(ro, ...LOG_DIR), 0o555);
-      const res = logEvent(ro, 'blocked-new-file', { kind: 'run' }); // new file under RO dir → fails
-      ok('unwritable dir → false (no throw)', res === false || res === true); // never throws either way
+      chmodSync(join(ro, ...LOG_DIR), 0o555);            // read-only dir → a NEW file can't be created
+      let threw = false, res;
+      try { res = logEvent(ro, 'blocked-new-file', { kind: 'run' }); } catch { threw = true; }
+      ok('unwritable dir: logEvent never throws', threw === false);              // the headline fail-safe
+      ok('unwritable dir: returns a boolean', typeof res === 'boolean');
+      // the real contract: if it reported failure, it did NOT leave a partial file behind.
+      // (a false escape hatch for the rare FS/uid where the write actually succeeds)
+      ok('unwritable dir: false ⇒ no file written', res === true || !existsSync(join(ro, ...LOG_DIR, 'blocked-new-file.jsonl')));
     } finally {
       try { chmodSync(join(ro, ...LOG_DIR), 0o755); } catch {}
       try { rmSync(ro, { recursive: true, force: true }); } catch {}

@@ -17,7 +17,7 @@ import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
 import { PACK_NAME, readText } from './pack.mjs';
-import { editYaml } from './install.mjs';
+import { editYaml, assertSafeNamespace } from './install.mjs';
 
 // A hook command belongs to Signposts if it names one of our hook files or the package.
 const OURS = /(?:\.claude\/hooks\/(?:preemptive-block|command-guard|signposts|signposts-core|signposts-test|lefthook-on-write|strip-claude-attribution)|rules\/check-git-discard|node_modules\/signposts)/;
@@ -90,12 +90,17 @@ export function uninstall({ target = process.cwd(), dryRun = false, pack = null,
 // recorded (kept if a surviving pack or a hand-written entry still needs them), and its
 // packs: entry. Comment-preserving; hand-written config is never touched.
 export function uninstallPack({ target = process.cwd(), namespace, dryRun = false, log = console.log }) {
+  assertSafeNamespace(namespace);                        // path-traversal guard before any rmSync
   const yamlPath = join(target, 'signposts.yaml');
   if (!existsSync(yamlPath)) { log('no signposts.yaml — nothing to uninstall'); return; }
   const tag = dryRun ? '[dry] ' : '';
 
   // 1. work out which settings.json entries this namespace's pack(s) own AND whether any
   //    surviving pack entry still needs them (only purge the ones nothing else keeps).
+  //    CAVEAT: a pack's permission ledger is per-pack-source, not per-namespace, so removing
+  //    ONE namespace of a multi-namespace pack purges no permissions (willEmpty is false) —
+  //    they're released only when the pack's last namespace goes. Acceptable: the common case
+  //    is one namespace per source; the multi-ns case just keeps permissions until full removal.
   const doc0 = (() => { try { return parseYaml(readFileSync(yamlPath, 'utf8')) || {}; } catch { return {}; } })();
   const packs = Array.isArray(doc0.packs) ? doc0.packs : [];
   const owned = { deny: new Set(), allow: new Set() };

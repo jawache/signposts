@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { readEvents } from '../log.mjs';
+import { readEvents, sanitise } from '../log.mjs';
 import { loadRules } from '../engine.mjs';
 
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -248,6 +248,14 @@ function logMetrics(root, session) {
     const ts = sessionLog.events.map((e) => e.ts).filter(Boolean).sort();
     return ts[0] || null;
   })();
+  // Upper bound for commit-leak attribution = the NEXT real session's start. Commit-gate runs
+  // log under the shared 'commit' id (no session), so a session owns the commit denies from its
+  // start until the next Claude session begins. Without this bound, re-running facts on an old
+  // session would sweep up every later commit as its "leak", and overlapping sessions would
+  // cross-attribute. (The newest session has no next start yet — it self-corrects once one exists.)
+  const nextStart = allLog.events
+    .filter((e) => e.kind === 'meta' && e.started && e.session && e.session !== 'commit' && started && e.started > started)
+    .map((e) => e.started).sort()[0] || null;
 
   const perRule = {};
   const ensure = (id, ns) => (perRule[id] ||= { id, ns: ns ?? null, fires: 0, hits: 0, caught: 0, leaked: 0 });
@@ -255,9 +263,11 @@ function logMetrics(root, session) {
     if (e.kind === 'run') for (const r of e.rules || []) { const t = ensure(r.id); t.fires += r.evaluated || 0; t.hits += r.hits || 0; }
     else if (e.kind === 'deny' && e.phase === 'edit') ensure(e.rule, e.ns).caught++;
   }
-  // commit/push denies live in commit.jsonl (no session id) — attribute the ones since this session started.
+  // commit/push denies live in commit.jsonl (no session id) — attribute the ones in this
+  // session's window [started, nextStart).
   for (const e of allLog.events) {
-    if (e.kind === 'deny' && (e.phase === 'commit' || e.phase === 'push') && (!started || (e.ts && e.ts >= started))) ensure(e.rule, e.ns).leaked++;
+    if (e.kind === 'deny' && (e.phase === 'commit' || e.phase === 'push')
+        && (!started || (e.ts && e.ts >= started && (!nextStart || e.ts < nextStart)))) ensure(e.rule, e.ns).leaked++;
   }
 
   // run tallies carry only {id, evaluated, hits} — backfill each row's namespace from
@@ -493,8 +503,6 @@ ${weakenBlock}
 </main></body></html>`;
 }
 
-function sanitiseSession(s) { return String(s || 'nosession').replace(/[^A-Za-z0-9_-]/g, '-'); }
-
 // ── self-test ─────────────────────────────────────────────────────────────
 function selfTest() {
   const fail = [];
@@ -597,6 +605,10 @@ function selfTest() {
     eq(demo.leaked, 1, 'logMetrics: demo leaked 1 at commit (since session start)');
     eq(m.caught, 1, 'logMetrics: total caught');
     eq(m.leaked, 1, 'logMetrics: total leaked');
+    // a LATER real session bounds the window: the 00:05 commit deny is no longer THIS session's leak.
+    fs.writeFileSync(path.join(logDir, 'sess-later.jsonl'), JSON.stringify({ kind: 'meta', v: 1, session: 'sess-later', started: '2026-07-06T00:02:00Z' }) + '\n');
+    eq(logMetrics(tmp, sess).leaked, 0, 'logMetrics: commit leak after the next session start is not attributed');
+    fs.rmSync(path.join(logDir, 'sess-later.jsonl'));
     eq(m.neverFired, ['sleepy'], 'logMetrics: sleepy never fired (demo did)');
     eq(m.signs.find((s) => s.id === 'rules').firstTouch, 1, 'logMetrics: sign first-touch');
     eq(m.signs.find((s) => s.id === 'rules').drift, 1, 'logMetrics: sign drift');
@@ -659,7 +671,7 @@ function main() {
   if (argv.includes('--html')) {
     const dir = path.join(cwd, '.signposts', 'reports');
     fs.mkdirSync(dir, { recursive: true });
-    const out = path.join(dir, `${sanitiseSession(session)}.html`);
+    const out = path.join(dir, `${sanitise(session)}.html`);
     fs.writeFileSync(out, renderHtml(a, m, meta, weaken));
     console.log(out);
     return;

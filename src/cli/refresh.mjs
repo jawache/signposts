@@ -21,7 +21,7 @@ import { parse as parseYaml } from 'yaml';
 import { PACK_NAME, readText } from './pack.mjs';
 import { resolveSource } from './source.mjs';
 import { loadPacks, diffPacks, canon } from '../skill/pack-diff.mjs';
-import { installPack, applyNamespace, editYaml, snapshotBase, walk, copyInto } from './install.mjs';
+import { installPack, applyNamespace, editYaml, snapshotBase, walk, copyInto, assertSafeNamespace, blockNode, ensureBlockSection } from './install.mjs';
 
 export function refresh({ target = process.cwd(), log = console.log }) {
   log(`[${PACK_NAME}] the core ships in the signposts package — run \`npm update signposts\` to update it.`);
@@ -53,10 +53,9 @@ function refreshInstalledPacks(target, log) {
   return out;
 }
 
-const block = (n) => { n.flow = false; return n; };
-
 // Three-way merge one namespace: yaml entries + scripts, against the install-time base.
 function mergeNamespace({ srcPath, src, namespace, target, log }) {
+  assertSafeNamespace(namespace);                        // path-traversal guard before any file op
   const baseDir = join(target, '.signposts', 'base', namespace);
   if (!existsSync(baseDir)) {                             // no base → keep-local fallback (+ pull genuinely-new)
     log(`  [${namespace}] no base snapshot (installed before three-way merge, or fresh clone) — keeping local versions; re-install the pack to arm merging.`);
@@ -78,8 +77,8 @@ function mergeNamespace({ srcPath, src, namespace, target, log }) {
       took += m.took; kept += m.kept; added += m.added;
       conflicts.push(...m.conflicts.map((id) => `${section}/${id}`));
       if (canon(m.merged) !== canon(local) && m.merged.length) {
-        if (doc.getIn([section]) == null || Object.keys(js[section] || {}).length === 0) doc.setIn([section], block(doc.createNode({})));
-        doc.setIn([section, namespace], block(doc.createNode(m.merged)));
+        ensureBlockSection(doc, section, js);
+        doc.setIn([section, namespace], blockNode(doc.createNode(m.merged)));
       }
     }
   });
@@ -166,6 +165,7 @@ export function selfTest() {
     write(join(hub, 'rules', 'demo', 'take.mjs'), script('take', 'const V = 1;'));
     write(join(hub, 'rules', 'demo', 'keep.mjs'), script('keep', 'const V = 1;'));
     write(join(hub, 'rules', 'demo', 'conflict.mjs'), script('conflict', 'const SAME_LINE = 1;'));
+    write(join(hub, 'rules', 'demo', 'merge.mjs'), script('merge', ['const A = 1;', 'const B1 = 2;', 'const B2 = 2;', 'const B3 = 2;', 'const C = 3;'].join('\n')));
     write(join(hub, 'signposts.yaml'), [
       'rules:', '  demo:',
       '    - id: r-take',    '      use: demo/take',    '      on: ["a"]',
@@ -181,6 +181,7 @@ export function selfTest() {
     // upstream v2: change take + conflict; leave keep
     write(join(hub, 'rules', 'demo', 'take.mjs'), script('take', 'const V = 2; // upstream'));
     write(join(hub, 'rules', 'demo', 'conflict.mjs'), script('conflict', 'const SAME_LINE = 999; // upstream'));
+    write(join(hub, 'rules', 'demo', 'merge.mjs'), script('merge', ['const A = 100; // upstream', 'const B1 = 2;', 'const B2 = 2;', 'const B3 = 2;', 'const C = 3;'].join('\n')));
     write(join(hub, 'signposts.yaml'), [
       'rules:', '  demo:',
       '    - id: r-take',    '      use: demo/take',    '      on: ["UPSTREAM"]',
@@ -191,6 +192,7 @@ export function selfTest() {
     // local edits: change keep script + conflict script + r-keep entry + r-conflict entry
     write(join(app, 'rules', 'demo', 'keep.mjs'), script('keep', 'const V = 1; // LOCAL edit'));
     write(join(app, 'rules', 'demo', 'conflict.mjs'), script('conflict', 'const SAME_LINE = 7; // LOCAL'));
+    write(join(app, 'rules', 'demo', 'merge.mjs'), script('merge', ['const A = 1;', 'const B1 = 2;', 'const B2 = 2;', 'const B3 = 2;', 'const C = 300; // LOCAL'].join('\n')));
     editYaml(join(app, 'signposts.yaml'), (doc) => {
       const rules = doc.toJS().rules.demo;
       const set = (id, on) => { const i = rules.findIndex((e) => e.id === id); doc.setIn(['rules', 'demo', i, 'on'], on); };
@@ -205,6 +207,10 @@ export function selfTest() {
     ok('conflict.mjs kept local (untouched)', readFileSync(join(app, 'rules', 'demo', 'conflict.mjs'), 'utf8').includes('= 7; // LOCAL'));
     ok('conflict.mjs wrote .upstream sidecar', existsSync(join(app, 'rules', 'demo', 'conflict.mjs.upstream')));
     ok('no conflict markers in the live file', !readFileSync(join(app, 'rules', 'demo', 'conflict.mjs'), 'utf8').includes('<<<<<<<'));
+    // the whole reason git merge-file is shelled out: non-overlapping edits auto-merge, both survive.
+    const mergedFile = readFileSync(join(app, 'rules', 'demo', 'merge.mjs'), 'utf8');
+    ok('merge.mjs auto-merged both non-overlapping edits', mergedFile.includes('A = 100') && mergedFile.includes('C = 300'));
+    ok('merge.mjs clean — no .upstream sidecar', !existsSync(join(app, 'rules', 'demo', 'merge.mjs.upstream')));
     // entries
     const rules = parseYaml(readFileSync(join(app, 'signposts.yaml'), 'utf8')).rules.demo;
     const byId = Object.fromEntries(rules.map((e) => [e.id, e]));

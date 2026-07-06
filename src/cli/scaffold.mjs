@@ -17,6 +17,7 @@ import { join, sep } from 'node:path';
 import {
   DEV_DEPENDENCIES, ACTIVATE, SKILL_SURFACE, copyFile, readText, writeText, exists,
 } from './pack.mjs';
+import { ensureGitignore } from './install.mjs';
 
 export function scaffold({ packRoot, target, activate = true, dryRun = false, log = console.log }) {
   const rel = (p) => join(target, p);
@@ -40,6 +41,10 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
 
   // 5. seed rules/ with the quick-start tour (only files that are absent) -------
   log(`• rules/: ${seedRules(join(packRoot, 'src/templates/rules-example'), join(target, 'rules'), dryRun)}`);
+
+  // 5b. ignore the engine's local telemetry (.signposts/ — log, report cards, base snapshots)
+  if (dryRun) log(`• .gitignore: would ensure .signposts/ is ignored`);
+  else log(`• .gitignore: ${ensureGitignore(target) ? 'added .signposts/' : '.signposts/ already ignored'}`);
 
   // 6. activate -----------------------------------------------------------------
   if (dryRun) log(`• activate: would ${activate ? 'install signposts + arm the gate' : 'be skipped (--no-activate)'}`);

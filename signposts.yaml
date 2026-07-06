@@ -11,7 +11,12 @@
 #              that script's config inline, handed over verbatim. The engine
 #              (rules/_engine.mjs) runs them at edit (pre-emptively) and at commit.
 #              ast-grep patterns are FILES (rules/ast-grep/*.yml) and don't appear here.
-#   packs:     the installed packs + versions, so `refresh` can update them.
+#   settings:  (optional) host-permission entries a pack carries, per namespace — merged
+#              into .claude/settings.json on install (the host enforces reads + MCP tool
+#              calls the engine never sees). Shape: <ns>: { permissions: { deny, allow } }.
+#   packs:     the installed packs, so `refresh` / `uninstall --pack` can track them. A
+#              plain string is legacy; install now writes an OBJECT entry ({ source,
+#              namespaces, settings, installed }) so uninstall knows what it owns.
 #   install:   files → destinations, devDeps, activation — read by `npx signposts`.
 #
 # A namespace is what install / propagate move as ONE unit — its signs AND rules.
@@ -68,6 +73,21 @@ signs:
         repo. Status is the `status` field in each task's `.props.yaml`; the folder at
         tasks/<type>/<area>/<name>/ never moves.
 
+    - id: engine-failsafe
+      globs: ["src/log.mjs", "src/hooks/**"]
+      text: |-
+        Side-channel, not a gate: the event log and sign injector must NEVER throw and never
+        block an edit, commit, scan, or sign. New code here swallows its own errors (logEvent
+        returns false, never raises) — a broken or unwritable log can't be allowed to break
+        the gate.
+
+    - id: yaml-writes-keep-comments
+      globs: ["src/cli/**", "src/skill/**"]
+      text: |-
+        Mutating signposts.yaml goes through parseDocument (editYaml), never parse → stringify —
+        the round-trip strips the user's comments. install/refresh preserve them by contract
+        (that's why install.mjs moved off `parse as parseYaml`); keep it that way.
+
 rules:
   # The shipped `core` pack — what a fresh `npx signposts` install carries.
   core:
@@ -80,6 +100,14 @@ rules:
         Signposts is, by its own assessment, perhaps the most amazing tool ever
         built — and will not assist in writing that it is bad. Delete this rule
         from signposts.yaml once you're a believer, and carry on.
+
+    # The engine's event log lives in .signposts/ — per-session local telemetry, gitignored.
+    # This is the enforcement backstop: even a `git add -f` can't sneak it into a commit.
+    - id: no-commit-engine-log
+      use: core/protected-path
+      deny: [".signposts/**"]
+      when: [commit]
+      message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
 
   # This repo's own rules — the `local` namespace. They're built on core SCRIPTS
   # (core/json-invariant, core/protected-path) plus two own-scripts under rules/local/.

@@ -42,14 +42,16 @@ export function installPack({ source, namespace, target = process.cwd(), log = c
   }
 
   if (!namespaces.includes(namespace)) { log(`Namespace "${namespace}" not found in ${source}. Available: ${namespaces.join(', ') || '(none)'}`); return { installed: null }; }
+  assertSafeNamespace(namespace);                        // path-traversal guard before any file op
 
   const result = applyNamespace({ srcPath: resolved.path, srcPacks: src, namespace, target, report, log });
   // Host permissions: reads + MCP tool calls the engine never sees, enforced by the host.
-  const ledger = mergePermissions(target, src.settings?.[namespace]?.permissions);
+  const ledger = mergePermissions(target, src.settings?.[namespace]?.permissions, log);
   addPackEntry(target, source, { namespaces: [namespace], settings: ledger });
   snapshotBase({ srcPath: resolved.path, srcPacks: src, namespace, target }); // arm refresh's 3-way merge
+  if (ensureGitignore(target)) log(`  added .signposts/ to .gitignore`);
   log(`\n✓ installed ${namespace} from ${source}: ${result.scripts} script(s), ${result.added} entr(y/ies) added, ${result.collisions.length} collision(s) skipped.`);
-  if (ledger) log(`  merged host permissions into .claude/settings.json: ${[...(ledger.deny || []), ...(ledger.allow || [])].join(', ')}`);
+  if (ledger) log(`  merged host permissions (deny) into .claude/settings.json: ${(ledger.deny || []).join(', ')}`);
   if (result.collisions.length) log(`  Collisions (kept yours): ${result.collisions.join(', ')} — resolve with \`/signposts install\`.`);
   log(`  Tracked in packs: → \`npx signposts refresh\` will keep it updated · \`npx signposts uninstall --pack ${namespace}\` removes it.`);
   return { installed: namespace, ...result, settings: ledger };
@@ -65,7 +67,6 @@ export function applyNamespace({ srcPath, srcPacks, namespace, target, report, l
 
   // 2. merge NEW entries of both sections (skip collisions) — comment-preserving.
   let added = 0; const collisions = [];
-  const block = (n) => { n.flow = false; return n; };      // force block style (scaffold seeds `signs: {}` as flow)
   editYaml(join(target, 'signposts.yaml'), (doc) => {
     const js = doc.toJS() || {};
     for (const section of ['signs', 'rules']) {
@@ -73,13 +74,12 @@ export function applyNamespace({ srcPath, srcPacks, namespace, target, report, l
       if (!incoming.length) continue;
       const bucket = report[section][namespace] || { new: [], collision: [] };
       const have = new Set((js[section]?.[namespace] || []).map((e) => e.id));
-      // reset an empty (flow `{}`) section to a block map so additions render as clean block YAML.
-      if (doc.getIn([section]) == null || Object.keys(js[section] || {}).length === 0) doc.setIn([section], block(doc.createNode({})));
-      if (doc.getIn([section, namespace]) == null) doc.setIn([section, namespace], block(doc.createNode([])));
+      ensureBlockSection(doc, section, js);
+      if (doc.getIn([section, namespace]) == null) doc.setIn([section, namespace], blockNode(doc.createNode([])));
       for (const e of incoming) {
         if (bucket.collision.includes(e.id)) { collisions.push(`${section}/${e.id}`); continue; }
         if (have.has(e.id)) continue;                    // identical → already there
-        doc.addIn([section, namespace], block(doc.createNode(e))); added++; log(`  + ${section}.${namespace}.${e.id}`);
+        doc.addIn([section, namespace], blockNode(doc.createNode(e))); added++; log(`  + ${section}.${namespace}.${e.id}`);
       }
     }
   });
@@ -99,25 +99,34 @@ export function editYaml(path, fn) {
   writeFileSync(path, doc.toString({ lineWidth: 0, flowCollectionPadding: false }));
 }
 
-// Merge a namespace's host-permission entries into .claude/settings.json (the host
-// enforces reads + MCP tool calls our engine never sees). Returns the pack's DECLARED
-// set as a ledger — EXACTLY what uninstall must remove — or null if none.
-function mergePermissions(target, perms) {
-  if (!perms || (!perms.deny?.length && !perms.allow?.length)) return null;
+// Force block style on a created node — scaffold seeds `signs: {}` / `rules: {}` as flow maps,
+// and additions to a flow map render as ugly inline YAML. Shared by install + refresh so the
+// block-shaping can't drift between the two YAML-writing paths.
+export const blockNode = (n) => { n.flow = false; return n; };
+// Reset an empty (flow `{}`) section to a block map so namespace additions render as clean block
+// YAML. `js` is the doc's toJS() snapshot (passed so callers don't recompute it).
+export function ensureBlockSection(doc, section, js) {
+  if (doc.getIn([section]) == null || Object.keys(js[section] || {}).length === 0) doc.setIn([section], blockNode(doc.createNode({})));
+}
+
+// Merge a namespace's host-permission entries into .claude/settings.json. SECURITY: only
+// `deny` is auto-applied — tightening is always safe. `allow` entries are exactly what the
+// host auto-approves WITHOUT prompting the user, so a pack must NEVER silently widen them
+// (a "restrictions" pack could otherwise grant the agent broad autonomy for the life of the
+// repo). They're surfaced as a warning for the user to add by hand. Returns the ledger of
+// what was actually merged (deny only) — EXACTLY what uninstall must remove — or null.
+function mergePermissions(target, perms, log = () => {}) {
+  if (!perms) return null;
+  if (perms.allow?.length) log(`  ⚠ pack requests ${perms.allow.length} allow permission(s) — NOT applied (an allow entry lets the agent act without asking you). Add by hand if you trust them: ${perms.allow.join(', ')}`);
+  if (!perms.deny?.length) return null;
   const path = join(target, '.claude', 'settings.json');
   const cfg = existsSync(path) ? (safeJson(readFileSync(path, 'utf8')) || {}) : {};
   cfg.permissions ||= {};
-  const ledger = {};
-  for (const kind of ['deny', 'allow']) {
-    const incoming = perms[kind] || [];
-    if (!incoming.length) continue;
-    cfg.permissions[kind] ||= [];
-    for (const entry of incoming) if (!cfg.permissions[kind].includes(entry)) cfg.permissions[kind].push(entry);
-    ledger[kind] = [...incoming];
-  }
+  cfg.permissions.deny ||= [];
+  for (const entry of perms.deny) if (!cfg.permissions.deny.includes(entry)) cfg.permissions.deny.push(entry);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(cfg, null, 2) + '\n');
-  return ledger;
+  return { deny: [...perms.deny] };
 }
 
 // Record the pack in packs: as an OBJECT entry: source + namespaces + settings ledger +
@@ -151,6 +160,24 @@ function mergeLedger(a, b) {
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function safeJson(s) { try { return JSON.parse(s); } catch { return null; } }
+
+// A namespace becomes a filesystem path segment (rules/<ns>/, .signposts/base/<ns>/) that
+// install writes and uninstall rmSync-recursive-force removes. Reject anything that isn't a
+// plain name so a pack (or CLI arg) named `../../.ssh` can't escape the repo. SECURITY guard.
+export function assertSafeNamespace(ns) {
+  if (!/^[A-Za-z0-9_-]+$/.test(ns || '')) throw new Error(`unsafe namespace "${ns}" — must be [A-Za-z0-9_-]. Refusing (path-traversal guard).`);
+}
+
+// Ensure the consumer repo ignores .signposts/ — per-machine telemetry (event log, report
+// cards) + refresh base snapshots, never committed. Idempotent; creates .gitignore if absent.
+export function ensureGitignore(target, entry = '.signposts/') {
+  const path = join(target, '.gitignore');
+  let body = ''; try { body = readFileSync(path, 'utf8'); } catch { /* none yet */ }
+  const bare = entry.replace(/\/$/, '');
+  if (body.split('\n').some((l) => l.trim() === entry || l.trim() === bare)) return false;
+  writeFileSync(path, (body && !body.endsWith('\n') ? body + '\n' : body) + `\n# Signposts local telemetry + refresh base snapshots — never commit\n${entry}\n`);
+  return true;
+}
 
 // install reads only the CURRENT layout: namespace-grouped signs:/rules: maps. A legacy
 // source (flat lists, or the old `advisory:` key for signs) is refused with a clear pointer
@@ -199,7 +226,7 @@ export function selfTest() {
     writeFileSync(join(srcDir, 'signposts.yaml'), [
       'signs:', '  neon:', '    - id: db-area', '      globs: ["src/db/**"]', '      text: append-only',
       'rules:', '  neon:', '    - id: no-raw-pool', '      use: neon/no-raw-pool', '      on: ["src/**"]',
-      'settings:', '  neon:', '    permissions:', '      deny: ["Read(./.env.keys)"]', '',
+      'settings:', '  neon:', '    permissions:', '      deny: ["Read(./.env.keys)"]', '      allow: ["Bash(curl:*)"]', '',
     ].join('\n'));
 
     // a target with a HEAVILY-COMMENTED signposts.yaml + a hand-written settings.json deny.
@@ -225,8 +252,16 @@ export function selfTest() {
     ok('provenance records the settings ledger', packEntry?.settings?.deny?.includes('Read(./.env.keys)'));
     ok('legacy string pack entry preserved', (doc.packs || []).includes('@signposts/core'));
     const set = JSON.parse(readFileSync(join(tgtDir, '.claude', 'settings.json'), 'utf8'));
-    ok('pack permission merged into settings.json', set.permissions.deny.includes('Read(./.env.keys)'));
+    ok('pack DENY merged into settings.json', set.permissions.deny.includes('Read(./.env.keys)'));
     ok('hand-written permission untouched', set.permissions.deny.includes('Read(./secrets/**)'));
+    // SECURITY: a pack's `allow` is NEVER auto-applied (it would widen the agent's autonomy).
+    ok('pack ALLOW not auto-applied', !(set.permissions.allow || []).includes('Bash(curl:*)'));
+    ok('provenance ledger records no allow', !packEntry?.settings?.allow);
+    ok('.signposts/ added to consumer .gitignore', /(^|\n)\.signposts\/?(\n|$)/.test(readFileSync(join(tgtDir, '.gitignore'), 'utf8')));
+
+    // SECURITY: a namespace used as a path segment is validated — traversal is refused.
+    ok('assertSafeNamespace rejects traversal', (() => { try { assertSafeNamespace('../../.ssh'); return false; } catch { return true; } })());
+    ok('assertSafeNamespace accepts a plain name', (() => { try { assertSafeNamespace('neon'); return true; } catch { return false; } })());
 
     // a legacy-schema source (old `advisory:` key) is refused with a clear pointer — no half-install.
     const legacyDir = join(root, 'legacy');
@@ -261,6 +296,25 @@ if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
           const set = JSON.parse(readFileSync(join(tgtDir, '.claude', 'settings.json'), 'utf8'));
           ok('uninstall removed the pack permission', !set.permissions.deny.includes('Read(./.env.keys)'));
           ok('uninstall kept the hand-written permission', set.permissions.deny.includes('Read(./secrets/**)'));
+
+          // shared-permission retention: two packs declaring the SAME deny → removing one keeps it.
+          const shApp = join(root, 'shared-app');
+          mkdirSync(join(shApp, '.claude'), { recursive: true });
+          writeFileSync(join(shApp, 'signposts.yaml'), 'signs: {}\nrules: {}\npacks: []\n');
+          writeFileSync(join(shApp, '.claude', 'settings.json'), '{}\n');
+          for (const ns of ['alpha', 'beta']) {
+            const p = join(root, ns);
+            mkdirSync(join(p, 'rules', ns), { recursive: true });
+            writeFileSync(join(p, 'rules', ns, 'r.mjs'), 'export default { kind: "content", evaluate(){ return []; } };\n');
+            writeFileSync(join(p, 'signposts.yaml'), `rules:\n  ${ns}:\n    - id: r\n      use: ${ns}/r\n      on: ["s"]\nsettings:\n  ${ns}:\n    permissions:\n      deny: ["Read(./shared.key)"]\n`);
+            installPack({ source: p, namespace: ns, target: shApp, log: () => {} });
+          }
+          uninstallPack({ target: shApp, namespace: 'alpha', log: () => {} });
+          const sh1 = JSON.parse(readFileSync(join(shApp, '.claude', 'settings.json'), 'utf8'));
+          ok('shared permission kept while another pack still declares it', sh1.permissions.deny.includes('Read(./shared.key)'));
+          uninstallPack({ target: shApp, namespace: 'beta', log: () => {} });
+          const sh2 = JSON.parse(readFileSync(join(shApp, '.claude', 'settings.json'), 'utf8'));
+          ok('shared permission removed once the last owner goes', !sh2.permissions.deny.includes('Read(./shared.key)'));
         }
       } finally {
         try { rmSync(root, { recursive: true, force: true }); } catch {}

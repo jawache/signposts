@@ -1,9 +1,11 @@
 // cli/source.mjs — resolve a pack SOURCE to a local directory.
 //
-// A pack is just a repo with a signposts.yaml — no separate format. Two doors:
+// A pack is just a repo with a signposts.yaml — no separate format. Three sources (only
+// git/npm need a fetch; a local path is read straight from disk):
+//   • local (private / quick) — a path on disk: ./hub, ../sibling, /abs/path
 //   • git (default) — github:owner/repo[#ref], ssh/https .git URLs, file:// (+ #ref)
 //   • npm (at scale) — @scope/name[@semver], or npm:@scope/name
-// Plus a local path or a .tgz tarball (what the tests + `npm pack` produce).
+// Plus a .tgz tarball (what the tests + `npm pack` produce).
 //
 // parseSource() is pure (unit-tested); resolveSource() does the fetch (clone / npm pack
 // + extract) into a cache dir and hands back the local path the rest of the CLI reads.
