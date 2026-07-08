@@ -33,11 +33,12 @@
 
   <h2>Config</h2>
   <pre><code>rules:
-  - id: no-package-scripts
-    use: core/json-invariant
-    on: "package.json"
-    assert: { path: scripts, keysPrefixedWith: "//" }
-    message: "package.json scripts must stay empty — commands live in the justfile."</code></pre>
+  justfile:
+    - id: no-package-scripts
+      use: core/json-invariant
+      on: "package.json"
+      assert: { path: scripts, keysPrefixedWith: "//" }
+      message: "package.json scripts must stay empty — commands live in the justfile."</code></pre>
   <table>
     <tr><th>Field</th><th>What it does</th></tr>
     <tr><td><code>on</code></td><td>Glob(s) for the JSON file(s) to check.</td></tr>

@@ -2,7 +2,7 @@
 //
 // The engine hands each script its config VERBATIM (the whole `rules:` entry), so
 // most scripts never need this. It's for a script's OWN standalone CLI (run outside
-// the engine, e.g. `node rules/local/justfile-docs.mjs <files>`) that still wants to
+// the engine, e.g. `node rules/justfile/justfile-docs.mjs <files>`) that still wants to
 // read its params from the one config file.
 //
 // `rules:` is GROUPED BY NAMESPACE (namespace → [entries]); this searches across all

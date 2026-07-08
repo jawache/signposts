@@ -27,7 +27,7 @@ how to resolve a clash). Never recount a metric a script gave you; never hard-co
 decision a human should make.
 
 Ground truth for the model (a **sign** steers, a **rule** blocks) and for *how* to write
-each is `rules/README.md` and the `docs/`. Read them; don't restate them.
+each is the `docs/`. Read them; don't restate them.
 
 ---
 
@@ -148,7 +148,7 @@ permissions it added, and nothing else.
 
 ## Authoring reference — a sign vs a rule
 
-Full detail is `rules/README.md`; the shape at a glance:
+Full detail is in `docs/` (see `07-authoring`); the shape at a glance:
 
 | Want to… | Author | Where |
 |---|---|---|

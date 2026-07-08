@@ -20,7 +20,7 @@
 #   install:   files → destinations, devDeps, activation — read by `npx signposts`.
 #
 # A namespace is what install / propagate move as ONE unit — its signs AND rules.
-# Authored via /signposts. Reference: docs/ (canonical) and rules/README.md.
+# Authored via /signposts. Reference: docs/ (canonical) + the /signposts skill.
 
 project:
   name: signposts-core
@@ -62,9 +62,13 @@ signs:
     - id: rules
       globs: ["rules/**"]
       text: |-
-        Every rule NAMES A SCRIPT with `use:` (a path: core/<name> or <ns>/<name>) and
-        gets its config verbatim. Ship a `--test` (a legal + an illegal sample); name the
-        decision in the message. Core scripts live in rules/core/; read rules/README.md.
+        A rule NAMES A SCRIPT with `use:` (core/<name> or <ns>/<name>), gets its config
+        verbatim, and names the decision in its message. Before writing an own-script, check
+        the cheaper shapes — most "novel" rules aren't: a code pattern is a rules/ast-grep/<name>.yml
+        (no code); a structural/path invariant is a core script + config; only then a small
+        own-script under your namespace. Diff the installed pack first. Ship a colocated
+        <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule.
+        Author with /signposts — depth lives in docs/.
 
     - id: work-journal
       globs: [".work/**"]
@@ -109,24 +113,9 @@ rules:
       when: [commit]
       message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
 
-  # This repo's own rules — the `local` namespace. They're built on core SCRIPTS
-  # (core/json-invariant, core/protected-path) plus two own-scripts under rules/local/.
+  # This repo's own rules — the `local` namespace: dogfood guards for working ON
+  # signposts (test siblings, delete protection, a focused-test warning). All core SCRIPTS.
   local:
-    # package.json `scripts` stays empty (only //-prefixed comment keys) — the
-    # justfile is the one command source.
-    - id: no-package-scripts
-      use: core/json-invariant
-      on: "package.json"
-      assert: { path: scripts, keysPrefixedWith: "//" }
-      message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
-
-    # every justfile recipe carries a [doc("…")] — a JS own-script (rules/local/justfile-docs.mjs).
-    - id: justfile-docs
-      use: local/justfile-docs
-      on: "justfile"
-      exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
-      message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
-
     # generated / vendored files — a content-free edit/commit block. `when: [edit, commit]`
     # is the default (omitted): ONE rule, BOTH triggers.
     - id: no-edit-generated
@@ -189,6 +178,24 @@ rules:
     - id: no-git-discard
       use: git-hygiene/no-git-discard
       message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
+
+  # An installable hygiene pack — the justfile is the single command source. Opt-in
+  # like git-hygiene: projects that centralise commands in a justfile pull it in.
+  justfile:
+    # package.json `scripts` stays empty (only //-prefixed comment keys) — the
+    # justfile is the one command source.
+    - id: no-package-scripts
+      use: core/json-invariant
+      on: "package.json"
+      assert: { path: scripts, keysPrefixedWith: "//" }
+      message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
+
+    # every justfile recipe carries a [doc("…")] — a JS own-script (rules/justfile/justfile-docs.mjs).
+    - id: justfile-docs
+      use: justfile/justfile-docs
+      on: "justfile"
+      exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
+      message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
 
 packs:
   - "@signposts/core"          # this repo IS the core pack

@@ -9,7 +9,7 @@ import { makeProject, runCli, has } from './harness.mjs';
 test('the tarball ships the pack\'s own signposts.yaml + rules/', () => {
   const dir = makeProject();
   assert.ok(has(dir, 'node_modules/signposts/signposts.yaml'), 'the pack ships its own signposts.yaml');
-  assert.ok(has(dir, 'node_modules/signposts/rules/README.md'), 'the pack ships rules/');
+  assert.ok(has(dir, 'node_modules/signposts/rules/ast-grep/date-default-no-nullish.yml'), 'the pack ships rules/ (an ast-grep pattern)');
   assert.ok(has(dir, 'node_modules/signposts/rules/git-hygiene/no-git-discard.mjs'), 'a real own-script ships');
 });
 
