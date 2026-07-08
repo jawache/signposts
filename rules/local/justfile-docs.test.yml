@@ -1,0 +1,13 @@
+# Test for justfile-docs (a JS own-script, kind content, fires on the justfile).
+# valid = must pass, invalid = must block.
+path: justfile
+message: /doc/
+invalid:
+  - |
+    build:
+        echo building
+valid:
+  - |
+    [doc("build the thing")]
+    build:
+        echo building

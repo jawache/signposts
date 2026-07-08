@@ -36,6 +36,7 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
 
   // 4. starter files (only if absent) ------------------------------------------
   log(`• signposts.yaml: ${starter(rel('signposts.yaml'), join(packRoot, 'src/templates/signposts.yaml'), dryRun)}`);
+  log(`• sgconfig.yml: ${starter(rel('sgconfig.yml'), join(packRoot, 'src/templates/sgconfig.yml'), dryRun)}`);
   log(`• lefthook.yml: ${starter(rel('lefthook.yml'), join(packRoot, 'src/templates/lefthook.yml'), dryRun)}`);
   log(`• justfile: ${starter(rel('justfile'), join(packRoot, 'src/templates/justfile'), dryRun)}`);
 
@@ -54,6 +55,7 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
   if (dryRun) { log(`\nDry run complete — re-run without --dry-run to apply.`); return; }
   log(`\n✓ Signposts wired in (as a dev dependency). Restart your agent session so the`);
   log(`  pre-emptive hook loads, then walk the quick-start tour in rules/README.md.`);
+  log(`  The pack ships its own rules — see or adopt them with:  npx signposts diff node_modules/signposts`);
 }
 
 function runActivate(target, packRoot, log) {
@@ -83,7 +85,11 @@ function mergePackageJson(dst, dryRun) {
     scripts: { '//': 'Commands live in the justfile — run `just`.' } };
   pkg.devDependencies = pkg.devDependencies || {};
   let added = 0;
-  for (const [name, ver] of Object.entries(DEV_DEPENDENCIES)) if (!pkg.devDependencies[name]) { pkg.devDependencies[name] = ver; added++; }
+  // Only add a dep the project doesn't already declare — in EITHER dependencies or devDependencies.
+  // (A consumer may already carry `signposts` in dependencies; adding it to devDependencies too
+  // would double-list it.)
+  const alreadyHas = (name) => (pkg.dependencies && pkg.dependencies[name]) || pkg.devDependencies[name];
+  for (const [name, ver] of Object.entries(DEV_DEPENDENCIES)) if (!alreadyHas(name)) { pkg.devDependencies[name] = ver; added++; }
   const next = JSON.stringify(pkg, null, 2) + '\n';
   if (next === existing) return 'unchanged';
   const verb = existing ? `merge (${added} devDep${added === 1 ? '' : 's'})` : 'create';

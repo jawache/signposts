@@ -1,10 +1,26 @@
+# sgconfig.yml — ast-grep project config. Read by TWO consumers:
+#   • the napi engine — it registers each `customLanguages` grammar at startup
+#     (feeds the entry to registerDynamicLanguage), so a rule's `language:` resolves.
+#   • the `ast-grep` CLI, if you ever run it directly (ast-grep -p '…' -l astro).
+# One file, both paths — keep it.
+
 ruleDirs:
   - rules/ast-grep
 
-# No custom languages here: the core rules target built-in TS/TSX, which ast-grep
-# parses out of the box. Stack bundles that need a custom grammar (e.g. astro via
-# virchau13/tree-sitter-astro, built by `just rules-build`) add their own
-# customLanguages block when they're installed.
-
-testConfigs:
-  - testDir: rules/ast-grep-tests
+# Grammars ast-grep doesn't ship natively (native = html · css · js · ts · tsx — nothing
+# needed here for those). Two ways a grammar gets in, both end up registered by the engine:
+#   • PREBUILT npm package  →  `signposts languages add sql`  (installs @ast-grep/lang-sql;
+#     resolved by import at runtime — no entry here, its path lives in node_modules).
+#   • CUSTOM / no package (astro, vue, svelte)  →  build the grammar once with tree-sitter and
+#     point an entry here (this is what `/signposts setup` does, or `signposts languages register`):
+#
+#       npm install -g tree-sitter-cli
+#       git clone https://github.com/virchau13/tree-sitter-astro && cd tree-sitter-astro
+#       tree-sitter build --output ../grammars/astro.so
+#
+# customLanguages:
+#   astro:
+#     libraryPath: grammars/astro.so   # repo-relative path to the built grammar
+#     extensions: [astro]
+#     expandoChar: _                   # $ isn't valid in .astro, so patterns use _VAR
+customLanguages: {}

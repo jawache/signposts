@@ -55,6 +55,9 @@ Usage:
   npx signposts refresh               pull updates for installed packs (keeps your edits)
   npx signposts uninstall             remove Signposts: delete its files + unwire the hooks
   npx signposts uninstall --pack <ns> remove one installed pack namespace (yaml, scripts, permissions)
+  npx signposts test                  run every rule's .test.yml through the real engine (+ validate ast-grep ymls)
+  npx signposts detect                what languages this project uses (file census + stack signals; --json)
+  npx signposts languages <list|add|register>   ast-grep grammars (add = prebuilt npm pkg; register = a built .so in sgconfig)
   npx signposts facts [...]           session facts (the coach's input)
   npx signposts diff <src>            diff a repo's packs against yours
   npx signposts --help
@@ -79,6 +82,9 @@ try {
   if (opts.cmd === 'help') help();
   else if (opts.cmd === 'facts') passthrough('src/skill/session-report.mjs', 'facts');
   else if (opts.cmd === 'diff') passthrough('src/skill/pack-diff.mjs', 'diff');
+  else if (opts.cmd === 'test') passthrough('src/skill/rule-test.mjs', 'test');
+  else if (opts.cmd === 'detect') passthrough('src/skill/detect.mjs', 'detect');
+  else if (opts.cmd === 'languages') passthrough('src/cli/languages.mjs', 'languages');
   else if (opts.cmd === 'install') {
     if (!opts.args[0]) { console.error('usage: npx signposts install <source> [namespace]'); process.exit(1); }
     installPack({ source: opts.args[0], namespace: opts.args[1], target: opts.target });

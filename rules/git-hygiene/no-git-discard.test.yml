@@ -1,0 +1,15 @@
+# Test for no-git-discard (a command rule). It blocks a checkout/restore that would wipe
+# UNCOMMITTED tracked edits — so the block case needs a real git repo with a dirty file.
+cases:
+  - command: "ls -la"
+    expect: pass
+  - command: "git checkout main"          # branch switch, not a pathspec discard
+    expect: pass
+  - command: "git checkout -- tracked.ts  # discard-ok"   # explicit opt-out
+    expect: pass
+  - command: "git checkout -- tracked.ts"
+    files: { "tracked.ts": "v1\n" }        # committed base
+    git: true                              # init + commit the files above
+    dirty: { "tracked.ts": "v2 uncommitted\n" }   # then modify (uncommitted → must block)
+    expect: block
+    message: /would discard/

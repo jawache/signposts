@@ -1,16 +1,17 @@
 ---
 name: signposts
-description: ALWAYS invoke when the user says "/signposts", "/signposts reflect", "/signposts propagate", "/signposts install", "reflect on this session", "make this a rule", "add a rule / a sign / a signpost", "enforce this", "send this rule to my hub / upstream", "install signposts from <repo>", or wants to author / test / share a rule or a sign.
+description: ALWAYS invoke when the user says "/signposts", "/signposts setup", "/signposts reflect", "/signposts propagate", "/signposts install", "set up signposts", "onboard this repo", "reflect on this session", "make this a rule", "add a rule / a sign / a signpost", "enforce this", "send this rule to my hub / upstream", "install signposts from <repo>", or wants to author / test / share a rule or a sign.
 allowed-tools: Read, Write, Edit, Glob, Grep, Task, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(just *), Bash(npx signposts *), Bash(git status*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git checkout*), Bash(gh pr*)
 ---
 
-# Signposts — reflect · propagate · install
+# Signposts — setup · reflect · propagate · install
 
-One skill, **three modes**. Each is the *judgement* half of a job whose *facts* come
+One skill, **four modes**. Each is the *judgement* half of a job whose *facts* come
 from a deterministic script — so you never rediscover what a script can just tell you.
 
 | Mode | What it does | Its fact-provider |
 |---|---|---|
+| **setup** | onboard a repo: install the right grammars, surface the pack's own rules, teach check-before-you-script | `npx signposts detect` / `diff` / `languages` |
 | **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ `--html` report card; + the `coach` agent) |
 | **propagate** | send a rule/sign to a repo you name (your hub, or upstream) | `git` / `gh` |
 | **install** | cherry-pick signs/rules from another repo (git/npm/**local folder**) into this one | `npx signposts diff` |
@@ -27,6 +28,47 @@ decision a human should make.
 
 Ground truth for the model (a **sign** steers, a **rule** blocks) and for *how* to write
 each is `rules/README.md` and the `docs/`. Read them; don't restate them.
+
+---
+
+## Mode: `setup` — get a project (and the agent) ready
+
+Run **once, when onboarding a repo onto Signposts** — or when its stack changes. `npx signposts`
+(the scaffold) writes files; **setup makes the project *and you* ready**: the right grammars, the
+pack's own rules surfaced, the check-before-you-script habit. Every onboarding failure Signposts
+was built to stop happened in the gap where setup should have been.
+
+1. **Scaffold if needed.** No `signposts.yaml` yet? Run `npx signposts` — the deterministic
+   scaffold (justfile, lefthook, the hooks, the quick-start tour). Restart the session so the
+   pre-emptive hook loads. (Already set up → skip to detect.)
+2. **Detect the stack.** `npx signposts detect` (`--json` to consume it) — a file census +
+   `package.json` stack signals. It marks each language **native** (free — html/css/js/ts/tsx) or
+   **needs-grammar**, and recommends the non-native ones (*on Neon → SQL is worth a grammar before
+   a `.sql` file even exists*).
+3. **Show the plan; get each grammar in (on consent).** Summarise it ("mostly TS, some Astro, on
+   Neon → needs `astro` + `sql`"). For each non-native grammar, on the user's go — **you're an
+   agent, so do whatever it takes**:
+   - **Prebuilt first:** `npx signposts languages add <lang>` — installs `@ast-grep/lang-<lang>`
+     (published for sql · python · go · rust · …). If it succeeds, done.
+   - **No published package?** (astro · vue · svelte have none) — **build the grammar yourself**:
+     `npm install -g tree-sitter-cli`; clone/fetch the `tree-sitter-<lang>` grammar (e.g.
+     `tree-sitter-astro`); `tree-sitter build --output grammars/<lang>.so`; then
+     `npx signposts languages register <lang> --library-path grammars/<lang>.so --ext <lang>`.
+     That writes it into `sgconfig.yml customLanguages`, which the engine reads and registers.
+   Don't dead-end at "no package" and don't hand-write a wrapper script — the grammar is the
+   thing; get it built and registered. **Never make a grammar a base dep.** Language rules are
+   then plain `rules/<ns>/ast-grep/*.yml` with `language: <lang>`; a misplaced ast-grep yml is
+   caught by `signposts test`.
+4. **Surface the pack's own rules.** `npx signposts diff node_modules/signposts` — **source #1**:
+   the installed package *is* a diffable pack. Walk what it ships; offer to adopt what fits (that's
+   `install` mode). Don't hand-write what the pack already carries.
+5. **Teach check-before-you-script.** Leave the habit behind: before writing a script, ask — can
+   `on`/`ignore` + a **core script** express this? does the **pack already ship it**
+   (`signposts diff node_modules/signposts`)? Most "novel" rules aren't.
+
+**Prove it:** `npx signposts test` green (the seeded rule's `.test.yml` + ast-grep validation runs
+from `node_modules`), and a bad edit is blocked at the gate. Then `reflect` authors what the
+session earns.
 
 ---
 
@@ -122,6 +164,10 @@ Full detail is `rules/README.md`; the shape at a glance:
 - **Prefer a rule whenever it's checkable** — a sign for something a check could catch is
   hope, not enforcement. And **never restate an enforced rule in a sign** — omit it, no
   pointer.
+- **Check before you script.** Before writing an own-script, ask: can `on`/`ignore` + a
+  **core script** already express this? does the **pack already ship it**? Diff the
+  installed pack first — `signposts diff node_modules/signposts` — and reach for a script
+  only when neither can. (The highest-leverage habit: most "novel" rules aren't.)
 
 ## Hard rules
 

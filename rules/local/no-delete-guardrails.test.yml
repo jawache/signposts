@@ -1,0 +1,14 @@
+# Test for no-delete-guardrails (D — a delete-guard: a `when: [delete]` rule checked against
+# rm / git rm / mv targets). `delete:` cases run through the engine's evaluateDelete.
+cases:
+  - delete: "rm signposts.yaml"
+    expect: block
+    message: /guardrail/
+  - delete: "git rm rules/local/foo.mjs"
+    expect: block
+  - delete: "mv rules/local/foo.mjs /tmp/foo.mjs"
+    expect: block
+  - delete: "rm src/index.ts"
+    expect: pass
+  - delete: "rm signposts.yaml # signposts-delete-ok"
+    expect: pass

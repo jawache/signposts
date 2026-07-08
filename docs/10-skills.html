@@ -30,7 +30,7 @@
   <table>
     <tr><th></th><th>Deterministic — <code>npx signposts</code></th><th>Judgement — <code>/signposts</code></th></tr>
     <tr><td>Does</td><td>drops files, computes facts</td><td>reads facts, converses, decides</td></tr>
-    <tr><td>Commands</td><td><code>scaffold</code> · <code>refresh</code> · the fetch/diff helpers</td><td><code>reflect</code> · <code>propagate</code> · <code>install</code></td></tr>
+    <tr><td>Commands</td><td><code>scaffold</code> · <code>test</code> · <code>detect</code> · <code>languages</code> · <code>refresh</code> · the fetch/diff helpers</td><td><code>setup</code> · <code>reflect</code> · <code>propagate</code> · <code>install</code></td></tr>
   </table>
   <p>The rule between them: the CLI never guesses, and the skill never rediscovers what a script could
   just tell it. A helper script emits the facts (what changed, what's in another repo, what collides);
@@ -47,6 +47,11 @@
       scope, <strong>or a local folder</strong>; <code>uninstall --pack &lt;ns&gt;</code> reverses one.</li>
     <li><code>npx signposts refresh</code> — pull updates for installed packs (three-way merge; keeps your
       local tweaks), tracked in your <code>packs:</code> list.</li>
+    <li><code>npx signposts test</code> — run every rule's colocated <code>.test.yml</code> through the
+      <strong>real engine</strong> (+ validate each ast-grep yml compiles). The proof a rule works.</li>
+    <li><code>npx signposts detect</code> · <code>languages &lt;list|add&gt;</code> — read the stack (file
+      census + <code>package.json</code> signals) and install the ast-grep grammars it needs. Base carries
+      the natives (html/css/js/ts/tsx); others (astro, sql…) install on demand — never a base dep.</li>
     <li><code>npx signposts facts [--html]</code> — the deterministic session report the coach reads:
       per-rule catches vs commit-leaks, never-fired rules, drift pointers. <code>--html</code> writes a
       shareable <strong>report card</strong> to <code>.signposts/reports/</code>.</li>
@@ -55,8 +60,16 @@
   </ul>
 
   <h2>The skill — <code>/signposts &lt;mode&gt;</code></h2>
-  <p>One skill, three modes. Each leans on a deterministic helper for facts, then does the part only
+  <p>One skill, four modes. Each leans on a deterministic helper for facts, then does the part only
   judgement can.</p>
+
+  <h3><code>/signposts setup</code> — onboard a repo</h3>
+  <p>Run it <strong>once, when onboarding a repo</strong> (or when its stack changes). Scaffold drops the
+  files; setup makes the project <em>and the agent</em> ready: it <code>detect</code>s the stack and
+  installs exactly the ast-grep grammars it needs (never bundle-guessing), <strong>surfaces the pack's own
+  rules</strong> to adopt (<code>signposts diff node_modules/signposts</code> — the installed package is a
+  diffable pack), and leaves the <em>check-before-you-script</em> habit. Every onboarding failure Signposts
+  exists to stop happened in the gap where this step was missing.</p>
 
   <h3><code>/signposts reflect</code> — the coach</h3>
   <p>Run it at the <strong>end of a session</strong>. A helper hands it the session's real history — what

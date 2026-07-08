@@ -1,0 +1,22 @@
+name: CI
+
+# Run the whole thing on every push / PR — the in-repo rule self-tests AND the as-installed
+# e2e suite (npm pack -> temp install -> drive the real CLI). The e2e's local folder sources
+# and local bare git remote keep it offline + deterministic; the only network is npm's cache.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: extractions/setup-just@v2
+      - run: npm ci
+      - name: just test (rule self-tests + as-installed e2e)
+        run: just test

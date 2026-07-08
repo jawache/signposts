@@ -12,7 +12,7 @@
 // FAILS SAFE: any error → exit 0, so a hook bug never wedges a command.
 
 import { readFileSync } from 'node:fs';
-import { evaluateCommand } from '../engine.mjs';
+import { evaluateCommand, evaluateDelete, partitionBySeverity, formatViolation } from '../engine.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
@@ -22,16 +22,24 @@ async function main() {
   const input = JSON.parse(raw || '{}');
   const command = input?.tool_input?.command;
   if (!command) return;
+  const logCtx = { root: ROOT, session: input.session_id };
 
-  const hits = await evaluateCommand({ command, phase: 'edit', root: ROOT, logCtx: { root: ROOT, session: input.session_id } });
+  // Two rails on the same PreToolUse Bash event: command rules (a banned command shape) and
+  // DELETE rules (a path/content rule guarding what an rm/git rm/mv would remove).
+  const hits = [
+    ...await evaluateCommand({ command, phase: 'edit', root: ROOT, logCtx }),
+    ...await evaluateDelete({ command, phase: 'delete', root: ROOT, logCtx }),
+  ];
   if (!hits.length) return;
 
-  const blocks = hits.map((h) => {
-    const msg = h.rule.message ? `\n  ${String(h.rule.message).trim().replace(/\n/g, '\n  ')}` : '';
-    return `✗ ${h.rule.id} (${h.rule.use})${msg}\n` + h.hits.map((x) => '    ' + x).join('\n');
-  });
-  process.stderr.write('\nSignposts — command blocked (before it ran):\n\n' + blocks.join('\n\n') + '\n\nAdjust the command, then retry.\n');
-  process.exit(2);
+  const { blocks, warns } = partitionBySeverity(hits);
+  if (blocks.length) {                                          // block → exit 2, stderr fed back
+    process.stderr.write('\nSignposts — command blocked (before it ran):\n\n' + blocks.map(formatViolation).join('\n\n') + '\n\nAdjust the command, then retry.\n');
+    process.exit(2);
+  }
+  if (warns.length) {                                           // warn → inform, never block
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: 'Signposts warning (not blocking):\n\n' + warns.map(formatViolation).join('\n\n') } }));
+  }
 }
 
 main().catch(() => process.exit(0));

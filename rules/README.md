@@ -15,13 +15,17 @@ Rules are declared **grouped by namespace** under `rules:` in `signposts.yaml`. 
 
 ## Prove they work
 
-Every script ships legal/illegal **samples** — the test, the documentation, and the
-spec. One command proves the lot:
+Every rule ships a colocated **`<name>.test.yml`** — `valid`/`invalid` samples (data, not
+code) run through the **real engine**, so green means the rule blocks in production, not in a
+mock. It's the test, the documentation, and the spec in one file. One command proves the lot:
 
 ```
-just test-rules    # ast-grep tests + the engine self-test (every core script,
-                   # when-routing, the shell contract) + each own-script's --test
+signposts test     # every rule's .test.yml through the engine + validates ast-grep ymls parse
+just test-rules    # the engine internals' self-tests, then `signposts test`
 ```
+
+The `rules-have-tests` rule (via `core/sibling-exists`) makes this structural: a rule under
+`rules/` without its `.test.yml` sibling is blocked — you can't ship an untested rule.
 
 ## How it runs — one engine, two triggers
 
@@ -129,8 +133,12 @@ rules:
 
 ## Adding a rule
 
-Author it with the **`/signposts`** skill (`reflect` proposes one from what happened). Three
-shapes:
+Author it with the **`/signposts`** skill (`reflect` proposes one from what happened).
+
+**Check before you script.** Before writing an own-script, confirm neither of the no-code
+shapes fits *and* the pack doesn't already ship it — `npx signposts diff
+node_modules/signposts` (source #1) shows the installed pack's actual rules. Most "novel"
+rules aren't. Three shapes, cheapest first:
 
 1. **Ban/require a code pattern** → drop a `rules/ast-grep/<name>.yml`. Zero code.
 2. **A structural / path / file invariant** → a `rules:` entry naming a **core script** +

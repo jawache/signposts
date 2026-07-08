@@ -134,6 +134,35 @@ rules:
       deny: ["**/*.generated.ts", "vendor/**"]
       message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
 
+    # Dogfood: every rule authored under rules/ ships a colocated <name>.test.yml (valid/invalid
+    # samples run through the REAL engine by `signposts test`). The gate won't let a rule land
+    # untested — "every rule has a test" is itself a Signposts rule. `.test.yml` files opt out.
+    - id: rules-have-tests
+      use: core/sibling-exists
+      on: ["rules/**/*.mjs", "rules/**/*.sh", "rules/**/*.yml"]
+      ignore: ["**/*.test.yml"]
+      sibling: "{dir}/{name}.test.yml"
+      message: "Every rule needs a sibling <name>.test.yml (valid/invalid samples the engine runs). Add it, then `just test-rules`."
+
+    # D — DELETE coverage: the guardrails guard themselves against deletion, not just edits. A
+    # `when: [delete]` rule checks the targets of rm / git rm / mv at PreToolUse Bash (the same
+    # rail no-git-discard rides). Append `# signposts-delete-ok` to a command to override.
+    - id: no-delete-guardrails
+      use: core/protected-path
+      deny: ["signposts.yaml", "rules/**"]
+      when: [delete]
+      message: "That command would delete a guardrail (signposts.yaml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
+
+    # D — severity WARN: a triggered CHECK that INFORMS instead of blocking (distinct from a
+    # sign, which is ambient area-guidance). Catches a `.only(` left in a test — it would silently
+    # skip the rest of the suite — but never blocks the edit or commit.
+    - id: no-only-in-tests
+      use: core/text-ban
+      on: ["**/*.test.{mjs,js,ts,tsx}"]
+      ban: ['\.only\(']
+      severity: warn
+      message: "A focused `.only(` will silently skip the rest of the suite — remove it before you commit."
+
   # An installable pack you can pull into your own projects (`/signposts install` from
   # this repo). A COMMAND rule: it blocks the Bash command before it runs, via the
   # command-guard hook — no copied .sh, just data.
@@ -173,12 +202,10 @@ install:
     - { from: ".claude/skills/",  to: ".claude/skills/" }
     - { from: "rules/",           to: "rules/" }
     - { from: "lefthook.yml",     to: "lefthook.yml" }
-    - { from: "sgconfig.yml",     to: "sgconfig.yml" }
     - { from: "justfile",         to: "justfile",       merge: true }
     - { from: "signposts.yaml",   to: "signposts.yaml", merge: true }
     - { from: ".claude/settings.json", to: ".claude/settings.json", merge: true }
   devDependencies:
-    "@ast-grep/cli": "^0.42.3"
     "@ast-grep/napi": "^0.42.3"
     "lefthook": "^2.1.8"
     "yaml": "^2.8.3"

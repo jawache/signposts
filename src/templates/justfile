@@ -12,9 +12,9 @@ default:
 install:
     npm ci
 
-[doc("Run the engine's self-test from the installed signposts package (core scripts + when-routing + the shell contract).")]
+[doc("Run every rule's .test.yml through the real engine (+ validate ast-grep ymls), from the installed signposts package.")]
 test-rules:
-    node node_modules/signposts/src/engine.mjs --test
+    node node_modules/signposts/src/cli/signposts.mjs test
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:

@@ -61,7 +61,7 @@ export function loadRules(root, configPath) {
   const seen = new Set(rules.map((r) => r.id));
   for (const dir of astGrepDirs(root)) {
     let files = [];
-    try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)); } catch { continue; /* no such dir */ }
+    try { files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f) && !/\.test\.ya?ml$/.test(f)); } catch { continue; /* no such dir; never load a .test.yml fixture as a rule */ }
     for (const f of files) {
       try {
         const r = parseYaml(readFileSync(join(dir, f), 'utf8'));
@@ -73,6 +73,7 @@ export function loadRules(root, configPath) {
           id, namespace: 'core', use: 'core/ast-grep',
           astgrep: r.rule, lang: r.language,
           on: r.files || TS_GLOB,
+          ignore: r.ignores,          // A3: honour the yml's `ignores:` — was dropped, so engine and CLI scan could disagree.
           when: (r.metadata && r.metadata.when) || ['edit', 'commit'],
           message: r.message,
         }));
@@ -93,6 +94,26 @@ function astGrepDirs(root) {
     }
   } catch { /* no rules/ dir */ }
   return dirs;
+}
+
+// A3 (honesty): an ast-grep-shaped yml (a top-level `rule:`) ONLY runs when it lives in an
+// `ast-grep/` folder — discovery looks nowhere else. A rule authored in the wrong place is
+// therefore silently ignored. This finds those so `signposts test` / setup can WARN rather
+// than let them no-op. Returns repo-relative paths. Fails safe: no rules/ dir → [].
+export function findMisplacedAstGrep(root) {
+  const out = [];
+  const walk = (dir) => {
+    let ents; try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const abs = join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'ast-grep') walk(abs); continue; }  // ast-grep/ folders are the legit home
+      if (!/\.ya?ml$/.test(e.name) || /\.test\.ya?ml$/.test(e.name)) continue;   // skip declarative test fixtures
+      try { const doc = parseYaml(readFileSync(abs, 'utf8')); if (doc && doc.rule) out.push(relative(root, abs)); }
+      catch { /* skip malformed */ }
+    }
+  };
+  walk(join(root, 'rules'));
+  return out;
 }
 
 function normalise(r) {
@@ -259,6 +280,56 @@ export async function evaluateCommand({ command, phase = 'edit', root, configPat
   return out;
 }
 
+// ── D: the event × response matrix ────────────────────────────────────────────
+// Deletion has no tool/hook of its own — it's a side-effect of Bash. Parse the targets of
+// rm / git rm / mv so a rule can guard them at PreToolUse (the same rail no-git-discard rides).
+// Append `# signposts-delete-ok` to override. Fails safe: unparseable → [].
+export function deleteTargets(command) {
+  if (typeof command !== 'string' || command.includes('# signposts-delete-ok')) return [];
+  const out = [];
+  for (const seg of command.split(/&&|\|\||;|\|/)) {                       // each sub-command
+    const toks = (seg.trim().match(/"[^"]*"|'[^']*'|\S+/g) || []).map((t) => t.replace(/^["']|["']$/g, ''));
+    if (!toks.length) continue;
+    const nonFlag = (a) => a.filter((t) => !t.startsWith('-'));
+    if (toks[0] === 'rm') out.push(...nonFlag(toks.slice(1)));
+    else if (toks[0] === 'git' && toks[1] === 'rm') out.push(...nonFlag(toks.slice(2)));
+    else if (toks[0] === 'mv') { const a = nonFlag(toks.slice(1)); if (a.length >= 2) out.push(...a.slice(0, -1)); }  // sources, not the dest
+  }
+  return out;
+}
+
+// Evaluate per-file rules that opted into `when: [delete]` against a Bash delete's targets.
+// The file still exists at PreToolUse, so a content/ast-grep rule can inspect it before it's
+// gone ("this file matched X — did you move the code first?"). Returns violations.
+export async function evaluateDelete({ command, phase = 'delete', root, configPath, logCtx = null }) {
+  const targets = deleteTargets(command);
+  if (!targets.length) return [];
+  const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes('delete'));
+  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
+  const out = [];
+  const { tally, record } = makeTally();
+  for (const rule of rules) {
+    const s = await resolveScript(rule.use, root);
+    if (!s || s.kind === 'command' || s.kind === 'project') continue;       // per-file rules only
+    for (const t of targets) {
+      const res = await runFileRule(s, rule, t, root, phase, getContent);
+      if (!res) continue;
+      record(rule, res.hits.length);
+      if (res.hits.length) out.push({ rule, path: res.path, hits: res.hits });
+    }
+  }
+  logRun(logCtx, phase, targets, tally, out);
+  return out;
+}
+
+// Split violations by response: `severity: warn` informs (PostToolUse-style), everything else
+// (default `block`) blocks. One knob covers the whole matrix — block-or-warn, on edit or delete.
+export function partitionBySeverity(violations) {
+  const blocks = [], warns = [];
+  for (const v of violations) ((v.rule.severity || 'block') === 'warn' ? warns : blocks).push(v);
+  return { blocks, warns };
+}
+
 // ── scan the whole tree (the THIRD trigger — reports, never blocks, never logs) ──
 // Runs every per-file rule over the whole tree as if each file were being written,
 // and reports the violations. Command + project rules have nothing per-file to scan,
@@ -333,8 +404,10 @@ async function cli(argv) {
   const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
   // lefthook runs outside any Claude session — commit/push events land in commit.jsonl.
   const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });
-  if (violations.length === 0) process.exit(0);
-  process.stderr.write('\n' + violations.map(formatViolation).join('\n\n') + '\n\n');
+  const { blocks, warns } = partitionBySeverity(violations);
+  if (warns.length) process.stderr.write('\n⚠ Signposts warnings (not blocking):\n' + warns.map(formatViolation).join('\n\n') + '\n');
+  if (blocks.length === 0) process.exit(0);
+  process.stderr.write('\n' + blocks.map(formatViolation).join('\n\n') + '\n\n');
   process.exit(2);
 }
 
@@ -382,11 +455,22 @@ async function selfTest() {
     results.push({ name: 'ignore skips opted-out paths', pass: ignored.length === 0 });
     results.push({ name: 'ignore leaves others enforced', pass: enforced.length === 1 });
 
-    // 5. ast-grep discovery reaches a namespaced rules/<ns>/ast-grep/ folder (seeded tour).
+    // 5. ast-grep discovery reaches a namespaced rules/<ns>/ast-grep/ folder (seeded tour),
+    //    and A3: honours a yml's `ignores:` (previously dropped, so engine & CLI scan disagreed).
     mkdirSync(join(tmp, 'rules/examples/ast-grep'), { recursive: true });
     writeFileSync(join(tmp, 'rules/examples/ast-grep/nsrule.yml'), 'id: ns-astgrep\nlanguage: typescript\nrule:\n  pattern: var $X = $Y\n');
-    const nsFound = loadRules(tmp, join(tmp, 'no-config.yaml')).some((r) => r.id === 'ns-astgrep');
-    results.push({ name: 'ast-grep discovered under rules/<ns>/ast-grep', pass: nsFound });
+    writeFileSync(join(tmp, 'rules/examples/ast-grep/ignoring.yml'),
+      'id: ns-ignore\nlanguage: typescript\nfiles: ["src/**"]\nignores: ["**/*.gen.ts"]\nrule:\n  pattern: var $X = $Y\n');
+    const disc = loadRules(tmp, join(tmp, 'no-config.yaml'));
+    results.push({ name: 'ast-grep discovered under rules/<ns>/ast-grep', pass: disc.some((r) => r.id === 'ns-astgrep') });
+    const ignoreRule = disc.find((r) => r.id === 'ns-ignore');
+    results.push({ name: 'ast-grep ignores: mapped to rule.ignore', pass: !!ignoreRule && Array.isArray(ignoreRule.ignore) && ignoreRule.ignore.includes('**/*.gen.ts') });
+
+    // 5c. A3: an ast-grep-shaped yml OUTSIDE an ast-grep/ folder is flagged, not silently ignored.
+    writeFileSync(join(tmp, 'rules/examples/misplaced.yml'), 'id: oops\nlanguage: typescript\nrule:\n  pattern: var $X = $Y\n');
+    const misplaced = findMisplacedAstGrep(tmp);
+    results.push({ name: 'misplaced ast-grep yml flagged', pass: misplaced.includes(join('rules', 'examples', 'misplaced.yml')) });
+    results.push({ name: 'well-placed ast-grep yml not flagged', pass: !misplaced.some((p) => p.split(/[\\/]/).includes('ast-grep')) });
 
     // 6. scanTree: whole-tree scan reports EXACTLY the offender; a command rule is skipped, not run.
     const scanRoot = mkdtempSync(join(tmpdir(), 'sg-scan-'));
@@ -400,6 +484,22 @@ async function selfTest() {
     results.push({ name: 'scanTree counts one violation, one per-file rule', pass: scan.counts.violations === 1 && scan.counts.rules === 1 });
     results.push({ name: 'scanTree skips the command rule', pass: scan.skipped.includes('cmd') });
     try { rmSync(scanRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+
+    // 7. D — delete coverage + severity. deleteTargets parses rm/git rm/mv (+ override); a
+    //    when:[delete] rule blocks the rm of a denied path; severity partitions block vs warn.
+    results.push({ name: 'deleteTargets parses rm', pass: JSON.stringify(deleteTargets('rm -rf secret/a.ts b.ts')) === JSON.stringify(['secret/a.ts', 'b.ts']) });
+    results.push({ name: 'deleteTargets parses git rm / mv-source / override', pass:
+      JSON.stringify(deleteTargets('git rm secret/a.ts')) === JSON.stringify(['secret/a.ts'])
+      && JSON.stringify(deleteTargets('mv secret/a.ts elsewhere/a.ts')) === JSON.stringify(['secret/a.ts'])
+      && deleteTargets('rm secret/a.ts # signposts-delete-ok').length === 0 });
+    const delCfg = join(tmp, 'delete.yaml');
+    writeFileSync(delCfg, 'rules:\n  local:\n    - id: no-del\n      use: core/protected-path\n      deny: ["secret/**"]\n      when: [delete]\n      message: protected\n');
+    const delBlocked = await evaluateDelete({ command: 'rm secret/x.ts', root: tmp, configPath: delCfg });
+    const delAllowed = await evaluateDelete({ command: 'rm other.ts', root: tmp, configPath: delCfg });
+    results.push({ name: 'evaluateDelete blocks a denied path', pass: delBlocked.length === 1 && delBlocked[0].rule.id === 'no-del' });
+    results.push({ name: 'evaluateDelete allows other paths', pass: delAllowed.length === 0 });
+    const part = partitionBySeverity([{ rule: { severity: 'warn' } }, { rule: {} }]);
+    results.push({ name: 'partitionBySeverity splits warn vs block', pass: part.warns.length === 1 && part.blocks.length === 1 });
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
   }

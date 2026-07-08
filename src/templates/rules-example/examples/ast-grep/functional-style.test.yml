@@ -1,0 +1,11 @@
+# EXAMPLE — the test for beat 3 (delete with the rest of rules/examples/ when done).
+#
+# Every rule ships a colocated <name>.test.yml: valid = must pass, invalid = must block.
+# `signposts test` runs each sample through the REAL engine (the same path as the gate), so
+# green means the rule actually blocks in production — not in a mock. This is how you prove a
+# rule you author works, and the `rules-have-tests` dogfood can require one for every rule.
+path: src/demo.functional.ts        # matches the rule's files: **/*.functional.ts
+invalid:
+  - export const sum = (xs) => { let t = 0; for (const x of xs) t += x; return t }
+valid:
+  - export const sum = (xs) => xs.reduce((a, b) => a + b, 0)

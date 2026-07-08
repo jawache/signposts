@@ -28,9 +28,16 @@ worktree branch:
 
 # ── rules / tests ──────────────────────────────────────────────────────────────
 
-[doc("Run every rules/ check + self-test (ast-grep, the engine's core scripts + shell contract, justfile-docs, no-ai-attribution, git-discard, the signposts engine + session-report).")]
+[doc("Run every rules/ check + self-test: the engine internals (core scripts, shell contract, log, signs, session-report, pack-diff, source, install, refresh, the rule-test runner) then `signposts test` (every rule's .test.yml through the real engine + ast-grep validation).")]
 test-rules:
-    ast-grep test --skip-snapshot-tests && node src/engine.mjs --test && node src/log.mjs --test && node rules/local/justfile-docs.mjs --test && node rules/git-hygiene/no-git-discard.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/cli/source.mjs --test && node src/cli/install.mjs --test && node src/cli/refresh.mjs --test
+    node src/engine.mjs --test && node src/log.mjs --test && node src/core/languages.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/skill/detect.mjs --test && node src/skill/rule-test.mjs --test && node src/cli/source.mjs --test && node src/cli/install.mjs --test && node src/cli/languages.mjs --test && node src/cli/refresh.mjs --test && node src/cli/signposts.mjs test
+
+[doc("Prove it works AS-INSTALLED: npm pack -> temp install -> drive the real CLI (packaging, scaffold, the gate, ship-completeness, onboarding-steers).")]
+test-e2e:
+    node --test "test/e2e/*.test.mjs"
+
+[doc("Run every test — the in-repo rule self-tests plus the as-installed e2e suite.")]
+test: test-rules test-e2e
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
 gate:

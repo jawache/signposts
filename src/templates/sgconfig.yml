@@ -1,0 +1,18 @@
+# sgconfig.yml — ast-grep project config, scaffolded by `npx signposts`. Read by TWO consumers:
+#   • the Signposts engine — it registers each `customLanguages` grammar (feeds it to napi), so a
+#     rule's `language:` resolves.
+#   • the `ast-grep` CLI, if you run it directly.
+#
+# Native languages (html · css · js · ts · tsx) need nothing here. For others:
+#   • PREBUILT  →  `npx signposts languages add sql`   (installs @ast-grep/lang-sql)
+#   • CUSTOM (astro, vue, svelte — no npm package) → build the grammar once, then register it:
+#       npm install -g tree-sitter-cli
+#       git clone <the tree-sitter-astro grammar> && cd tree-sitter-astro
+#       tree-sitter build --output ../grammars/astro.so
+#       npx signposts languages register astro --library-path grammars/astro.so --ext astro
+#   (Or just run `/signposts setup` and let it do the detecting + installing for you.)
+
+ruleDirs:
+  - rules/ast-grep
+
+customLanguages: {}

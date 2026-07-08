@@ -1,5 +1,0 @@
-id: date-default-no-nullish
-valid:
-  - const d = row.published_at || new Date();
-invalid:
-  - const d = row.published_at ?? new Date();

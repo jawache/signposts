@@ -1,0 +1,7 @@
+# Test for date-default-no-nullish (ast-grep), run through the REAL engine.
+# valid = must pass, invalid = must block. `path` scopes the samples so the rule's glob matches.
+path: src/probe.ts
+invalid:
+  - const d = row.published_at ?? new Date();
+valid:
+  - const d = row.published_at || new Date();

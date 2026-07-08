@@ -22,7 +22,7 @@
 
 import { readFileSync, appendFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
-import { evaluate } from '../engine.mjs';
+import { evaluate, partitionBySeverity } from '../engine.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
@@ -125,6 +125,19 @@ function deny(reason) {
   );
 }
 
+// A `severity: warn` rule informs without blocking: additionalContext, no deny decision.
+function warnReason(violations) {
+  const items = violations.map((v) => {
+    const head = `[${v.rule.id}]${v.path ? ` · ${v.path}` : ''}`;
+    const msg = v.rule.message ? '\n  ' + String(v.rule.message).trim().replace(/\n/g, '\n  ') : '';
+    return head + msg + '\n' + v.hits.map((h) => '    ' + h).join('\n');
+  });
+  return ['Signposts — warning (not blocking):', '', ...items].join('\n');
+}
+function inform(context) {
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: context } }));
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -147,8 +160,10 @@ async function main() {
     getContent: () => file.content,
     logCtx: { root: ROOT, session: input.session_id },
   });
-  trace(`eval → ${violations.length ? `DENY (${violations.length})` : 'allow'}`);
-  if (violations.length) deny(denyReason(violations));
+  const { blocks, warns } = partitionBySeverity(violations);
+  trace(`eval → ${blocks.length ? `DENY (${blocks.length})` : warns.length ? `WARN (${warns.length})` : 'allow'}`);
+  if (blocks.length) { deny(denyReason(blocks)); return; }     // block wins if both
+  if (warns.length) inform(warnReason(warns));
 }
 
 main().catch((e) => {

@@ -44,7 +44,9 @@ one-line "working").
 Fires, pass/fail, which job caught something (the gate doing its job). Propose any **new
 check** worth adding — named as an **ast-grep rule** (give the YAML pattern) **or a
 `rules/` script** (give the pseudo-logic + its file/command trigger). A new rule is a flag
-for `/signposts`, not an auto-add.
+for `/signposts`, not an auto-add. **Check before you script:** before naming an own-script,
+confirm a **core script** or the **already-shipped pack** (`signposts diff
+node_modules/signposts`) can't already express it — most "novel" checks aren't.
 
 ### justfile
 Front-door hit-rate: `just <recipe>` calls vs raw-tool bypasses (treat bypass counts as

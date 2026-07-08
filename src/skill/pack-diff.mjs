@@ -17,13 +17,20 @@ import { join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
+// A3 (honesty): the legacy flat layout (`advisory:`, or `signs:`/`rules:` as a bare array)
+// carries no namespaces, so a diff of it finds nothing — the same "(no installable namespaces)"
+// as an empty repo. Detect it so we can say WHY. Mirrors install.mjs's refusal check.
+export function isLegacyDoc(doc) {
+  return !!doc && (doc.advisory !== undefined || Array.isArray(doc.signs) || Array.isArray(doc.rules));
+}
+
 // ── load a repo's packs (grouped: section → namespace → [entries]) ────────────
 export function loadPacks(root) {
   let doc = {};
   try { doc = parseYaml(readFileSync(join(root, 'signposts.yaml'), 'utf8')) || {}; } catch { /* none */ }
   // `settings:` (optional) carries host-permission entries per namespace — travels with
   // the namespace on install (merged into .claude/settings.json). Shape: ns → { permissions: { deny, allow } }.
-  return { signs: grouped(doc.signs), rules: grouped(doc.rules), settings: (doc.settings && typeof doc.settings === 'object') ? doc.settings : {}, root };
+  return { signs: grouped(doc.signs), rules: grouped(doc.rules), settings: (doc.settings && typeof doc.settings === 'object') ? doc.settings : {}, root, legacy: isLegacyDoc(doc) };
 }
 function grouped(section) {
   const out = {};
@@ -42,7 +49,7 @@ export function canon(v) {
 
 // ── diff source packs against target packs ────────────────────────────────────
 export function diffPacks(source, target, only) {
-  const report = { signs: {}, rules: {}, namespaces: {} };
+  const report = { signs: {}, rules: {}, namespaces: {}, sourceLegacy: !!source.legacy };
   for (const section of ['signs', 'rules']) {
     for (const [ns, entries] of Object.entries(source[section])) {
       if (only && ns !== only) continue;
@@ -84,7 +91,11 @@ function listScripts(root, ns) {
 function render(report, source, target) {
   const L = [`pack diff — ${source} → ${target}`, ''];
   const namespaces = Object.keys(report.namespaces).sort();
-  if (!namespaces.length) { L.push('(no installable namespaces found in the source)'); return L.join('\n'); }
+  if (!namespaces.length) {
+    if (report.sourceLegacy) L.push('legacy flat format detected (advisory: / bare signs: / rules: array) — install can\'t read it; it needs a manual port. Open it with the /signposts skill and cherry-pick by hand.');
+    else L.push('(no installable namespaces found in the source)');
+    return L.join('\n');
+  }
   for (const ns of namespaces) {
     const meta = report.namespaces[ns];
     L.push(`▸ ${ns}  (${meta.signs || 0} sign(s), ${meta.rules || 0} rule(s), ${meta.scripts.length} script file(s))`);
@@ -128,6 +139,12 @@ function selfTest() {
     ['rule same', canon(r.rules.neon.same) === canon(['agreed'])],
     ['namespace counts', r.namespaces.neon.rules === 3 && r.namespaces.neon.signs === 1],
     ['canon order-insensitive', canon({ a: 1, b: 2 }) === canon({ b: 2, a: 1 })],
+    // A3: legacy flat layouts are detected, and the empty-diff render says WHY.
+    ['legacy: advisory key', isLegacyDoc({ advisory: [] }) === true],
+    ['legacy: flat rules array', isLegacyDoc({ rules: [{ id: 'x' }] }) === true],
+    ['not legacy: grouped', isLegacyDoc({ rules: { core: [] } }) === false],
+    ['legacy hint on empty diff', render({ signs: {}, rules: {}, namespaces: {}, sourceLegacy: true }, '/s', '/t').includes('legacy flat format')],
+    ['plain hint when not legacy', render({ signs: {}, rules: {}, namespaces: {}, sourceLegacy: false }, '/s', '/t').includes('no installable namespaces')],
   ];
   const fail = checks.filter(([, ok]) => !ok).map(([n]) => n);
   if (fail.length) { console.error('FAIL pack-diff:\n  ' + fail.join('\n  ')); process.exit(1); }
