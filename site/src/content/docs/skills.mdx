@@ -9,23 +9,32 @@ order: 4
 |  | Deterministic — `npx signposts` | Judgement — `/signposts` |
 | --- | --- | --- |
 | Does | drops files, computes facts | reads facts, converses, decides |
-| Commands | `scaffold` · `refresh` · the fetch/diff helpers | `reflect` · `propagate` · `install` |
+| Commands | `scaffold` · `test` · `detect` · `languages` · `refresh` · the fetch/diff helpers | `setup` · `reflect` · `propagate` · `install` |
 
 The rule between them: the CLI never guesses, and the skill never rediscovers what a script could just tell it. A helper script emits the facts (what changed, what's in another repo, what collides); the skill applies the judgement.
 
 ## The CLI — `npx signposts`
 
 - `npx signposts` — **scaffold**: drop the engine, hooks, config, and the core pack into a repo, and arm the gate. One-time. ([Quickstart](/docs/quickstart).)
-- `npx signposts refresh` — pull updates for the packs you've installed, tracked in your `packs:` list.
-- Under the hood it also exposes the **fetch / diff / apply** helpers the skill calls — e.g. "summarise what's in *that* repo versus mine" — so the AI doesn't burn tokens working it out.
+- `npx signposts scan` — **audit the whole tree** against your rules. Reports, never blocks — see the debt an existing repo already carries, or how many hits a proposed rule has. ([the third trigger](/docs/wiring).)
+- `npx signposts install <src> [ns]` — cherry-pick a pack from a git repo, an npm scope, **or a local folder**; `uninstall --pack <ns>` reverses one.
+- `npx signposts refresh` — pull updates for installed packs (three-way merge; keeps your local tweaks), tracked in your `packs:` list, and re-copy the skill surface (`SKILL.md` + `coach.md`) from the updated package so it doesn't fall behind.
+- `npx signposts test` — run every rule's colocated `.test.yml` through the **real engine** (+ validate each ast-grep yml compiles). The proof a rule works.
+- `npx signposts detect` · `languages <list|add|register>` — read the stack (file census + `package.json` signals) and install the ast-grep grammars it needs. Base carries the natives (html/css/js/ts/tsx); others (astro, sql…) install on demand — never a base dep.
+- `npx signposts facts [--html]` — the deterministic session report the coach reads: per-rule catches vs commit-leaks, never-fired rules, drift pointers. `--html` writes a shareable **report card** to `.signposts/reports/`.
+- Under the hood it also exposes the **fetch / diff / apply** helpers the skill calls — so the AI doesn't burn tokens working it out.
 
 ## The skill — `/signposts <mode>`
 
-One skill, three modes. Each leans on a deterministic helper for facts, then does the part only judgement can.
+One skill, four modes. Each leans on a deterministic helper for facts, then does the part only judgement can.
+
+### `/signposts setup` — onboard a repo
+
+Run it **once, when onboarding a repo** (or when its stack changes). Scaffold drops the files; setup makes the project *and the agent* ready: it `detect`s the stack and installs exactly the ast-grep grammars it needs (never bundle-guessing), **surfaces the pack's own rules** to adopt (`signposts diff node_modules/signposts` — the installed package is a diffable pack), and leaves the *check-before-you-script* habit. Every onboarding failure Signposts exists to stop happened in the gap where this step was missing.
 
 ### `/signposts reflect` — the coach
 
-Run it at the **end of a session**. A helper hands it the session's real history — what you corrected, what you re-explained, what a rule blocked — and the coach proposes new signposts: <em>"this drift → a <Chip kind="sign">sign</Chip>"</em> or <em>"this mistake → a <Chip kind="rule">rule</Chip>"</em>, or both. You accept, and it authors and tests them. This is the engine of [the loop](/docs/the-loop).
+Run it at the **end of a session**. A helper hands it the session's real history — what you corrected, what you re-explained, what a rule blocked — and the coach proposes new signposts: <em>"this drift → a <Chip kind="sign">sign</Chip>"</em> or <em>"this mistake → a <Chip kind="rule">rule</Chip>"</em>, or both. You accept, and it authors and tests them. This is the engine of [the loop](/docs/the-loop). The facts it reads are deterministic — hard numbers from the engine's [event log](/docs/wiring), not guessed from the transcript — and `npx signposts facts --html` renders them as a session **report card**.
 
 ### `/signposts propagate` — send a rule to a repo
 
@@ -33,7 +42,7 @@ Lift a rule or sign out of this project and **send it to a repo you name** — g
 
 ### `/signposts install` — cherry-pick from a repo
 
-Point it at any repo — your hub, a teammate's project, an official pack. A helper diffs *their* signposts against *yours* — what's new, what collides, which namespaces — and the skill walks you through an **interactive picker**: take the whole `neon` namespace, or individual entries. Collisions are talked through, not resolved by a rigid rule — this is exactly where an AI is good.
+Point it at any repo — your hub (even a private one, or a sibling folder on disk), a teammate's project, an official pack. A helper diffs *their* signposts against *yours* — what's new, what collides, which namespaces — and the skill walks you through an **interactive picker**: take the whole `neon` namespace, or individual entries. Collisions are talked through, not resolved by a rigid rule — this is exactly where an AI is good.
 
 ## The hub loop
 

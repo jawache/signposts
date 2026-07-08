@@ -16,7 +16,7 @@ Most often one of these:
 ## "It's blocking things it shouldn't"
 
 - **Tighten `on:`** (or `deny:` / `ban:`) so the rule only fires where you mean it to.
-- **Add a legal sample to the script's `--test`** that covers the case being false-flagged — then fix the script until it passes.
+- **Add a valid sample to the rule's `.test.yml`** (a legal case the engine must pass) that covers the case being false-flagged — then fix the rule until `signposts test` is green.
 - For a deliberate one-off, the rule's message always tells you the way out (e.g. a safety guard's explicit escape).
 
 ## The debug trace
@@ -49,3 +49,7 @@ The edit-time block still works (it's an agent hook). You lose the commit-time b
 ### A rule is irrelevant to this repo — do I delete it?
 
 No need. A rule whose `on:` glob never matches simply sleeps. Carrying your whole stack everywhere is the intended model.
+
+### I updated Signposts but my `/signposts` skill is missing a mode
+
+The skill (`SKILL.md`) and the `coach` agent are **copied** into your project's `.claude/` at setup time — your agent loads them from there, not from `node_modules` — so they're a snapshot, and updating the installed package doesn't refresh them. Run `npx signposts refresh` — it re-copies both from the updated package (or re-scaffold with `npx signposts`) — then **restart your agent session** so the new skill loads.

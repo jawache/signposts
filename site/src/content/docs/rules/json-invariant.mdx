@@ -15,11 +15,12 @@ A structured config file drifting from its intended shape. The starter example: 
 
 ```yaml
 rules:
-  - id: no-package-scripts
-    use: core/json-invariant
-    on: "package.json"
-    assert: { path: scripts, keysPrefixedWith: "//" }
-    message: "package.json scripts must stay empty — commands live in the justfile."
+  justfile:
+    - id: no-package-scripts
+      use: core/json-invariant
+      on: "package.json"
+      assert: { path: scripts, keysPrefixedWith: "//" }
+      message: "package.json scripts must stay empty — commands live in the justfile."
 ```
 
 | Field | What it does |

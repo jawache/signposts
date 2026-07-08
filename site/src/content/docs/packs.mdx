@@ -33,37 +33,64 @@ The trap with "packaging" is that it pulls your rules away from where you use th
 ```
 npx signposts install github:you/your-project           # browse what's there
 npx signposts install github:you/your-project  neon     # take the neon namespace
+npx signposts install ../my-hub  neon                   # …or from a sibling folder on disk
 ```
 
-It copies `rules/neon/` and merges the `neon` group from both `signs:` and `rules:` — the whole pack, in one move.
+It copies `rules/neon/` and merges the `neon` group from both `signs:` and `rules:` — the whole pack, in one move. Comments in your `signposts.yaml` are preserved (the merge edits the document in place, it doesn't re-serialise from scratch). To remove a pack later: `npx signposts uninstall --pack neon` — it drops the namespace's yaml groups, its `rules/neon/`, and any permissions it added, leaving your own config untouched.
+
+<Note>
+**Install reads the current layout only.** An older repo (flat `signs:`/`rules:` lists, or the legacy `advisory:` key) is refused with a clear message — open it with `/signposts install` (the skill) and cherry-pick by hand. No silent half-install.
+</Note>
 
 ## The hub: your own repo as the spine
 
 You don't need a public anything. Keep a personal rules repo (private is fine) as your hub: `reflect` finds a rule in a project → `propagate` sends it to the hub → `install` pulls it into your other projects. Trusted teammates can install from the hub too.
 
-## Two distribution doors
+## Three install doors
 
-The same pack ships either way — pick by how much ceremony you want.
+The same pack installs any of three ways — pick by how much ceremony you want.
 
-|  | Git <span class="muted">(default)</span> | npm-scoped <span class="muted">(at scale)</span> |
-| --- | --- | --- |
-| Source | `github:you/pack#v1`, or private over SSH | `@signposts/neon` · `@acme/guardrails` |
-| Publish step | just `git push` (tag to pin) | `npm publish` |
-| Versioning | tags / refs | semver (`@^2`) |
-| Private | a private repo | a private registry |
-| Best for | you · personal · quick · private | official packs · companies · access control |
+|  | Local path <span class="muted">(private / quick)</span> | Git <span class="muted">(default)</span> | npm-scoped <span class="muted">(at scale)</span> |
+| --- | --- | --- | --- |
+| Source | `../my-hub` · `/abs/path` | `github:you/pack#v1`, or private over SSH | `@signposts/neon` · `@acme/guardrails` |
+| Publish step | none — install straight from disk | just `git push` (tag to pin) | `npm publish` |
+| Versioning | whatever's on disk | tags / refs | semver (`@^2`) |
+| Best for | private repos · one cleaned-up hub folder you install everywhere from | you · personal · shared | official packs · companies · access control |
 
-Official packs live under the project's `@signposts/*` scope; a company publishes under its own (`@acme/*`); you just push a repo.
+Same cherry-pick semantics for all three — only the fetch differs. The local door fits the common case: most rule-bearing repos are private, and the natural workflow is "tidy one local hub, install from there". Official packs live under `@signposts/*`; a company publishes under its own (`@acme/*`); you just push (or point at) a repo.
 
-## Refresh tracks what you installed
+## A pack can carry host permissions
 
-Your config records installed packs so `npx signposts refresh` can pull updates:
+Some guardrails aren't enforceable by the engine — denying a *read*, or an MCP tool call, is the host's job (Claude Code's `.claude/settings.json`), not ours. A pack can carry those so you don't hand-edit settings after every install. Add a `settings:` block, per namespace:
+
+```yaml
+settings:
+  neon:
+    permissions:
+      deny:  ["Read(./.env.keys)"]   # the host blocks the read; Signposts just delivers the entry
+      allow: []                       # optional
+```
+
+On install these merge into `.claude/settings.json`, and exactly what was added is recorded as the pack's ledger in `packs:` (below), so `uninstall --pack` removes precisely those entries — never a hand-written one, never one another installed pack still needs.
+
+## Refresh keeps your local tweaks
+
+Your config records installed packs so `npx signposts refresh` can pull updates. Install writes an *object* entry — the source, the namespaces it owns, the permissions ledger, and the date (a plain string still works for a legacy entry):
 
 ```yaml
 packs:
-  - "@signposts/neon@^2"                 # npm, semver-tracked
-  - "github:you/signposts-mystyle#v1"    # git, ref-tracked
+  - "@signposts/neon@^2"                    # legacy string — still valid
+  - source: "github:you/signposts-mystyle#v1"
+    namespaces: [mystyle]
+    settings: { deny: ["Read(./.env.keys)"] }   # exactly what install added
+    installed: "2026-07-06"
 ```
+
+Refresh does a **three-way merge** against a snapshot install took (kept under a gitignored `.signposts/base/<ns>/`): it compares what the pack originally shipped, what's in your repo now, and what the pack ships today. Only upstream changed → take theirs; only you changed → keep yours; *both* changed → it surfaces a conflict and touches nothing (for a script it drops a `<file>.upstream` sidecar beside yours — never conflict markers in a live rule). That's what makes "install, then tune it locally" safe to combine with "stay current".
+
+<Note>
+**Fresh clone?** `.signposts/` is gitignored, so the base snapshot isn't in the repo. Refresh notices and keeps your local versions with a notice — re-install the pack to re-arm merging.
+</Note>
 
 <Note>
 **core is a pack too.** The baked-in scripts and starter rules ship as the `core` namespace — same mechanism as `neon` or your own. Nothing is special; it's just the pack that comes pre-installed.

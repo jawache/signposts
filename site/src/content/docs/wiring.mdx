@@ -41,6 +41,21 @@ order: 10
 <p class="muted">Re-injected every <code>drift_tokens</code> as the context grows.</p>
 </div>
 
+<div class="lane">
+<h3><Chip kind="rule">scan</Chip> · on-demand (the whole-tree audit)</h3>
+<div class="flow">
+<span class="box"><code>npx signposts scan</code></span><span class="arrow">→</span>
+<span class="box hl">engine · phase&nbsp;scan</span><span class="arrow">→</span>
+<span class="box">every per-file rule, whole tree</span><span class="arrow">→</span>
+<span class="box soft">report the violations</span>
+</div>
+<p class="muted">The third door into the same engine — but it <strong>never blocks</strong> (always exits 0). Edit and commit stop new violations; scan reveals the ones already there (adopting a rule on an old repo, or pre-sizing a proposed rule). See [the CLI](/docs/skills).</p>
+</div>
+
+## The engine keeps its own event log
+
+Every evaluation appends one line to a local, **gitignored** log at `.signposts/log/<session>.jsonl`: a `run` with per-rule tallies, a `deny` per violation, and a `sign` per injection. It's the deterministic ground truth behind `npx signposts facts` and its HTML report card — per-rule fires, **edit-catches vs commit-leaks**, rules that never fired. It stays on your machine (it's for your own metrics, never sent anywhere), and — like every hook path — writing it is fail-safe: an unwritable log can never block an edit. The report card reads *numbers* from here and *narrative* from the transcript, kept strictly apart.
+
 ## How config reaches a script
 
 The engine reads `rules:` from `signposts.yaml`. For each entry it loads the script named by `use:` and calls it with the entry **verbatim** as the rule config, plus the file (in-memory at edit, from disk at commit). One uniform path:
