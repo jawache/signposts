@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { matchAny } from './util.mjs';
 import { logEvent } from './log.mjs';
+import { defaultGetContent, walkFiles } from './core/fs.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the library)
 // The built-in rule types live in the package, next to the engine (src/core). A
@@ -102,17 +103,14 @@ function astGrepDirs(root) {
 // than let them no-op. Returns repo-relative paths. Fails safe: no rules/ dir → [].
 export function findMisplacedAstGrep(root) {
   const out = [];
-  const walk = (dir) => {
-    let ents; try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      const abs = join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== 'ast-grep') walk(abs); continue; }  // ast-grep/ folders are the legit home
-      if (!/\.ya?ml$/.test(e.name) || /\.test\.ya?ml$/.test(e.name)) continue;   // skip declarative test fixtures
-      try { const doc = parseYaml(readFileSync(abs, 'utf8')); if (doc && doc.rule) out.push(relative(root, abs)); }
-      catch { /* skip malformed */ }
-    }
-  };
-  walk(join(root, 'rules'));
+  const ymls = walkFiles(join(root, 'rules'), {
+    skip: ['ast-grep'],                                                       // ast-grep/ folders are the legit home
+    filter: (p) => /\.ya?ml$/.test(p) && !/\.test\.ya?ml$/.test(p),           // skip declarative test fixtures
+  });
+  for (const abs of ymls) {
+    try { const doc = parseYaml(readFileSync(abs, 'utf8')); if (doc && doc.rule) out.push(relative(root, abs)); }
+    catch { /* skip malformed */ }
+  }
   return out;
 }
 
@@ -174,6 +172,18 @@ function logRun(logCtx, phase, files, tally, violations) {
   logEvent(root, session, { kind: 'run', phase, files: Array.isArray(files) ? files.length : 0, rules: [...tally.values()] });
   for (const v of violations) {
     logEvent(root, session, { kind: 'deny', phase, rule: v.rule.id, ns: v.rule.namespace || null, path: v.path, hits: (v.hits || []).slice(0, 1) });
+  }
+}
+
+// A would-be block cleared by `# signposts-delete-ok`. Emit the `run` tally (so the rule is
+// counted as FIRED — `facts` must not report it "never fired") plus one `override` per cleared
+// violation (so the escape is auditable). logEvent never throws.
+function logOverride(logCtx, phase, files, tally, violations) {
+  if (!logCtx || !logCtx.root) return;
+  const { root, session } = logCtx;
+  logEvent(root, session, { kind: 'run', phase, files: Array.isArray(files) ? files.length : 0, rules: [...tally.values()] });
+  for (const v of violations) {
+    logEvent(root, session, { kind: 'override', phase, rule: v.rule.id, ns: v.rule.namespace || null, path: v.path, marker: 'signposts-delete-ok' });
   }
 }
 
@@ -282,20 +292,32 @@ export async function evaluateCommand({ command, phase = 'edit', root, configPat
 
 // ── D: the event × response matrix ────────────────────────────────────────────
 // Deletion has no tool/hook of its own — it's a side-effect of Bash. Parse the targets of
-// rm / git rm / mv so a rule can guard them at PreToolUse (the same rail no-git-discard rides).
-// Append `# signposts-delete-ok` to override. Fails safe: unparseable → [].
+// rm / git rm / mv / git mv so a rule can guard them at PreToolUse (the same rail no-git-discard
+// rides). PURE parsing — the override lives in the caller (evaluateDelete), so an overridden
+// delete is still logged instead of the guard silently vanishing. Fails safe: unparseable → [].
 export function deleteTargets(command) {
-  if (typeof command !== 'string' || command.includes('# signposts-delete-ok')) return [];
+  if (typeof command !== 'string') return [];
   const out = [];
   for (const seg of command.split(/&&|\|\||;|\|/)) {                       // each sub-command
-    const toks = (seg.trim().match(/"[^"]*"|'[^']*'|\S+/g) || []).map((t) => t.replace(/^["']|["']$/g, ''));
+    let toks = (seg.trim().match(/"[^"]*"|'[^']*'|\S+/g) || []).map((t) => t.replace(/^["']|["']$/g, ''));
+    const hash = toks.findIndex((t) => t.startsWith('#'));                 // cut a trailing `# comment` (incl. the override marker) — not a delete target
+    if (hash >= 0) toks = toks.slice(0, hash);
     if (!toks.length) continue;
     const nonFlag = (a) => a.filter((t) => !t.startsWith('-'));
+    const sources = (a) => { const n = nonFlag(a); if (n.length >= 2) out.push(...n.slice(0, -1)); };  // rename: sources, not the dest
     if (toks[0] === 'rm') out.push(...nonFlag(toks.slice(1)));
     else if (toks[0] === 'git' && toks[1] === 'rm') out.push(...nonFlag(toks.slice(2)));
-    else if (toks[0] === 'mv') { const a = nonFlag(toks.slice(1)); if (a.length >= 2) out.push(...a.slice(0, -1)); }  // sources, not the dest
+    else if (toks[0] === 'mv') sources(toks.slice(1));
+    else if (toks[0] === 'git' && toks[1] === 'mv') sources(toks.slice(2));   // git mv was a blind spot: a move out of the tree slipped past unguarded
   }
   return out;
+}
+
+// The delete-guard's escape hatch. ONLY a TRAILING `# signposts-delete-ok` counts — the token
+// buried mid-command (or inside a quoted arg) must not silently exempt an unrelated deletion on
+// the same line. Mirrors how no-git-discard's `# discard-ok` reads as an explicit opt-out.
+export function hasDeleteOverride(command) {
+  return typeof command === 'string' && /#\s*signposts-delete-ok\s*$/.test(command.trim());
 }
 
 // Evaluate per-file rules that opted into `when: [delete]` against a Bash delete's targets.
@@ -305,7 +327,7 @@ export async function evaluateDelete({ command, phase = 'delete', root, configPa
   const targets = deleteTargets(command);
   if (!targets.length) return [];
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes('delete'));
-  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
+  const getContent = defaultGetContent(root);
   const out = [];
   const { tally, record } = makeTally();
   for (const rule of rules) {
@@ -318,6 +340,9 @@ export async function evaluateDelete({ command, phase = 'delete', root, configPa
       if (res.hits.length) out.push({ rule, path: res.path, hits: res.hits });
     }
   }
+  // A trailing `# signposts-delete-ok` clears the block — but LOG the override so it's auditable
+  // and the rule still counts as fired (not the block silently disappearing before any logging).
+  if (out.length && hasDeleteOverride(command)) { logOverride(logCtx, phase, targets, tally, out); return []; }
   logRun(logCtx, phase, targets, tally, out);
   return out;
 }
@@ -339,7 +364,7 @@ export function partitionBySeverity(violations) {
 export async function scanTree({ root, configPath }) {
   const files = listTrackedFiles(root);
   const rules = loadRules(root, configPath);
-  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
+  const getContent = defaultGetContent(root);
   const byRule = {};
   const skipped = [];
   let violations = 0, scannedRules = 0;
@@ -401,7 +426,7 @@ async function cli(argv) {
     else files.push(a);
   }
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const getContent = (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
+  const getContent = defaultGetContent(root);
   // lefthook runs outside any Claude session — commit/push events land in commit.jsonl.
   const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });
   const { blocks, warns } = partitionBySeverity(violations);
@@ -488,16 +513,24 @@ async function selfTest() {
     // 7. D — delete coverage + severity. deleteTargets parses rm/git rm/mv (+ override); a
     //    when:[delete] rule blocks the rm of a denied path; severity partitions block vs warn.
     results.push({ name: 'deleteTargets parses rm', pass: JSON.stringify(deleteTargets('rm -rf secret/a.ts b.ts')) === JSON.stringify(['secret/a.ts', 'b.ts']) });
-    results.push({ name: 'deleteTargets parses git rm / mv-source / override', pass:
+    results.push({ name: 'deleteTargets parses git rm / mv / git mv sources', pass:
       JSON.stringify(deleteTargets('git rm secret/a.ts')) === JSON.stringify(['secret/a.ts'])
       && JSON.stringify(deleteTargets('mv secret/a.ts elsewhere/a.ts')) === JSON.stringify(['secret/a.ts'])
-      && deleteTargets('rm secret/a.ts # signposts-delete-ok').length === 0 });
+      && JSON.stringify(deleteTargets('git mv secret/a.ts elsewhere/a.ts')) === JSON.stringify(['secret/a.ts']) });   // git mv was blind
+    results.push({ name: 'delete override: only a TRAILING marker counts; targets still parse', pass:
+      hasDeleteOverride('rm secret/a.ts # signposts-delete-ok') === true
+      && hasDeleteOverride('rm a.ts # signposts-delete-ok && rm b.ts') === false      // mid-command must NOT exempt
+      && deleteTargets('rm secret/a.ts # signposts-delete-ok').length === 1 });
     const delCfg = join(tmp, 'delete.yaml');
     writeFileSync(delCfg, 'rules:\n  local:\n    - id: no-del\n      use: core/protected-path\n      deny: ["secret/**"]\n      when: [delete]\n      message: protected\n');
     const delBlocked = await evaluateDelete({ command: 'rm secret/x.ts', root: tmp, configPath: delCfg });
     const delAllowed = await evaluateDelete({ command: 'rm other.ts', root: tmp, configPath: delCfg });
+    const delGitMv = await evaluateDelete({ command: 'git mv secret/x.ts /tmp/gone.ts', root: tmp, configPath: delCfg });
+    const delOverridden = await evaluateDelete({ command: 'rm secret/x.ts # signposts-delete-ok', root: tmp, configPath: delCfg });
     results.push({ name: 'evaluateDelete blocks a denied path', pass: delBlocked.length === 1 && delBlocked[0].rule.id === 'no-del' });
     results.push({ name: 'evaluateDelete allows other paths', pass: delAllowed.length === 0 });
+    results.push({ name: 'evaluateDelete catches git mv out of the tree (was blind)', pass: delGitMv.length === 1 });
+    results.push({ name: 'evaluateDelete clears a block on a trailing override', pass: delOverridden.length === 0 });
     const part = partitionBySeverity([{ rule: { severity: 'warn' } }, { rule: {} }]);
     results.push({ name: 'partitionBySeverity splits warn vs block', pass: part.warns.length === 1 && part.blocks.length === 1 });
   } finally {

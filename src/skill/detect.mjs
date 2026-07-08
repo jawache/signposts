@@ -4,9 +4,10 @@
 // facts/diff. Two signals: a FILE CENSUS (extensions → languages) and STACK SIGNALS (deps in
 // package.json — on Neon, SQL is worth a grammar before a .sql file even exists). No network.
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkFiles } from '../core/fs.mjs';
 
 const EXT_LANG = {
   '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
@@ -46,21 +47,7 @@ export function analyze(files, deps = []) {
 }
 
 // ── gather from disk ──────────────────────────────────────────────────────────
-function listFiles(root) {
-  const out = [];
-  const walk = (dir) => {
-    let ents; try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      if (e.name.startsWith('.') && e.name !== '.') { if (SKIP.has(e.name)) continue; }
-      if (SKIP.has(e.name)) continue;
-      const p = join(dir, e.name);
-      if (e.isDirectory()) walk(p);
-      else out.push(p);
-    }
-  };
-  walk(root);
-  return out;
-}
+function listFiles(root) { return walkFiles(root, { skip: SKIP }); }
 function readDeps(root) {
   try {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));

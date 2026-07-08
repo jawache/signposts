@@ -24,7 +24,7 @@
 
 <main>
   <h1><code>core/ast-grep</code> &nbsp;<span class="muted">— ban or require a code shape</span></h1>
-  <p class="lede">Match a syntactic pattern in TS/TSX with a real parser — so it never false-matches on
+  <p class="lede">Match a syntactic pattern with a real parser — so it never false-matches on
   a string or a comment. The lowest-effort rule.</p>
 
   <h2>What it catches</h2>
@@ -35,11 +35,11 @@
   <h2>The patterns are files</h2>
   <p>Unlike other rules, ast-grep patterns live as <strong>files</strong> in
   <code>rules/ast-grep/*.yml</code> — not inline in <code>signposts.yaml</code>. That's deliberate: the
-  same files are used by <code>ast-grep scan</code> and by the test runner (<code>just test-rules</code>),
+  same files are used by the engine and by the test runner (<code>signposts test</code>),
   so there's one source of truth for a pattern.</p>
   <pre><code># rules/ast-grep/date-default-no-nullish.yml
 id: date-default-no-nullish
-language: tsx                 # tsx | typescript
+language: tsx                 # native: html·css·js·ts·tsx; others via `signposts languages`
 message: |
   Use `||`, not `??`, for date defaults — `??` lets empty strings through.
 rule:

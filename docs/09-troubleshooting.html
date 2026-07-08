@@ -45,8 +45,9 @@
   <ul>
     <li><strong>Tighten <code>on:</code></strong> (or <code>deny:</code> / <code>ban:</code>) so the rule
       only fires where you mean it to.</li>
-    <li><strong>Add a legal sample to the script's <code>--test</code></strong> that covers the case
-      being false-flagged — then fix the script until it passes.</li>
+    <li><strong>Add a valid sample to the rule's <code>.test.yml</code></strong> (a legal case the
+      engine must pass) that covers the case being false-flagged — then fix the rule until
+      <code>signposts test</code> is green.</li>
     <li>For a deliberate one-off, the rule's message always tells you the way out (e.g. a safety guard's
       explicit escape).</li>
   </ul>
@@ -76,6 +77,14 @@
   <h3>A rule is irrelevant to this repo — do I delete it?</h3>
   <p>No need. A rule whose <code>on:</code> glob never matches simply sleeps. Carrying your whole stack
   everywhere is the intended model.</p>
+
+  <h3>I updated Signposts but my <code>/signposts</code> skill is missing a mode</h3>
+  <p>The skill (<code>SKILL.md</code>) and the <code>coach</code> agent are <strong>copied</strong> into
+  your project's <code>.claude/</code> at setup time — your agent loads them from there, not from
+  <code>node_modules</code> — so they're a snapshot, and updating the installed package doesn't refresh
+  them. Run <code>npx signposts refresh</code> — it re-copies both from the updated package (or
+  re-scaffold with <code>npx signposts</code>) — then <strong>restart your agent session</strong> so
+  the new skill loads.</p>
 
   <div class="pn"><a href="08-wiring.html">← How it wires</a><a href="index.html">Back to overview →</a></div>
 </main>

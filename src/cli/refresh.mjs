@@ -1,6 +1,8 @@
 // cli/refresh.mjs — `npx signposts refresh` pulls updates for installed packs.
 //
-// The CORE updates via npm (`npm update signposts`). What refresh handles is the installed
+// The CORE updates via npm (`npm update signposts`); refresh then re-copies the skill surface
+// (SKILL.md + coach.md) from that package into .claude/, since those are copied in at scaffold and
+// npm can't move them. What refresh otherwise handles is the installed
 // PACKS (the sources in your packs: list). For each shared namespace it does a THREE-WAY
 // merge against the base snapshot install took (.signposts/base/<ns>/):
 //   • only upstream changed  → take upstream
@@ -12,25 +14,44 @@
 // enforcing). Missing base (installed before this, or a fresh clone — .signposts is
 // gitignored) → keep-local with a notice; re-install to arm merging.
 
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { PACK_NAME, readText } from './pack.mjs';
+import { PACK_NAME, readText, SKILL_SURFACE, copyFile, exists } from './pack.mjs';
 import { resolveSource } from './source.mjs';
 import { loadPacks, diffPacks, canon } from '../skill/pack-diff.mjs';
 import { installPack, applyNamespace, editYaml, snapshotBase, walk, copyInto, assertSafeNamespace, blockNode, ensureBlockSection } from './install.mjs';
 
 export function refresh({ target = process.cwd(), log = console.log }) {
   log(`[${PACK_NAME}] the core ships in the signposts package — run \`npm update signposts\` to update it.`);
+  refreshSkillSurface(target, log);
   const results = refreshInstalledPacks(target, log);
   const added = results.reduce((a, r) => a + (r.added || 0), 0);
   const took = results.reduce((a, r) => a + (r.took || 0), 0);
   const conflicts = results.reduce((a, r) => a + ((r.conflicts || []).length), 0);
   log(`\nInstalled packs: ${results.length} merge(s), ${took} upstream update(s) taken, ${added} new entr(y/ies), ${conflicts} conflict(s) (kept local).`);
   return { packs: results };
+}
+
+// The skill surface (SKILL.md + coach.md) is COPIED into the project at scaffold — the agent loads
+// it from .claude/, not node_modules — so `npm update signposts` refreshes the engine but leaves
+// that copy behind (a stale skill: a missing mode, old wording). Re-copy it from the package that
+// is actually running this command (resolved from here, so it's the version the project uses). It's
+// vendor-owned; if you deliberately forked it, the overwrite shows up in your `git diff` to revert.
+function refreshSkillSurface(target, log) {
+  const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');   // <pkg>/src/cli → <pkg>
+  let updated = 0;
+  for (const f of SKILL_SURFACE) {
+    const src = join(pkgRoot, f);
+    if (!exists(src)) continue;
+    const r = copyFile(src, join(target, f));                                     // 'created' | 'updated' | 'unchanged'
+    if (r !== 'unchanged') { updated++; log(`  skill surface: ${r} ${f}`); }
+  }
+  if (!updated) log('  skill surface: up to date');
+  return updated;
 }
 
 function refreshInstalledPacks(target, log) {
@@ -220,6 +241,8 @@ export function selfTest() {
     ok('r-new added from upstream', !!byId['r-new']);
     ok('refresh reported conflicts', (res.conflicts || []).length >= 2); // conflict.mjs + rules/r-conflict
     ok('refresh took upstream updates', res.took >= 2);
+    // skill surface: refresh re-copies SKILL.md/coach.md from the running package into the project.
+    ok('refresh re-copied the skill surface', existsSync(join(app, '.claude', 'skills', 'signposts', 'SKILL.md')));
 
     // missing-base fallback
     const app2 = join(root, 'app2');
@@ -232,7 +255,7 @@ export function selfTest() {
     try { rmSync(root, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   if (fails.length) { console.error('FAIL refresh:\n  ' + fails.join('\n  ')); process.exit(1); }
-  console.log('PASS refresh (3-way: take · keep · conflict · new · missing-base)');
+  console.log('PASS refresh (3-way: take · keep · conflict · new · missing-base; + skill surface)');
 }
 
 if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {

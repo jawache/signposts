@@ -92,6 +92,15 @@ signs:
         the round-trip strips the user's comments. install/refresh preserve them by contract
         (that's why install.mjs moved off `parse as parseYaml`); keep it that way.
 
+    - id: ast-grep-grammars
+      globs: ["src/core/languages.mjs", "src/cli/languages.mjs", "sgconfig.yml"]
+      text: |-
+        ast-grep parses only html · css · js · ts · tsx natively. Beyond those, DON'T assume a
+        grammar is on npm: some (sql, python, go, rust) ship an `@ast-grep/lang-<x>` package
+        (`signposts languages add`), but astro/vue/svelte have none — they're built from source with
+        tree-sitter and declared in sgconfig.yml customLanguages (`signposts languages register`).
+        An unknown language is an honest error (resolveLang throws) — never a silent fall-through to Tsx.
+
 rules:
   # The shipped `core` pack — what a fresh `npx signposts` install carries.
   core:

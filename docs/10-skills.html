@@ -46,10 +46,11 @@
     <li><code>npx signposts install &lt;src&gt; [ns]</code> — cherry-pick a pack from a git repo, an npm
       scope, <strong>or a local folder</strong>; <code>uninstall --pack &lt;ns&gt;</code> reverses one.</li>
     <li><code>npx signposts refresh</code> — pull updates for installed packs (three-way merge; keeps your
-      local tweaks), tracked in your <code>packs:</code> list.</li>
+      local tweaks), tracked in your <code>packs:</code> list, and re-copy the skill surface
+      (<code>SKILL.md</code> + <code>coach.md</code>) from the updated package so it doesn't fall behind.</li>
     <li><code>npx signposts test</code> — run every rule's colocated <code>.test.yml</code> through the
       <strong>real engine</strong> (+ validate each ast-grep yml compiles). The proof a rule works.</li>
-    <li><code>npx signposts detect</code> · <code>languages &lt;list|add&gt;</code> — read the stack (file
+    <li><code>npx signposts detect</code> · <code>languages &lt;list|add|register&gt;</code> — read the stack (file
       census + <code>package.json</code> signals) and install the ast-grep grammars it needs. Base carries
       the natives (html/css/js/ts/tsx); others (astro, sql…) install on demand — never a base dep.</li>
     <li><code>npx signposts facts [--html]</code> — the deterministic session report the coach reads:

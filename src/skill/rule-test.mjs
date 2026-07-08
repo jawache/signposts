@@ -15,31 +15,23 @@
 // A test maps to its rule by basename (`justfile-docs.test.yml` → rule id `justfile-docs`),
 // or an explicit `id:`. The rule is evaluated IN ISOLATION (a temp repo carrying only it).
 
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { join, dirname, basename, resolve, isAbsolute } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { join, dirname, basename, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml, stringify as yamlStringify } from 'yaml';
-import { evaluate, evaluateCommand, evaluateDelete, loadRules, formatViolation } from '../engine.mjs';
+import { evaluate, evaluateCommand, evaluateDelete, loadRules, formatViolation, partitionBySeverity } from '../engine.mjs';
 import { astGrepHits } from '../core/ast-grep.mjs';
+import { walkFiles, defaultGetContent } from '../core/fs.mjs';
 
 // ── discovery ─────────────────────────────────────────────────────────────────
-function walk(dir, out = []) {
-  let ents; try { ents = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of ents) {
-    const p = join(dir, e.name);
-    if (e.isDirectory()) walk(p, out);
-    else out.push(p);
-  }
-  return out;
-}
 const isTestYml = (p) => /\.test\.ya?ml$/.test(p);
 const isYml = (p) => /\.ya?ml$/.test(p) && !isTestYml(p);
 
-function discoverTests(root) { return walk(join(root, 'rules')).filter(isTestYml); }
+function discoverTests(root) { return walkFiles(join(root, 'rules')).filter(isTestYml); }
 function discoverAstGrepYmls(root) {
-  return walk(join(root, 'rules')).filter((p) => isYml(p) && p.split(/[\\/]/).includes('ast-grep'));
+  return walkFiles(join(root, 'rules')).filter((p) => isYml(p) && p.split(/[\\/]/).includes('ast-grep'));
 }
 
 // ── build a temp repo carrying ONLY the rule under test ───────────────────────
@@ -64,19 +56,22 @@ function writeInto(root, rel, content) {
   const p = join(root, rel); mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, typeof content === 'string' && content.endsWith('\n') ? content : `${content}\n`);
 }
-function getContentFor(root) {
-  return (f) => { try { return readFileSync(isAbsolute(f) ? f : join(root, f), 'utf8'); } catch { return null; } };
-}
 function stripRe(s) { const m = /^\/(.*)\/([a-z]*)$/.exec(String(s)); return m ? new RegExp(m[1], m[2]) : new RegExp(String(s)); }
 
-// A pass/block expectation over a set of violations (+ optional message match on a block).
+// Judge a set of violations against the expected RESPONSE — the same block/warn split the gate
+// uses (partitionBySeverity), so a `severity: warn` rule is asserted as `warn`, not `block`. A
+// warn-rule that a test claims BLOCKS is caught here, instead of passing on "any violation".
+//   expect ∈ 'block' | 'warn' | 'pass'   (+ optional message match on a block/warn).
 function judge(violations, expect, message) {
-  const blocked = violations.length > 0;
-  if (expect === 'block' && !blocked) return 'expected BLOCK, got pass';
-  if (expect === 'pass' && blocked) return `expected PASS, got block: ${violations.map((v) => (v.hits || []).join('; ')).join(' | ')}`;
-  if (expect === 'block' && message) {
+  const { blocks, warns } = partitionBySeverity(violations);
+  const got = blocks.length ? 'block' : warns.length ? 'warn' : 'pass';
+  if (got !== expect) {
+    if (expect === 'pass') return `expected PASS, got ${got}: ${violations.map((v) => (v.hits || []).join('; ')).join(' | ')}`;
+    return `expected ${expect.toUpperCase()}, got ${got.toUpperCase()}`;
+  }
+  if ((expect === 'block' || expect === 'warn') && message) {
     const text = violations.map(formatViolation).join('\n');
-    if (!stripRe(message).test(text)) return `blocked, but message did not match ${message}`;
+    if (!stripRe(message).test(text)) return `matched ${expect}, but message did not match ${message}`;
   }
   return null;   // ok
 }
@@ -86,7 +81,7 @@ async function evalContent(rule, path, code, expect, message) {
   const { tmp, cfg } = buildRuleRoot(rule);
   try {
     writeInto(tmp, path, code);
-    const violations = await evaluate({ phase: 'commit', files: [path], root: tmp, getContent: getContentFor(tmp), configPath: cfg });
+    const violations = await evaluate({ phase: 'commit', files: [path], root: tmp, getContent: defaultGetContent(tmp), configPath: cfg });
     return judge(violations, expect, message);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -94,7 +89,7 @@ async function evalPath(rule, c) {
   const { tmp, cfg } = buildRuleRoot(rule);
   try {
     for (const [p, content] of Object.entries(c.files || {})) writeInto(tmp, p, content);
-    const violations = await evaluate({ phase: 'commit', files: [c.check], root: tmp, getContent: getContentFor(tmp), configPath: cfg });
+    const violations = await evaluate({ phase: 'commit', files: [c.check], root: tmp, getContent: defaultGetContent(tmp), configPath: cfg });
     return judge(violations, c.expect, c.message);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -135,7 +130,8 @@ async function runOne(root, rules, testPath) {
   const out = [];
   if (Array.isArray(spec.invalid) || Array.isArray(spec.valid)) {
     const path = spec.path || 'probe.ts';
-    for (const [kind, list, expect] of [['invalid', spec.invalid, 'block'], ['valid', spec.valid, 'pass']]) {
+    const onHit = rule.severity === 'warn' ? 'warn' : 'block';   // an invalid sample of a warn-rule WARNS, it doesn't block
+    for (const [kind, list, expect] of [['invalid', spec.invalid, onHit], ['valid', spec.valid, 'pass']]) {
       for (let i = 0; i < (Array.isArray(list) ? list.length : 0); i++) {
         const err = await evalContent(rule, path, String(list[i]), expect, kind === 'invalid' ? spec.message : null);
         out.push({ name: `${rel} › ${kind}[${i}]`, ok: !err, err });
@@ -185,6 +181,9 @@ async function selfTest() {
     ['a WRONG valid claim is caught', (await evalContent(rule, 'bad.txt', 'x', 'pass')) !== null],
     ['a WRONG invalid claim is caught', (await evalContent(rule, 'fine.txt', 'x', 'block')) !== null],
     ['message mismatch is caught', (await evalContent(rule, 'bad.txt', 'x', 'block', '/totally different/')) !== null],
+    // a warn-rule INFORMS, it doesn't block — the runner must judge on the response axis, not "any violation".
+    ['a warn-rule is judged as warn, not block', (await evalContent({ ...rule, severity: 'warn' }, 'bad.txt', 'x', 'warn')) === null],
+    ['a warn-rule wrongly claimed to block is caught', (await evalContent({ ...rule, severity: 'warn' }, 'bad.txt', 'x', 'block')) !== null],
   ];
   const fail = checks.filter(([, ok]) => !ok).map(([n]) => n);
   if (fail.length) { console.error('FAIL rule-test:\n  ' + fail.join('\n  ')); process.exit(1); }

@@ -67,7 +67,7 @@ Options:
   --no-activate    scaffold without running \`npm install\`
   --dry-run        preview the footprint (scaffold) or what would be removed (uninstall)
 
-Judgement lives in the /signposts skill (reflect · propagate · install).`);
+Judgement lives in the /signposts skill (setup · reflect · propagate · install).`);
 }
 
 // Passthrough to a package helper script, forwarding every arg after the subcommand.

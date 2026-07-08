@@ -12,13 +12,12 @@
 //       declare a CUSTOM grammar you built (tree-sitter build) in sgconfig.yml customLanguages —
 //       the engine registers it, and the ast-grep CLI can use it too.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { parse as parseYaml } from 'yaml';
 import { editYaml } from './install.mjs';
-import { nativeLanguages } from '../core/languages.mjs';
+import { nativeLanguages, customLanguages } from '../core/languages.mjs';
 
 // A grammar name becomes an npm package name and a config key — validate before either.
 export function assertLangName(lang) {
@@ -27,10 +26,6 @@ export function assertLangName(lang) {
   }
 }
 
-export function customLanguages(target) {
-  try { const sg = parseYaml(readFileSync(join(target, 'sgconfig.yml'), 'utf8')) || {}; return sg.customLanguages && typeof sg.customLanguages === 'object' ? sg.customLanguages : {}; }
-  catch { return {}; }
-}
 function installedGrammars(target) {
   try { return readdirSync(join(target, 'node_modules', '@ast-grep')).filter((d) => d.startsWith('lang-')).map((d) => d.slice(5)); }
   catch { return []; }
