@@ -89,6 +89,9 @@ p.lead { color: #494e45; max-width: 62ch; font-size: 1.05rem; }
 .getstarted p { color: #d8eadf; max-width: 52ch; margin: .4rem auto 1.6rem; }
 .getstarted .npx { display: inline-block; background: #10140f; color: var(--term-gold); border-radius: 10px; padding: .75rem 1.4rem; font-size: 1.05rem; }
 .getstarted .npx .d { color: var(--term-dim); }
+.getstarted .cmds { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.getstarted .cmd { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
+.getstarted .cmd .cap { color: #d8eadf; font-size: .85rem; opacity: .85; }
 
 @media (max-width: 840px) {
   .bridge, .plate { grid-template-columns: 1fr; }

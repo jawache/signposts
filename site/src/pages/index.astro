@@ -114,11 +114,20 @@ import '../styles/landing.css';
   <section class="section" id="start">
     <div class="wrap">
       <div class="getstarted">
-        <h2>Start in one command</h2>
+        <h2>Start in two commands</h2>
         <p>It scaffolds a known-good setup — with a cheeky demo rule, so you see a block (and a
         self-correct) on day one. From there, grow your own rails as you work, and cherry-pick
         from any repo you trust.</p>
-        <span class="npx mono"><span class="d">$</span> npx signposts</span>
+        <div class="cmds">
+          <div class="cmd">
+            <span class="npx mono"><span class="d">$</span> npx signposts</span>
+            <span class="cap">in your repo root — drops the engine, hooks and core pack</span>
+          </div>
+          <div class="cmd">
+            <span class="npx mono"><span class="d">›</span> /signposts setup</span>
+            <span class="cap">the skill — onboards the repo and readies the agent</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
