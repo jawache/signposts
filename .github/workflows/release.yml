@@ -1,0 +1,46 @@
+name: Release
+
+# Publish the signposts CLI to npm via OIDC trusted publishing — no tokens, no OTP.
+#
+# To cut a release:
+#   1. Bump "version" in package.json (e.g. 0.2.0), commit, push to main.
+#   2. Create a GitHub Release whose tag is v<version> (e.g. v0.2.0) and publish it.
+# This workflow then runs the test suite, checks the tag matches package.json, and
+# publishes with build provenance. npm mints a short-lived credential from the OIDC
+# token below — the repo must be registered as a Trusted Publisher on npmjs.com.
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+# id-token: write is what lets npm exchange GitHub's OIDC token for a publish credential.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships an older npm.
+      - name: Ensure recent npm (OIDC support)
+        run: npm install -g npm@latest
+      - run: npm ci
+      - uses: extractions/setup-just@v2
+      - name: just test (rule self-tests + as-installed e2e)
+        run: just test
+      - name: Verify release tag matches package.json version
+        if: github.event_name == 'release'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "release tag: $TAG   package.json: $PKG"
+          test "$TAG" = "$PKG"
+      - name: Publish to npm (OIDC — no token)
+        run: npm publish --provenance

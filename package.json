@@ -4,6 +4,12 @@
   "description": "Keep your AI coding agent on the rails — a rules repository that catches the mistakes your agent makes before they land, and learns new guardrails as you work.",
   "license": "Apache-2.0",
   "author": "Asim Hussain <asim@asim.dev>",
+  "homepage": "https://signposts.asim.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jawache/signposts.git"
+  },
+  "bugs": "https://github.com/jawache/signposts/issues",
   "type": "module",
   "bin": {
     "signposts": "src/cli/signposts.mjs"
