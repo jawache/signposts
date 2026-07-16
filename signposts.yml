@@ -206,8 +206,8 @@ fcis:
       on: ["src/core/**", "src/schema.mjs"]
       text: |-
         Functional Core, Imperative Shell (Gary Bernhardt, "Boundaries"): decisions live in pure functions — no I/O, no clock, no randomness, no env; inject them as arguments, because determinism IS testability.
-        Here that's the core scripts' evaluate() and the normaliser: they compute a verdict from their inputs. The effects — reading files, spawning tools, writing the log — live in the hooks and the CLI, the thin shell around the core.
-        A core script that must shell out (depcruise, tool-gate, change-together) is itself a small adapter; keep the DECISION pure and hand the effect its inputs, so a plain function can be unit-tested.
+        Here that's LITERAL: src/core/pure/ holds the decision functions (a fence blocks them from importing any node:* builtin or the shell), each with a colocated .test.mjs. src/core/*.mjs are thin ADAPTERS — they read files, spawn tools, parse — that call a pure fn and re-export it.
+        Writing a new core rule? Put the decision in src/core/pure/<name>.mjs (+ <name>.test.mjs, TDD it), and keep <name>.mjs a small adapter. The normaliser (src/schema.mjs) is pure too; the effects live in the hooks and the CLI.
 
     - type: rule
       id: import-fence
