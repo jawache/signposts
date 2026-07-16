@@ -211,18 +211,39 @@ fcis:
 
     - type: rule
       id: import-fence
-      description: A dependency-cruiser fence — the decision core must not import the CLI shell.
+      description: A dependency-cruiser fence — the pure layer imports no node builtins or shell, and the core never imports the CLI.
       at: [commit]
       use: core/depcruise
       scan: src
       layers:
+        pure: ["src/core/pure/**"]
+        utils: ["src/util.mjs"]
         core: ["src/core/**", "src/schema.mjs"]
         cli: ["src/cli/**"]
+      only:
+        # the functional core: a file in src/core/pure/ may import ONLY other pure modules and the
+        # certified-pure util.mjs — never a node:* builtin, never the hooks/CLI shell, never an adapter.
+        pure: [pure, utils]
       forbid:
         - from: core
           to: cli
           why: "the decision core never reaches up into the CLI shell"
-      message: "An import crosses the FCIS boundary the wrong way — the decision core (src/core, src/schema.mjs) must not import the CLI shell. Dependencies point inward: the shell imports the core, never the reverse."
+      options:
+        # the fence is about production architecture — don't cruise the colocated *.test.mjs
+        # (they legitimately import node:test / node:assert).
+        exclude:
+          path: '\.test\.mjs$'
+      message: "An import crosses an FCIS boundary — the pure layer (src/core/pure/**) may import only other pure modules + src/util.mjs (no node:* builtins, no hooks/CLI), and the decision core must not import the CLI shell."
+
+    - type: rule
+      id: pure-has-test
+      description: Every pure decision module ships a colocated .test.mjs — the functional core is TDD'd.
+      at: [write, commit]
+      on: ["src/core/pure/**/*.mjs"]
+      ignore: ["**/*.test.mjs"]
+      use: core/sibling-exists
+      sibling: "{dir}/{name}.test.mjs"
+      message: "A pure module needs a sibling {dir}/{name}.test.mjs (unit tests for the decision fn). Add it, then `just test-pure`."
 
 # ── tdd — how we test here ──
 tdd:

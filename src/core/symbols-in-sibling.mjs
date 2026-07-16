@@ -1,12 +1,14 @@
-// rules/core/symbols-in-sibling.mjs — every exported symbol is referenced in its
-// sibling test. Correlates two files: parses the edited file for exports (a real
-// parser, via @ast-grep/napi), then checks each name appears in the sibling.
+// src/core/symbols-in-sibling.mjs — ADAPTER: every exported symbol is referenced in its sibling
+// test. Parsing the exports needs a real parser (@ast-grep/napi) and reading the sibling is IO, so
+// both live here; the pure decision (which names are unreferenced) is ./pure/symbols-in-sibling.mjs.
 //
 // Config:  sibling: "{dir}/{name}.test.ts"
 // Contract: kind 'content' → ctx = { path, content, root, exists, readText }.
 
 import { join } from 'node:path';
-import { escapeRe, expandTemplate } from '../util.mjs';
+import { expandTemplate } from '../util.mjs';
+import { unreferenced } from './pure/symbols-in-sibling.mjs';
+export { unreferenced };
 
 export async function exportedNames(content) {
   const { parse, Lang } = await import('@ast-grep/napi');
@@ -16,9 +18,6 @@ export async function exportedNames(content) {
     for (const m of root.findAll(p)) { const n = m.getMatch('N'); if (n) out.add(n.text()); }
   }
   return [...out];
-}
-export function unreferenced(names, siblingText) {
-  return names.filter((n) => !new RegExp(`\\b${escapeRe(n)}\\b`).test(siblingText));
 }
 
 export default {

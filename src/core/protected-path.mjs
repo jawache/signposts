@@ -1,19 +1,14 @@
-// rules/core/protected-path.mjs — block any hand-edit of a protected path.
-//
-// The simplest rule: it reads no content, the path alone decides. Used for
-// generated output, vendored code, anything machine-owned — and for the built-in
-// signposts-self-regard demo (blocks creating signposts-is-bad.yaml).
+// src/core/protected-path.mjs — ADAPTER: block any hand-edit of a protected path.
+// The decision is pure (./pure/protected-path.mjs); this wires it to the engine's path contract.
 //
 // Config:  deny: ["**/*.generated.ts", "vendor/**"]   (path is the whole rule)
 // Contract: kind 'path' → ctx = { path, root, exists, readText }.
 
-import { matchAny } from '../util.mjs';
+import { protectedPathHits } from './pure/protected-path.mjs';
 
 export default {
   kind: 'path',
-  evaluate(rule, ctx) {
-    return matchAny(ctx.path, rule.deny) ? [`'${ctx.path}' is a protected path (do not edit directly)`] : [];
-  },
+  evaluate(rule, ctx) { return protectedPathHits(ctx.path, rule.deny); },
   test() {
     const rule = { deny: ['src/generated/**', 'legacy/**'] };
     const legal = this.evaluate(rule, { path: 'src/app/x.ts' }).length === 0;

@@ -28,9 +28,13 @@ worktree branch:
 
 # ── rules / tests ──────────────────────────────────────────────────────────────
 
-[doc("Run every rules/ check + self-test: the engine internals (core scripts, shell contract, log, signs, session-report, pack-diff, source, install, refresh, the rule-test runner) then `signposts test` (every rule's .test.yml through the real engine + ast-grep validation).")]
-test-rules:
-    node src/schema.mjs --test && node src/core/depcruise-compile.mjs --test && node src/engine.mjs --test && node src/log.mjs --test && node src/core/languages.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/hooks/session-start.mjs --test && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/skill/detect.mjs --test && node src/skill/rule-test.mjs --test && node src/cli/source.mjs --test && node src/cli/install.mjs --test && node src/cli/languages.mjs --test && node src/cli/refresh.mjs --test && node src/cli/signposts.mjs test
+[doc("Unit-test the PURE decision layer: src/core/pure/*.mjs, each fn with a colocated .test.mjs (the functional core — no IO, no node builtins, fenced by fcis/pure-core).")]
+test-pure:
+    node --test "src/core/pure/*.test.mjs"
+
+[doc("Run every rules/ check + self-test: the pure decision layer, then the engine internals (adapters, shell contract, log, signs, session-report, pack-diff, source, install, refresh, the rule-test runner) then `signposts test` (every rule's .test.yml through the real engine + ast-grep validation).")]
+test-rules: test-pure
+    node src/schema.mjs --test && node src/engine.mjs --test && node src/log.mjs --test && node src/core/languages.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/hooks/session-start.mjs --test && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/skill/detect.mjs --test && node src/skill/rule-test.mjs --test && node src/cli/source.mjs --test && node src/cli/install.mjs --test && node src/cli/languages.mjs --test && node src/cli/refresh.mjs --test && node src/cli/signposts.mjs test
 
 [doc("Prove it works AS-INSTALLED: npm pack -> temp install -> drive the real CLI (packaging, scaffold, the gate, ship-completeness, onboarding-steers).")]
 test-e2e:

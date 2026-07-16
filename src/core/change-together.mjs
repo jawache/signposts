@@ -1,32 +1,15 @@
-// src/core/change-together.mjs — files that must move in the SAME commit.
-//
-// Some edits are only correct in pairs: change package.json and the lockfile changes too; touch a
-// schema and its migration ships alongside. This project-kind rule reads the staged set at commit
-// and blocks when a trigger changed but its companion didn't.
+// src/core/change-together.mjs — ADAPTER: files that must move in the SAME commit.
+// The decision is pure (./pure/change-together.mjs); this reads the staged set and calls it.
 //
 // Config:  groups:
 //            - if: ["package.json"]                 # any staged file matching an `if` glob …
 //              then-any: ["package-lock.json", "pnpm-lock.yaml"]   # … needs a staged `then-any` too
 // Contract: kind 'project' → ctx = { root }. The staged set arrives from `git diff --cached`
-// (ctx.changed overrides it in tests). Fails safe: not a git repo / unreadable → [] (can't judge →
-// never traps a commit).
+// (ctx.changed overrides it in tests). Fails safe: not a git repo / unreadable → [] (never traps).
 
 import { spawnSync } from 'node:child_process';
-import { globMatch } from '../hooks/signs-core.mjs';
-
-// Pure: which groups were triggered (an `if` glob changed) without their `then-any` companion?
-export function changeTogether({ changed, groups }) {
-  const out = [];
-  for (const g of [].concat(groups || [])) {
-    const ifGlobs = [].concat(g.if || []);
-    const thenGlobs = [].concat(g['then-any'] || g.thenAny || []);
-    const triggered = changed.some((f) => ifGlobs.some((glob) => globMatch(glob, f)));
-    if (!triggered) continue;
-    const satisfied = changed.some((f) => thenGlobs.some((glob) => globMatch(glob, f)));
-    if (!satisfied) out.push(`${ifGlobs.join(', ')} changed but none of [${thenGlobs.join(', ')}] did in the same commit`);
-  }
-  return out;
-}
+import { changeTogether } from './pure/change-together.mjs';
+export { changeTogether };
 
 // The staged file set (paths relative to the repo root). null = not a git repo / git unavailable.
 function stagedFiles(root) {

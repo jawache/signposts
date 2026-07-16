@@ -1,15 +1,11 @@
-// rules/core/command-guard.mjs — block a dangerous shell command before it runs.
-//
-// Operates on the command string the agent is about to execute (not on a file):
-// a force-push to main, a recursive delete, a destructive reset. Because it fires
-// before the command runs, it can prevent the irreversible.
+// src/core/command-guard.mjs — ADAPTER: block a dangerous shell command before it runs.
+// The decision is pure (./pure/command-guard.mjs); this wires it to the engine's command contract.
 //
 // Config:  ban: ["git\\s+push\\s+.*--force.*\\bmain\\b", "rm\\s+-rf\\s+/"]
 // Contract: kind 'command' → ctx = { command, root }.
 
-export function bannedCommand(command, bans) {
-  return [].concat(bans).filter((pat) => new RegExp(pat).test(command)).map((pat) => `command matches banned /${pat}/`);
-}
+import { bannedCommand } from './pure/command-guard.mjs';
+export { bannedCommand };
 
 export default {
   kind: 'command',

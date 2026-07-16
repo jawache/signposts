@@ -1,21 +1,12 @@
-// rules/core/text-ban.mjs — ban a word or pattern in text/prose.
-//
-// A plain regex over the content, line by line. For code shapes prefer
-// core/ast-grep (it won't false-match a string or comment); text-ban is for
-// prose, docs, config where a literal/regex match is what you want.
+// src/core/text-ban.mjs — ADAPTER: ban a word or pattern in text/prose.
+// The decision is pure (./pure/text-ban.mjs); this wires it to the engine's content contract.
+// For code shapes prefer core/ast-grep (it won't false-match a string or comment).
 //
 // Config:  ban: "\\bTODO\\b"   (a regex, or a list of regexes)
 // Contract: kind 'content' → ctx = { path, content, root, exists, readText }.
 
-export function textBan(content, bans) {
-  const lines = content.split('\n');
-  const out = [];
-  for (const pat of [].concat(bans)) {
-    const re = new RegExp(pat);
-    lines.forEach((ln, i) => { if (re.test(ln)) out.push(`line ${i + 1}: matches /${pat}/`); });
-  }
-  return out;
-}
+import { textBan } from './pure/text-ban.mjs';
+export { textBan };
 
 export default {
   kind: 'content',

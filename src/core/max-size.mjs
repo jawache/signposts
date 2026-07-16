@@ -1,9 +1,6 @@
-// src/core/max-size.mjs — committed files must respect a byte budget.
-//
-// A performance budget you don't enforce is a wish: an unoptimised hero image or a bloated font
-// slips in and the page gets slower one commit at a time. This project-kind rule walks the tree,
-// matches each file to the FIRST budget whose glob it fits, and blocks anything over the limit.
-// A file whose path contains the `allow_marker` is exempted (a deliberate, reviewable override).
+// src/core/max-size.mjs — ADAPTER: committed files must respect a byte budget.
+// The decisions are pure (./pure/max-size.mjs); this walks the tree, stats the files, and calls
+// overBudget with what it collected. A file whose path contains allow_marker is exempted.
 //
 // Config:  on: ["public/**", "src/assets/**"]         # (optional) scope the walk
 //          budgets:
@@ -15,44 +12,8 @@
 import { statSync } from 'node:fs';
 import { relative } from 'node:path';
 import { walkFiles } from './fs.mjs';
-
-const UNITS = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024 };
-
-// "200KB" | "1.5 MB" | 4096 → bytes. NaN on nonsense (an unparseable budget then never fires).
-export function parseSize(s) {
-  if (typeof s === 'number') return s;
-  const m = String(s).trim().match(/^([\d.]+)\s*(B|KB|MB|GB)?$/i);
-  return m ? Math.round(parseFloat(m[1]) * UNITS[(m[2] || 'B').toUpperCase()]) : NaN;
-}
-
-// A glob → an anchored regex WITH brace expansion ({png,jpg} → (?:png|jpg)), which the shared
-// globMatch deliberately doesn't do. Kept local so the size dialect owns its own matching.
-function globToRe(glob) {
-  let re = '';
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === '{') { const end = glob.indexOf('}', i); if (end > i) { re += '(?:' + glob.slice(i + 1, end).split(',').map((s) => s.replace(/[.+^${}()|[\]\\]/g, '\\$&')).join('|') + ')'; i = end; continue; } }
-    if (c === '*') { if (glob[i + 1] === '*') { re += (glob[i + 2] === '/') ? '(?:.*/)?' : '.*'; i += (glob[i + 2] === '/') ? 2 : 1; } else re += '[^/]*'; continue; }
-    re += /[.+^${}()|[\]\\]/.test(c) ? '\\' + c : c;
-  }
-  return new RegExp('^' + re + '$');
-}
-const globHit = (glob, path) => globToRe(glob).test(path);
-
-// Pure: files [{ path, bytes }] over their first-matching budget → violation strings.
-export function overBudget({ files, budgets, allowMarker }) {
-  const out = [];
-  for (const { path, bytes } of files) {
-    if (allowMarker && path.includes(allowMarker)) continue;
-    for (const b of [].concat(budgets || [])) {
-      if (!globHit(b.glob, path)) continue;                   // first matching budget wins
-      const max = parseSize(b.max);
-      if (Number.isFinite(max) && bytes > max) out.push(`${path} is ${(bytes / 1024).toFixed(0)}KB > ${b.max}${b.hint ? ` — ${b.hint}` : ''}`);
-      break;
-    }
-  }
-  return out;
-}
+import { overBudget, parseSize, globHit } from './pure/max-size.mjs';
+export { overBudget, parseSize, globHit };
 
 export default {
   kind: 'project',

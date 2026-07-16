@@ -13,7 +13,7 @@ import { writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:
 import { join, isAbsolute, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { compileDialect } from './depcruise-compile.mjs';
+import { compileDialect } from './pure/depcruise-compile.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

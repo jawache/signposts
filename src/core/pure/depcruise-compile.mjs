@@ -1,6 +1,6 @@
-// src/core/depcruise-compile.mjs — compile the signposts LAYERS-&-FENCES dialect to
+// src/core/pure/depcruise-compile.mjs — compile the signposts LAYERS-&-FENCES dialect to
 // dependency-cruiser's native rule schema. PURE (no IO), so it golden-tests cleanly and the
-// runner (depcruise.mjs) can materialise the result to a config file.
+// runner (../depcruise.mjs) can materialise the result to a config file.
 //
 // The dialect names LAYERS (sets of path globs / npm packages / node:*) and declares FENCES
 // between them; this turns each affordance into the tool's own `forbidden` / `required` rules:
@@ -137,70 +137,3 @@ export function compileDialect(rule) {
   };
   return { forbidden, required, options };
 }
-
-// ── self-test (golden-ish: one assertion per affordance) ───────────────────────
-function selfTest() {
-  const cases = [];
-  const ok = (name, cond) => cases.push([name, !!cond]);
-
-  const dialect = {
-    layers: {
-      core: ['src/lib/**/domain.ts'],
-      effects: ['src/lib/**/db.ts'],
-      shell: ['src/pages/**'],
-      features: ['src/lib/*'],
-      'pure-libs': ['zod', 'date-fns'],
-      'node-fx': ['node:*'],
-    },
-    only: { core: ['core', 'pure-libs'] },
-    except: ['type-only'],
-    forbid: [
-      { from: 'core', to: 'effects', transitive: true, why: 'purity is transitive' },
-      { from: 'core', to: 'node-fx', why: 'builtins are effects' },
-      'circular', 'orphans',
-      { 'cycles-between': 'features', why: 'features talk via shared/' },
-    ],
-    require: [{ in: 'src/pages/api/**', import: 'src/pages/api/_runtime', why: 'gate first' }],
-    warn: ['sdp'],
-  };
-  const c = compileDialect(dialect);
-  const byName = Object.fromEntries(c.forbidden.map((r) => [r.name, r]));
-
-  // glob / entry compilation
-  ok('glob **/ compiles to a ReDoS-safe run', globToRe('src/lib/**/domain.ts') === '^src/lib/.*domain\\.ts$');
-  ok('trailing ** → prefix match, no end anchor', globToRe('src/pages/**') === '^src/pages/');
-  ok('single * stays within a path segment', globToRe('src/lib/*') === '^src/lib/[^/]*$');
-  ok('bare name → node_modules matcher', entryToMatcher('zod').path === 'node_modules/zod(/|$)');
-  ok('node:* → core marker', entryToMatcher('node:*').core === true);
-
-  // only → fail-closed allowlist with pathNot of allowed layers
-  ok('only rule present', !!byName['core-only']);
-  ok('only is fail-closed (pathNot of allowed)', Array.isArray(byName['core-only'].to.pathNot) && byName['core-only'].to.pathNot.some((p) => /domain/.test(p)) && byName['core-only'].to.pathNot.some((p) => /zod/.test(p)));
-  ok('only carves out type-only', JSON.stringify(byName['core-only'].to.dependencyTypesNot) === JSON.stringify(['type-only']));
-
-  // transitive → reachable
-  ok('transitive fence → reachable:true', byName['no-core-to-effects-transitive']?.to.reachable === true);
-  // node builtins → dependencyTypes core
-  ok('node-fx fence → dependencyTypes core', JSON.stringify(byName['no-core-to-node-fx']?.to.dependencyTypes) === JSON.stringify(['core']));
-  // circular + orphans
-  ok('circular rule', byName['no-circular']?.to.circular === true);
-  ok('orphans rule (warn)', byName['no-orphans']?.severity === 'warn' && byName['no-orphans'].from.orphan === true);
-  // cycles-between → backreference
-  ok('cycles-between uses a $1 backreference', /\$1/.test(byName['no-cycles-between-features']?.to.pathNot || ''));
-  // require → inverted
-  ok('require rule inverted (module + to)', c.required[0]?.module?.path && c.required[0]?.to?.path);
-  // sdp → moreUnstable warn
-  ok('sdp warn rule', byName['sdp']?.severity === 'warn' && byName['sdp'].to.moreUnstable === true);
-
-  // except off → no carve-out
-  const noExcept = compileDialect({ layers: dialect.layers, only: { core: ['core'] } });
-  ok('no except → no type-only carve-out', !noExcept.forbidden[0].to.dependencyTypesNot);
-
-  let pass = 0;
-  for (const [name, cond] of cases) { if (cond) pass++; else console.log(`  ✗ ${name}`); }
-  const allOk = pass === cases.length;
-  console.log(`${allOk ? 'PASS' : 'FAIL'} depcruise-compile  (${pass}/${cases.length})`);
-  process.exit(allOk ? 0 : 1);
-}
-
-if (process.argv[1]?.endsWith('depcruise-compile.mjs') && process.argv[2] === '--test') selfTest();
