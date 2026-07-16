@@ -65,14 +65,15 @@ Lower it if your agent drifts quickly on long sessions; raise it if signs feel r
 Areas can overlap, and that's by design. When a file matches more than one sign — a broad one on a parent folder and a finer one on a child — **both are injected**, in the order they appear in `signposts.yaml`. There's no "most specific wins": the agent gets the area's general guidance *and* the specific sign layered on top.
 
 ```yaml
-signs:
+bundles:
   local:
-    - id: src-area
-      globs: ["src/**"]
-      text: "House style: small functions, no default exports."
-    - id: db-area
-      globs: ["src/db/**"]
-      text: "Queries go through the repository layer; migrations are append-only."
+    signs:
+      - id: src-area
+        globs: ["src/**"]
+        text: "House style: small functions, no default exports."
+      - id: db-area
+        globs: ["src/db/**"]
+        text: "Queries go through the repository layer; migrations are append-only."
 ```
 
 | Agent touches… | Injected |

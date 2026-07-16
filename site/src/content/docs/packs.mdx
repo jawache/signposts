@@ -62,17 +62,18 @@ Same cherry-pick semantics for all three — only the fetch differs. The local d
 
 ## A pack can carry host permissions
 
-Some guardrails aren't enforceable by the engine — denying a *read*, or an MCP tool call, is the host's job (Claude Code's `.claude/settings.json`), not ours. A pack can carry those so you don't hand-edit settings after every install. Add a `settings:` block, per namespace:
+Some guardrails aren't enforceable by the engine — denying a *read*, or an MCP tool call, is the host's job (Claude Code's `.claude/settings.json`), not ours. A bundle carries those in its own `settings:` key, so you don't hand-edit settings after every install:
 
 ```yaml
-settings:
+bundles:
   neon:
-    permissions:
-      deny:  ["Read(./.env.keys)"]   # the host blocks the read; Signposts just delivers the entry
-      allow: []                       # optional
+    settings:
+      permissions:
+        deny:  ["Read(./.env.keys)"]   # the host blocks the read; Signposts just delivers the entry
+        allow: []                       # optional — surfaced for you, never auto-applied (it widens autonomy)
 ```
 
-On install these merge into `.claude/settings.json`, and exactly what was added is recorded as the pack's ledger in `packs:` (below), so `uninstall --pack` removes precisely those entries — never a hand-written one, never one another installed pack still needs.
+On install the `deny` entries merge into `.claude/settings.json`; on uninstall, only the ones nothing else still needs are removed — never a hand-written entry.
 
 ## Refresh keeps your local tweaks — the `from:` pin
 

@@ -54,13 +54,13 @@ Most guardrails want both halves: a sign so the agent gets it right early, and a
 
 <p class="muted">Keep the starting context tight: lots of light-touch signs delivered just in time, a small number of rules for the things that really must not happen.</p>
 
-## One rule, two triggers
+## One rule, two moments
 
-A rule fires on both triggers by default (`when: [edit, commit]`) — one definition, two places:
+A rule fires at two [moments](/docs/wiring) by default (`at: [write, commit]`) — one definition, two places:
 
-| Trigger | Where | What it does |
+| Moment | Where | What it does |
 | --- | --- | --- |
-| `edit` | Inside your agent, before a write | Pre-emptive block — reconstructs the would-be file, checks it, denies with the fix so the agent self-corrects. |
-| `commit` / `push` | Your git hooks | The backstop gate over staged files — runs even on a plain `git commit`, with no AI involved. |
+| `write` | Inside your agent, before a write | Pre-emptive block — reconstructs the would-be file, checks it, denies with the fix so the agent self-corrects. |
+| `commit` | Your git hooks | The backstop gate over staged files — runs even on a plain `git commit`, with no AI involved. |
 
-You only set `when:` when you want something other than both — e.g. a heavy whole-project check that can only run at commit. See [the config file](/docs/signposts-yaml) and [the rules](/docs/rules).
+You only set `at:` when you want something other than both — a heavy whole-project check that can only run at `commit`, a `delete` guard, or an end-of-turn `turn` check. See [the moments](/docs/wiring), [the config file](/docs/signposts-yaml) and [the rules](/docs/rules).

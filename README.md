@@ -79,14 +79,14 @@ human would.
 
 ## Docs
 
-Full docs are a small static site in [`docs/`](docs/) — open [`docs/index.html`](docs/index.html)
-in a browser. Highlights:
+Full docs live at **[signposts.asim.dev/docs](https://signposts.asim.dev/docs)** (source in
+[`site/`](site/); run `just site-dev` to preview locally). Highlights:
 
-[Quickstart](docs/01-quickstart.html) · [The loop](docs/02-the-loop.html) ·
-[Concepts](docs/03-concepts.html) · [The config file](docs/04-signposts-yaml.html) ·
-[Rules](docs/05-rules/index.html) · [Signs](docs/06-signs.html) ·
-[Authoring](docs/07-authoring.html) · [Packs](docs/11-packs.html) ·
-[Wiring](docs/08-wiring.html) · [Troubleshooting](docs/09-troubleshooting.html)
+[Quickstart](https://signposts.asim.dev/docs/quickstart) · [The loop](https://signposts.asim.dev/docs/the-loop) ·
+[Concepts](https://signposts.asim.dev/docs/concepts) · [The config file](https://signposts.asim.dev/docs/signposts-yaml) ·
+[Rules](https://signposts.asim.dev/docs/rules) · [Signs](https://signposts.asim.dev/docs/signs) ·
+[Authoring](https://signposts.asim.dev/docs/authoring) · [Packs](https://signposts.asim.dev/docs/packs) ·
+[Wiring](https://signposts.asim.dev/docs/wiring) · [Troubleshooting](https://signposts.asim.dev/docs/troubleshooting)
 
 ## Licence
 

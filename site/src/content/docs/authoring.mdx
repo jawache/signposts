@@ -10,31 +10,33 @@ order: 8
 
 ## 1 · A rule from a core script — config only
 
-Add an entry under `rules:` naming a [core script](/docs/rules) with `use:` and its config. No code.
+Add an entry under a bundle's `rules:` list, naming a [core script](/docs/rules) with `use:` and its config. No code.
 
 ```yaml
-rules:
+bundles:
   local:
-    - id: domain-has-test
-      use: core/sibling-exists
-      on: "src/domain/**/*.ts"
-      sibling: "{dir}/{name}.test.ts"
-      message: "Every domain file needs a sibling test."
+    rules:
+      - id: domain-has-test
+        use: core/sibling-exists
+        on: "src/domain/**/*.ts"
+        sibling: "{dir}/{name}.test.ts"
+        message: "Every domain file needs a sibling test."
 ```
 
 The whole entry is handed to `core/sibling-exists` **verbatim** — it reads `sibling`, `core/ast-grep` reads `rule`, and so on. `use:` is just a script; there's no registry and no glue.
 
 ## 2 · Your own script — when no core fits
 
-Point `use:` at a script you write. It lives in *your* namespace folder — `rules/<namespace>/` (core scripts live in `rules/core/`). It can be JavaScript or a shell script.
+Point `use:` at a script you write. It lives in *your* bundle's folder — `rules/<bundle>/` (core scripts live in `rules/core/`). It can be JavaScript or a shell script.
 
 ```yaml
-rules:
+bundles:
   neon:
-    - id: no-raw-pool
-      use: neon/no-raw-pool        # → rules/neon/no-raw-pool.mjs
-      on: "src/**/*.ts"
-      forbid: "new Pool("          # ← your own config, whatever you like
+    rules:
+      - id: no-raw-pool
+        use: neon/no-raw-pool        # → rules/neon/no-raw-pool.mjs
+        on: "src/**/*.ts"
+        forbid: "new Pool("          # ← your own config, whatever you like
 ```
 
 ### What your script is handed
@@ -96,16 +98,16 @@ fi
 
 The one design choice that decides your `kind` and your triggers:
 
-- **Per-file** (you only need the one changed file) → it runs **pre-emptively** on edit and at commit. Default `when`, leave it off.
-- **Whole-project** (you need the whole tree in a consistent state — an import graph, coverage) → it's a `kind: 'project'` [tool-gate](/docs/rules/tool-gate), `when: [commit]`. It can't run per keystroke, so it's commit-only.
+- **Per-file** (you only need the one changed file) → it runs **pre-emptively** on write and at commit. Default `at`, leave it off.
+- **Whole-project** (you need the whole tree in a consistent state — an import graph, coverage) → it's a `kind: 'project'` [tool-gate](/docs/rules/tool-gate) or [depcruise](/docs/rules/depcruise) fence, `at: [commit]`. It can't run per keystroke, so it's commit-only.
 
 <Note>
 **Two musts for your own script.** (1) **Guard its CLI** so importing it has no side-effects. (2) Ship a **`--test`** with a legal and an illegal sample — that's the rule's proof and its documentation. `just test-rules` runs it.
 </Note>
 
-## 3 · It belongs to a namespace
+## 3 · It belongs to a bundle
 
-Your rule lives under a namespace in `signposts.yaml` (`local` for your own ad-hoc rules; a name like `neon` if it's a coherent set you might share). The namespace is what [install and propagate](/docs/packs) move as a unit — its rules *and* its signs together.
+Your rule lives in a bundle's block in `signposts.yaml` (`local` for your own ad-hoc rules; a name like `neon` if it's a coherent set you might share). The bundle is what [install and propagate](/docs/packs) move as a unit — its rules, its signs, its `settings`, and its `rules/<bundle>/` scripts, as one contiguous block.
 
 ## Let the coach write it — and share it
 
