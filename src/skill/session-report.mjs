@@ -37,6 +37,8 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { readEvents, sanitise } from '../log.mjs';
 import { loadRules } from '../engine.mjs';
+import { loadConfig } from '../schema.mjs';
+import { composeOrientation } from '../hooks/session-start.mjs';
 
 const ANSI = /\x1b\[[0-9;]*m/g;
 const strip = (s) => String(s ?? '').replace(ANSI, '');
@@ -287,6 +289,13 @@ function logMetrics(root, session) {
 
   const rows = Object.values(perRule).sort((a, b) => a.id.localeCompare(b.id));
   const realEvents = sessionLog.events.filter((e) => e.kind && e.kind !== 'meta').length;
+  // Composed-orientation size: the SessionStart block every session pays for up front. Tracked so
+  // the coach can flag creep — orientation should stay terse (a few lines per bundle); depth belongs
+  // in the just-in-time area signs, not here.
+  const orientation = (() => {
+    try { const { text, ids } = composeOrientation(loadConfig(root)); return { bundles: ids.length, lines: text ? text.split('\n').length : 0, bytes: text.length }; }
+    catch { return { bundles: 0, lines: 0, bytes: 0 }; }
+  })();
   return {
     logPresent: allLog.files > 0,           // the .signposts/log dir has any file
     sessionArmed: sessionLog.files > 0,      // THIS session recorded events
@@ -294,7 +303,7 @@ function logMetrics(root, session) {
     rows, neverFired, signs: Object.values(signs).sort((a, b) => a.id.localeCompare(b.id)),
     caught: rows.reduce((s, r) => s + r.caught, 0),
     leaked: rows.reduce((s, r) => s + r.leaked, 0),
-    universeCount: universe.length,
+    universeCount: universe.length, orientation,
   };
 }
 
@@ -409,6 +418,11 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
       L.push('');
       L.push('### Signs injected (this session)');
       for (const g of m.signs) L.push(`- ${g.id} · first-touch ×${g.firstTouch} · drift ×${g.drift}`);
+    }
+    if (m.orientation && m.orientation.bundles) {
+      L.push('');
+      L.push(`### Composed orientation (session start): ${m.orientation.bundles} bundle${m.orientation.bundles > 1 ? 's' : ''} · ${m.orientation.lines} lines · ${m.orientation.bytes} bytes`);
+      L.push('- keep it terse — orientation says WHERE and WHAT REGIME; depth belongs in the just-in-time area signs. Flag creep.');
     }
   }
   L.push('');

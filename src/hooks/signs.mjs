@@ -26,7 +26,15 @@ try {
   const stateFile = statePath(session, input.agent_id || 'main')
 
   if ((input.hook_event_name || '') === 'PostCompact') {
-    writeState(stateFile, {}) // reset — everything re-briefs after a compaction
+    // Re-brief AREA signs after a compaction (clear their marks → first-touch again), but KEEP
+    // session signs suppressed: SessionStart's `compact` matcher just re-delivered orientation,
+    // so re-injecting it on the next tool touch would duplicate. Marking at the current context
+    // size means they still re-show after `drift_tokens` more tokens.
+    const { signs } = loadSigns(ROOT)
+    const tokensSoFar = readTranscriptTokens(input.transcript_path)
+    const marked = {}
+    for (const s of signs) if (s.at === 'session') marked[s.id] = tokensSoFar
+    writeState(stateFile, marked)
     process.exit(0)
   }
 

@@ -67,6 +67,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/src/hooks/session-start.mjs"
+          }
+        ]
+      }
     ]
   }
 }
