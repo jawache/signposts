@@ -171,6 +171,16 @@ rules:
       severity: warn
       message: "A focused `.only(` will silently skip the rest of the suite — remove it before you commit."
 
+    # The TURN moment (dogfood): at the end of a turn where rules/ changed but `just test-rules`
+    # never ran, hold the turn open. Prefer `commit` for most checks — `turn` earns its place here
+    # because an untested rule edit should be caught before the turn ends, not only at commit.
+    - id: rules-tested-this-turn
+      use: core/ran-since-edit
+      at: [turn]
+      edited: ["rules/**"]
+      must_run: "just test-rules"
+      message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
+
   # An installable pack you can pull into your own projects (`/signposts install` from
   # this repo). A COMMAND rule: it blocks the Bash command before it runs, via the
   # command-guard hook — no copied .sh, just data.

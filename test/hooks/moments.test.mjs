@@ -113,3 +113,68 @@ test('off switch silences the SessionStart orientation', () => {
     assert.equal(r.stdout.trim(), '', 'no orientation emitted when off');
   } finally { s.cleanup(); }
 });
+
+// ── the turn moment (Stop hook) ────────────────────────────────────────────────
+
+const TURN_YAML = [
+  'rules:',
+  '  local:',
+  '    - id: rules-tested-this-turn',
+  '      use: core/ran-since-edit',
+  '      at: [turn]',
+  '      edited: ["rules/**"]',
+  '      must_run: "just test-rules"',
+  '      message: "You changed rules/ this turn but never ran `just test-rules`."',
+  '',
+].join('\n');
+
+// Write a transcript fixture of tool_use blocks and return its path.
+function transcript(root, uses) {
+  const p = join(root, 'transcript.jsonl');
+  writeFileSync(p, uses.map((u) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: u.name, input: u.input }] } })).join('\n'));
+  return p;
+}
+
+test('turn: editing rules/ without running the command holds the turn open', () => {
+  const s = scratch(TURN_YAML);
+  try {
+    const tp = transcript(s.root, [{ name: 'Edit', input: { file_path: 'rules/local/x.mjs' } }]);
+    const r = s.drive('turn-guard.mjs', { hook_event_name: 'Stop', transcript_path: tp });
+    assert.equal(r.json.decision, 'block', 'the turn is held open');
+    assert.match(r.json.reason, /just test-rules/, 'the reason names the missing command');
+  } finally { s.cleanup(); }
+});
+
+test('turn: running the command clears the block — the turn ends', () => {
+  const s = scratch(TURN_YAML);
+  try {
+    const tp = transcript(s.root, [
+      { name: 'Edit', input: { file_path: 'rules/local/x.mjs' } },
+      { name: 'Bash', input: { command: 'just test-rules' } },
+    ]);
+    const r = s.drive('turn-guard.mjs', { hook_event_name: 'Stop', transcript_path: tp });
+    assert.notEqual(r.json.decision, 'block', 'no block once the command ran');
+  } finally { s.cleanup(); }
+});
+
+test('turn: stop_hook_active releases even with a live violation — it can never loop', () => {
+  const s = scratch(TURN_YAML);
+  try {
+    const tp = transcript(s.root, [{ name: 'Edit', input: { file_path: 'rules/local/x.mjs' } }]);
+    // Same unsatisfied state as the blocking case, but the re-entry flag is set.
+    const r = s.drive('turn-guard.mjs', { hook_event_name: 'Stop', transcript_path: tp, stop_hook_active: true });
+    assert.notEqual(r.json.decision, 'block', 'the second Stop must not block → turn provably ends');
+    assert.equal(r.status, 0);
+  } finally { s.cleanup(); }
+});
+
+test('turn: off switch silences the Stop check', () => {
+  const s = scratch(TURN_YAML);
+  try {
+    mkdirSync(join(s.root, '.signposts'), { recursive: true });
+    writeFileSync(join(s.root, '.signposts', 'off'), 'off\n');
+    const tp = transcript(s.root, [{ name: 'Edit', input: { file_path: 'rules/local/x.mjs' } }]);
+    const r = s.drive('turn-guard.mjs', { hook_event_name: 'Stop', transcript_path: tp });
+    assert.notEqual(r.json.decision, 'block', 'no turn block when off');
+  } finally { s.cleanup(); }
+});
