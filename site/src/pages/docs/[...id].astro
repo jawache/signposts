@@ -13,6 +13,7 @@ import Mode from '../../components/docs/Mode.astro';
 import Note from '../../components/docs/Note.astro';
 import Steps from '../../components/docs/Steps.astro';
 import Step from '../../components/docs/Step.astro';
+import Signposts from '../../components/docs/Signposts.astro';
 
 export async function getStaticPaths() {
   const docs = await getCollection('docs');
@@ -25,7 +26,7 @@ export async function getStaticPaths() {
 
 const { entry } = Astro.props;
 const { Content } = await render(entry);
-const components = { Chip, Card, Grid, Modes, Mode, Note, Steps, Step };
+const components = { Chip, Card, Grid, Modes, Mode, Note, Steps, Step, Signposts };
 ---
 <Docs entry={entry}>
   <Content components={components} />

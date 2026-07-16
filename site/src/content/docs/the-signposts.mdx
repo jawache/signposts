@@ -1,0 +1,15 @@
+---
+title: Signposts' own signposts — a live listing
+description: The bundles, signs and rules this very repo runs on — generated at build time from its signposts.yml, so it can never drift from what actually ships.
+order: 5.5
+---
+
+<p class="lede">Signposts runs on Signposts. This is the live listing of <strong>this repo's own</strong> bundles, signs and rules — generated at build time from its <code>signposts.yml</code>, so it can never drift from what actually ships.</p>
+
+Each entry's one-line summary is its `description:` field. A <Chip kind="sign">sign</Chip> steers (it never blocks); a <Chip kind="rule">rule</Chip> blocks at the [moment](/docs/wiring) shown. The bundles below are the four the project ships: **core** (what a fresh install carries), **local** (dogfood guards for working on Signposts), and the installable **git-hygiene** and **justfile** bundles.
+
+<Signposts />
+
+<Note>
+**Dogfood.** The `local` bundle's `signposts-well-formed` rule ([`core/signposts-lint`](/docs/rules)) is what keeps this file honest — it blocks a commit if any sign or rule is missing its `description`, so this table is never half-empty. See [the config file](/docs/signposts-yaml) for the schema.
+</Note>

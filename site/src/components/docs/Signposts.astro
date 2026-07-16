@@ -1,0 +1,77 @@
+---
+// Signposts.astro — the live listing of THIS repo's own signposts, generated at build time from
+// the root signposts.yml. Every bundle → its signs and rules, each with its one-line description.
+// Reading the real config means the page can never drift from what the project actually ships.
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
+
+const root = fileURLToPath(new URL('../../../../', import.meta.url));
+let doc: any = {};
+for (const name of ['signposts.yml', 'signposts.yaml']) {
+  try { doc = parseYaml(fs.readFileSync(root + name, 'utf8')) || {}; break; } catch { /* try next */ }
+}
+const bundles: Record<string, any> = (doc && doc.bundles) || {};
+
+// Moment shown per entry: a rule's `at` (default write+commit) or a sign's `at` (default touch).
+const moments = (e: any, kind: 'sign' | 'rule') => {
+  const at = e.at ?? e.when;
+  if (at) return [].concat(at).join(' · ');
+  return kind === 'rule' ? 'write · commit' : 'touch';
+};
+const nbsp = (s: string) => s || '—';
+---
+<div class="sp-list">
+  {Object.entries(bundles).map(([name, b]) => (
+    <section class="sp-bundle">
+      <h3 id={`bundle-${name}`}>{name}{b?.from && <span class="sp-from">from {b.from}</span>}</h3>
+
+      {Array.isArray(b?.signs) && b.signs.length > 0 && (
+        <>
+          <p class="sp-kind">Signs — steer</p>
+          <table>
+            <thead><tr><th>id</th><th>moment</th><th>what it does</th></tr></thead>
+            <tbody>
+              {b.signs.map((s: any) => (
+                <tr>
+                  <td><code>{s.id}</code></td>
+                  <td class="sp-moment">{moments(s, 'sign')}</td>
+                  <td>{nbsp(s.description)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {Array.isArray(b?.rules) && b.rules.length > 0 && (
+        <>
+          <p class="sp-kind">Rules — block</p>
+          <table>
+            <thead><tr><th>id</th><th>uses</th><th>moment</th><th>what it does</th></tr></thead>
+            <tbody>
+              {b.rules.map((r: any) => (
+                <tr>
+                  <td><code>{r.id}</code></td>
+                  <td><code>{r.use}</code></td>
+                  <td class="sp-moment">{moments(r, 'rule')}</td>
+                  <td>{nbsp(r.description)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  ))}
+</div>
+
+<style>
+  .sp-bundle { margin: 1.6rem 0 2rem; }
+  .sp-bundle h3 { display: flex; align-items: baseline; gap: .6rem; }
+  .sp-from { font-size: .72rem; font-weight: 400; color: var(--mut, #6b726a); font-family: "Overpass Mono", monospace; }
+  .sp-kind { font: 700 .7rem/1 "Overpass", system-ui, sans-serif; text-transform: uppercase; letter-spacing: .05em; color: var(--mut, #6b726a); margin: 1rem 0 .3rem; }
+  .sp-moment { white-space: nowrap; font-family: "Overpass Mono", monospace; font-size: .82em; }
+  .sp-list table { font-size: .92rem; }
+  .sp-list td, .sp-list th { vertical-align: top; }
+</style>
