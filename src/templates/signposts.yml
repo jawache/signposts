@@ -1,15 +1,20 @@
-# signposts.yml — the ONE file Signposts needs. Scaffolded by `npx signposts`. BUNDLE-FIRST: organised around the BUNDLE (the thing you adopt and share), each a self-contained block.
+# signposts.yml — the ONE file Signposts needs. Scaffolded by `npx signposts`.
 #
-#   project:  stack identity (name + description).
-#   config:   engine runtime settings — drift_tokens (the sign re-injection cadence).
-#   bundles:  the unit of value. Each key is a bundle (its namespace), carrying up to five keys:
-#     • from      provenance pin — vendored bundles only (github:owner/repo#ref or a local path).
-#     • signs     just-in-time notes. `at: session | touch | turn` (default touch). A `session` sign is ORIENTATION — composed across bundles and injected at session start.
-#     • rules     blocks. `use:` names a script (core/<name> or <bundle>/<name>) + inline config. `at: write | commit | delete | turn` (default [write, commit]).
-#     • settings  host-permission entries merged into .claude/settings.json on install.
-#     • needs     (rare, on a rule) an npm dep that exists only because that rule does.
+# Top-level keys: `project` (stack identity) and `config` (engine settings). EVERYTHING ELSE is a
+# BUNDLE — the unit you adopt and share. A bundle carries a `title`, a `summary`, and a `signposts:`
+# list. Each item in that list is a SIGNPOST — a `sign` (steers, never blocks) or a `rule` (blocks) —
+# tagged with `type:`, so a sign and its related rule sit together in reading order.
 #
-# Give every sign and rule a one-line `description:` (a human summary). A bundle owns rules/<bundle>/** — that's how install/uninstall know what to move. Author with /signposts. Full guide: the Signposts docs.
+# Every signpost has:
+#   type          sign | rule
+#   id            short unique name
+#   description   a one-line, human "what is this" (for reading the file, not for the agent)
+#   at            the LIFECYCLE MOMENT it fires — signs: session | touch | turn-end · rules: write | commit | delete | command | turn-end
+#   on            (optional) the file glob it applies to
+#   text          (signs) the guidance injected · message (rules) the reason shown on a block · use (rules) the script
+#
+# A bundle owns rules/<bundle>/** — the ownership convention install/uninstall move by. Author with
+# the /signposts skill. Full guide: the Signposts docs.
 
 project:
   name: my-project
@@ -18,65 +23,86 @@ project:
 config:
   drift_tokens: 200000        # re-inject a sign after ~this many tokens of drift
 
-bundles:
-
-  # ── the default `signposts` bundle — the guards you want on any Signposts-guarded repo ──
+# ── the default `signposts` bundle — the guards you want on any Signposts-guarded repo ──
+signposts:
+  title: Signposts defaults
+  summary: The orientation and guards you want on any repo that uses Signposts. Edit the orientation to fit your stack.
   signposts:
-    signs:
-      - id: orientation
-        description: The composed orientation injected at session start — edit this to fit your repo.
-        at: session
-        text: |-
-          (Orientation — replace this.) Say where the code lives, and how commands are run.
-          State any regime that's always true. Keep it to a few lines; depth goes in the area signs below.
+    - type: sign
+      id: orientation
+      description: What this repo is and how it's run — shown at the start of every session.
+      at: [session]
+      text: |-
+        (Orientation — replace this.) Say where the code lives, and how commands are run.
+        State any regime that's always true. Keep it to a few lines; depth goes in the area signs below.
 
-      - id: rules-self-edit
-        description: A soft nudge when the agent edits the guardrails; never blocks — the AI must stay able to author rules.
-        globs: ["signposts.yml", "signposts.yaml", "rules/**", ".claude/settings.json"]
-        text: |-
-          You are editing the guardrails themselves.
-          If this edit weakens or removes a rule/permission IN RESPONSE to just being blocked by it — stop and confirm with the user first.
-          Authoring new signposts is always fine; loosening one to get an edit through is the user's call, not yours.
-    rules:
-      - id: no-commit-engine-log
-        description: Never commit the gitignored .signposts/ event log, even via `git add -f`.
-        use: core/protected-path
-        deny: [".signposts/**"]
-        at: [commit]
-        message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
+    - type: sign
+      id: rules-self-edit
+      description: A nudge when you edit the guardrails themselves; it never blocks.
+      at: [touch]
+      on: ["signposts.yml", "signposts.yaml", "rules/**", ".claude/settings.json"]
+      text: |-
+        You are editing the guardrails themselves.
+        If this edit weakens or removes a rule/permission because it just blocked you — stop and confirm with the user first.
+        Authoring new signposts is always fine; loosening one to get an edit through is the user's call, not yours.
 
-  # ── QUICK-START TOUR — the `examples` bundle. Delete it (and rules/examples/) once you're a believer. ──
-  examples:
-    rules:
-      - id: no-bad-mouthing
-        description: Beat 1 — feel the pre-emptive block on a would-be write.
-        use: core/protected-path
-        deny: ["**/signposts-is-bad.yaml"]
-        message: "Signposts is, by its own assessment, perhaps the most amazing tool ever built — and will not assist in writing that it is bad. Carry on."
-      - id: test-first
-        description: Beat 2 — a source file must have its sibling test.
-        use: core/sibling-exists
-        on: ["src/**/*.ts"]
-        ignore: ["**/*.test.ts"]
-        sibling: "{dir}/{name}.test.ts"
-        message: "Write the test first — {dir}/{name}.test.ts is missing."
-      - id: no-hardcoded-secret
-        description: Beat 4 — a custom shell rule greps the would-be file for a secret.
-        use: examples/no-hardcoded-secret
-        on: ["src/**/*.{ts,tsx,js,mjs}"]
+    - type: rule
+      id: no-commit-engine-log
+      description: Stops the Signposts event log (.signposts/) being checked in.
+      at: [commit]
+      use: core/protected-path
+      deny: [".signposts/**"]
+      message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
 
-  # ── YOUR BUNDLE ──
-  # Add your own bundle (use: core/<name> for a built-in, or use: <ns>/<name> for a script in rules/<ns>/).
-  # myapp:
-  #   signs:
-  #     - id: db-area
-  #       description: Steer database code — queries go through the repository layer.
-  #       globs: ["src/db/**"]
-  #       text: "Queries go through the repository layer, never inline in a route."
-  #   rules:
-  #     - id: no-console
-  #       description: Block a stray console.log in source.
-  #       use: core/text-ban
-  #       on: ["src/**/*.ts"]
-  #       ban: ["console.log"]
-  #       message: "Leftover console.log — remove it or use the logger."
+# ── QUICK-START TOUR — the `examples` bundle. Delete it (and rules/examples/) once you're a believer. ──
+examples:
+  title: Quick-start tour
+  summary: A handful of signposts that let you FEEL the rails fire. Delete this bundle (and rules/examples/) once you're convinced.
+  signposts:
+    - type: rule
+      id: no-bad-mouthing
+      description: Beat 1 — feel the pre-emptive block on a would-be write.
+      at: [write, commit]
+      on: ["**/signposts-is-bad.yaml"]
+      use: core/protected-path
+      deny: ["**/signposts-is-bad.yaml"]
+      message: "Signposts is, by its own assessment, perhaps the most amazing tool ever built — and will not assist in writing that it is bad. Carry on."
+
+    - type: rule
+      id: test-first
+      description: Beat 2 — a source file must have its sibling test.
+      at: [write, commit]
+      on: ["src/**/*.ts"]
+      ignore: ["**/*.test.ts"]
+      use: core/sibling-exists
+      sibling: "{dir}/{name}.test.ts"
+      message: "Write the test first — {dir}/{name}.test.ts is missing."
+
+    - type: rule
+      id: no-hardcoded-secret
+      description: Beat 3 — a custom shell rule greps the would-be file for a secret.
+      at: [write, commit]
+      on: ["src/**/*.{ts,tsx,js,mjs}"]
+      use: examples/no-hardcoded-secret
+
+# ── YOUR BUNDLE ──
+# Add your own bundle: a top-level key with a title, a summary, and a signposts list.
+# Use `use: core/<name>` for a built-in, or `use: <bundle>/<name>` for a script in rules/<bundle>/.
+# myapp:
+#   title: My app
+#   summary: The rules that keep my app's code on the rails.
+#   signposts:
+#     - type: sign
+#       id: db-area
+#       description: Steer database code — queries go through the repository layer.
+#       at: [touch]
+#       on: ["src/db/**"]
+#       text: "Queries go through the repository layer, never inline in a route."
+#     - type: rule
+#       id: no-console
+#       description: Block a stray console.log in source.
+#       at: [write, commit]
+#       on: ["src/**/*.ts"]
+#       use: core/text-ban
+#       ban: ["console.log"]
+#       message: "Leftover console.log — remove it or use the logger."

@@ -6,25 +6,54 @@ order: 5
 
 <p class="lede">Everything Signposts needs lives in one file at your repo root, organised around the thing you actually adopt and share — the <strong>bundle</strong>. Each bundle is one contiguous, cherry-pickable block.</p>
 
-| Section | Holds | Read by |
+Two top-level keys are reserved; **everything else is a bundle**.
+
+| Key | Holds | Read by |
 | --- | --- | --- |
 | `project` | Stack identity — a name and description. | the CLI |
 | `config` | Engine runtime settings — currently `drift_tokens` (the sign re-injection cadence). | the sign injector |
-| `bundles` | The unit of value. Each key is a bundle (its namespace); each block carries up to five keys. | everything |
+| *(any other key)* | A **bundle** — the unit of value. Its key is its namespace. | everything |
 
 ## A bundle is one block
 
-The old layout scattered a namespace across five top-level sections (`signs:`, `rules:`, `settings:`, `packs:`, `install:`) — cherry-picking one meant harvesting from all five. Bundle-first puts each bundle in **one place**. Copying a bundle between repos is copying its block plus its `rules/<bundle>/` folder — nothing else. The five keys a bundle may carry:
+The old layout scattered a namespace across five top-level sections (`signs:`, `rules:`, `settings:`, `packs:`, `install:`) — cherry-picking one meant harvesting from all five. Bundle-first puts each bundle in **one place**: a top-level key carrying a `title`, a `summary`, and a `signposts:` list. Copying a bundle between repos is copying its block plus its `rules/<bundle>/` folder — nothing else.
 
 | Key | What it is |
 | --- | --- |
-| `from` | Provenance pin — **vendored bundles only** (`github:owner/repo#ref` or a local path). The base `refresh` diffs against. Local bundles simply omit it. |
-| `signs` | Steering <Chip kind="sign">sign</Chip> notes. `at: session \| touch \| turn` (default `touch`). A `session` sign is [orientation](/docs/signs). |
-| `rules` | <Chip kind="rule">rule</Chip> blocks. `use:` names a script; config rides inline. `at: write \| commit \| delete \| turn` (default `[write, commit]`). |
-| `settings` | Host-permission entries merged into `.claude/settings.json` on install (`deny` auto-applied; `allow` surfaced for you). |
-| `needs` | *(rare, on a rule)* an npm dep that exists only because that rule does. Baseline tools ride the engine, not bundles. |
+| `title` | A human name for the bundle. |
+| `summary` | One line: what this bundle is for. |
+| `signposts` | The list of [signposts](#a-signpost-is-a-sign-or-a-rule) — signs and rules, interleaved in reading order. |
+| `from` | *(vendored bundles only)* Provenance pin — `github:owner/repo#ref` or a local path. The base `refresh` diffs against. Local bundles omit it. |
+| `settings` | *(optional)* Host-permission entries merged into `.claude/settings.json` on install. |
 
-A bundle **owns** `rules/<bundle>/**` — that ownership convention is how install and uninstall know what to copy and remove, so there's no machine manifest to drift. Gone from the old schema: `packs:`, `install: files`, install dates.
+A bundle **owns** `rules/<bundle>/**` — that ownership convention is how install and uninstall know what to copy and remove, so there's no machine manifest to drift.
+
+## A signpost is a sign or a rule
+
+Every item in a bundle's `signposts:` list is a **signpost**, tagged with `type:`. A <Chip kind="sign">sign</Chip> steers (injects guidance, never blocks); a <Chip kind="rule">rule</Chip> blocks. Because they share one list, a sign and the rule it explains sit **together** in reading order.
+
+| Field | On | What it is |
+| --- | --- | --- |
+| `type` | both | `sign` or `rule`. |
+| `id` | both | A short unique name. |
+| `description` | both | A one-line, human "what is this" — for reading the file, not shown to the agent. |
+| `at` | both | The [lifecycle moment](/docs/wiring) it fires on — **always explicit**, no hidden default. |
+| `on` | both | *(optional)* The file glob(s) it applies to. |
+| `text` | sign | The guidance injected when the moment fires. |
+| `use` | rule | The script — `core/<name>` or `<bundle>/<name>` — with its config inline. |
+| `message` | rule | The reason fed back to the agent on a block. |
+
+### The moments (`at:`)
+
+| `at:` | Fires when | Valid for |
+| --- | --- | --- |
+| `session` | a session starts (orientation) | sign |
+| `touch` | a file matching `on:` is edited | sign |
+| `write` | an edit is about to land | rule |
+| `commit` | at commit (a whole-tree check) | rule |
+| `delete` | a command would delete a matched path | rule |
+| `command` | a Bash command is about to run (a command-guard) | rule |
+| `turn-end` | the agent tries to end its turn | both |
 
 ## A worked example
 
@@ -36,54 +65,72 @@ project:
 config:
   drift_tokens: 200000          # re-inject a sign after ~this many tokens of drift
 
-bundles:
+# ── a LOCAL bundle — born here, may propagate upstream one day ──
+core:
+  title: Core guardrails
+  summary: The orientation and blocks I want on every repo I work in.
+  signposts:
+    - type: sign
+      id: orientation
+      description: How this repo is laid out and run — shown at session start.
+      at: [session]
+      text: |-
+        docs/arch/ is the system prior — read before structural work.
+        Repeated commands live in justfile recipes, never package.json scripts.
 
-  # ── a LOCAL bundle — born here, may propagate upstream one day ──
-  core:
-    signs:
-      - id: orientation
-        at: session                        # the composed-CLAUDE.md slot (session start)
-        text: |-
-          docs/arch/ is the system prior — read before structural work.
-          Repeated commands live in justfile recipes, never package.json scripts.
-      - id: db-area
-        globs: ["src/db/**"]               # at: touch is the default for signs
-        text: "Queries go through the repository layer, never inline in a route."
-    rules:
-      - id: no-edit-generated
-        use: core/protected-path
-        deny: ["**/*.generated.ts", "vendor/**"]   # at: [write, commit] is the default
-        message: "Generated / vendored — change the source, then regenerate."
+    - type: sign
+      id: db-area
+      description: Steer database code toward the repository layer.
+      at: [touch]
+      on: ["src/db/**"]
+      text: "Queries go through the repository layer, never inline in a route."
 
-  # ── a VENDORED bundle — pinned provenance, content editable in place ──
-  fcis:
-    from: github:you/hub#v1.4.2
-    rules:
-      - id: import-fence
-        use: core/depcruise                # the layers-&-fences dialect (see below)
-        layers:
-          core:    ["src/lib/**/domain.ts"]
-          effects: ["src/lib/**/db.ts"]
-        forbid:
-          - { from: core, to: effects, transitive: true, why: "purity is transitive" }
-    settings:
-      permissions:
-        deny: ["Read(.env.keys)"]          # merged into .claude/settings.json on install
+    - type: rule
+      id: no-edit-generated
+      description: Block edits to generated or vendored files.
+      at: [write, commit]
+      on: ["**/*.generated.ts", "vendor/**"]
+      use: core/protected-path
+      deny: ["**/*.generated.ts", "vendor/**"]
+      message: "Generated / vendored — change the source, then regenerate."
+
+# ── a VENDORED bundle — pinned provenance, content editable in place ──
+fcis:
+  title: Functional core, imperative shell
+  summary: Keeps the pure core from importing the effectful shell.
+  from: github:you/hub#v1.4.2
+  signposts:
+    - type: rule
+      id: import-fence
+      description: A dependency-cruiser fence — the domain layer can't reach effects.
+      at: [write, commit]
+      use: core/depcruise
+      layers:
+        core:    ["src/lib/**/domain.ts"]
+        effects: ["src/lib/**/db.ts"]
+      forbid:
+        - from: core
+          to: effects
+          transitive: true
+          why: "purity is transitive"
+  settings:
+    permissions:
+      deny: ["Read(.env.keys)"]        # merged into .claude/settings.json on install
 ```
 
 ## How a rule reads
 
-Each entry names a **script** with `use:` and carries that script's config inline. The whole entry is handed to the script **verbatim**.
+Each rule names a **script** with `use:` and carries that script's config inline. The whole signpost is handed to the script **verbatim**.
 
 - `use: core/<name>` — a [core script](/docs/rules); or `<bundle>/<name>` for [your own](/docs/authoring).
 - `on:` — the glob(s) it applies to (some scripts use `deny:` or `run:` instead).
-- `at:` — the [moment](/docs/wiring) it fires on. Rules default to `[write, commit]`; reach for `[commit]` (a whole-tree tool-gate), `[delete]`, or `[turn]` (end of turn). The legacy `when:` still loads.
+- `at:` — the [moment(s)](/docs/wiring) it fires on, always explicit.
 - `message:` — the reason, fed back to the agent on a block.
 
 <Note>
-**Code patterns are files, not inline.** ast-grep rules stay as `rules/ast-grep/*.yml` (so the engine and `signposts test` use the same files); the `core/ast-grep` runner executes them in-process. Import fences ride the declarative [`core/depcruise`](/docs/rules/depcruise) dialect. Everything else is a normal `rules:` entry.
+**Code patterns are files, not inline.** ast-grep rules stay as `rules/<bundle>/ast-grep/*.yml` (so the engine and `signposts test` use the same files); the `core/ast-grep` runner executes them in-process. Import fences ride the declarative [`core/depcruise`](/docs/rules/depcruise) dialect. Everything else is a normal `signposts:` entry.
 </Note>
 
-## Backwards compatibility
+## Filename
 
-A load-time normaliser accepts **both** shapes — bundle-first and the old section-first (`signs:` / `rules:` / `settings:` grouped by namespace, plus legacy `advisory:` and flat lists) — and hands the engine the flat form it already consumes. The **filename** is equally forgiving: Signposts prefers `signposts.yml` (what a fresh scaffold writes) but still reads a legacy `signposts.yaml`. Old files keep working forever; a repo moves to bundle-first `.yml` when you touch it. See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.
+Signposts prefers `signposts.yml` (what a fresh scaffold writes) but still reads a legacy `signposts.yaml`. See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.
