@@ -14,7 +14,9 @@ agent-edit:
   parallel: true
   jobs:
     - name: signposts
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node node_modules/signposts/src/engine.mjs --phase commit "$@"'
+      # --files-only: skip whole-tree `project` rules (tool-gates, depcruise, budgets) on the
+      # per-file fast path — they run in the pre-commit gate below, not on every edit.
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node node_modules/signposts/src/engine.mjs --phase commit --files-only "$@"'
 
 pre-commit:
   parallel: true

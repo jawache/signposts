@@ -352,6 +352,14 @@ local:
         Shape: keep decision logic pure and testable (the core scripts' evaluate, the normaliser) and push IO to the edges (the hooks) — the rails fail safe and must never throw or block an edit.
         Config is signposts.yml, bundle-first: each top-level key is a bundle (a title, a summary, and a signposts list of typed signs + rules).
 
+    - type: rule
+      id: commit-runs-tests
+      description: Runs the deterministic test suite at commit and blocks the commit if anything fails.
+      at: [commit]
+      use: core/tool-gate
+      run: "just test-rules"
+      message: "`just test-rules` failed — the commit is blocked until the suite is green. (Run it yourself to see what broke.)"
+
     - type: sign
       id: site
       description: How to build and style the website.

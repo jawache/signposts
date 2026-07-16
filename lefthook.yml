@@ -4,7 +4,10 @@
 # which is why the rule files are committed in the repo, not a per-user cache):
 #   • agent-edit — fast, file-local. Run on every Claude Edit/Write via
 #     .claude/hooks/lefthook-on-write.sh → `lefthook run agent-edit --file <p>`.
-#   • pre-commit — the full gate: the same rules over the staged set.
+#     It passes --files-only, so whole-tree `project` rules (tool-gates, depcruise,
+#     budgets) are skipped here — they'd re-scan the tree on every keystroke-edit.
+#   • pre-commit — the full gate: the same rules over the staged set, PLUS the
+#     project rules (so `commit-runs-tests` and the import-fence run once, at commit).
 #
 # The `engine` job IS the gate (rules/_engine.mjs, --phase commit). It runs the
 # auto-discovered ast-grep pattern files AND every signposts.yaml rule (grouped by
@@ -24,7 +27,7 @@ agent-edit:
   parallel: true
   jobs:
     - name: engine
-      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node src/engine.mjs --phase commit "$@"'
+      run: 'set -- {staged_files}; [ "$#" -eq 0 ] || node src/engine.mjs --phase commit --files-only "$@"'
 
 pre-commit:
   parallel: true
