@@ -375,11 +375,11 @@ local:
 
     - type: rule
       id: commit-runs-tests
-      description: Runs the deterministic test suite at commit and blocks the commit if anything fails.
+      description: Runs the deterministic test suite (rules + hooks, ~6s; not e2e/live) at commit and blocks if anything fails.
       at: [commit]
       use: core/tool-gate
-      run: "just test-rules"
-      message: "`just test-rules` failed — the commit is blocked until the suite is green. (Run it yourself to see what broke.)"
+      run: "just test-commit"
+      message: "`just test-commit` failed — the commit is blocked until the suite is green. (Run it yourself to see what broke.)"
 
     - type: sign
       id: site

@@ -48,7 +48,10 @@ test-hooks:
 test-live:
     node --test "test/live/*.test.mjs"
 
-[doc("Run every test — the in-repo rule self-tests, the hook-moment tests, and the as-installed e2e suite. (Live tier is separate: `just test-live`.)")]
+[doc("The COMMIT gate's test set: everything deterministic and fast (~6s) — the rule self-tests + the hook-moment tests. Skips the ~19s as-installed e2e and the token-spending live tier. This is what commit-runs-tests runs.")]
+test-commit: test-rules test-hooks
+
+[doc("Run every test — the in-repo rule self-tests, the hook-moment tests, and the as-installed e2e suite. (Live tier is separate: `just test-live`.) This is the CI/full run.")]
 test: test-rules test-hooks test-e2e
 
 [doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
