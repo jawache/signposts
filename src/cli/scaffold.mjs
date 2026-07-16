@@ -6,10 +6,11 @@
 // (the /signposts SKILL + the coach agent). Everything is idempotent.
 //
 //   1. copy the skill surface (SKILL.md + coach.md)
-//   2. merge package.json devDependencies (signposts + lefthook)
+//   2. merge package.json devDependencies (signposts)
 //   3. write .claude/settings.json (hooks → node_modules/signposts), merge-not-clobber
-//   4. write signposts.yaml + lefthook.yml + justfile — only if absent
-//   5. activate: npm install (arms lefthook). Pre-publish: falls back to `npm link`.
+//   4. write signposts.yaml + .githooks/pre-commit + justfile — only if absent
+//   5. activate: npm install + arm the gate (git config core.hooksPath .githooks).
+//      Pre-publish: falls back to `npm link`.
 
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
@@ -37,7 +38,7 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
   // 4. starter files (only if absent) ------------------------------------------
   log(`• signposts.yml: ${starter(rel('signposts.yml'), join(packRoot, 'src/templates/signposts.yml'), dryRun)}`);
   log(`• sgconfig.yml: ${starter(rel('sgconfig.yml'), join(packRoot, 'src/templates/sgconfig.yml'), dryRun)}`);
-  log(`• lefthook.yml: ${starter(rel('lefthook.yml'), join(packRoot, 'src/templates/lefthook.yml'), dryRun)}`);
+  log(`• .githooks/pre-commit: ${starterHook(rel('.githooks/pre-commit'), join(packRoot, 'src/templates/githooks/pre-commit'), dryRun)}`);
   log(`• justfile: ${starter(rel('justfile'), join(packRoot, 'src/templates/justfile'), dryRun)}`);
 
   // 5. seed rules/ with the quick-start tour (only files that are absent) -------
@@ -49,8 +50,8 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
 
   // 6. activate -----------------------------------------------------------------
   if (dryRun) log(`• activate: would ${activate ? 'install signposts + arm the gate' : 'be skipped (--no-activate)'}`);
-  else if (activate) runActivate(target, packRoot, log);
-  else log(`• activate: skipped (run \`${ACTIVATE.join(' && ')}\` to install signposts + arm the gate)`);
+  else if (activate) { runActivate(target, packRoot, log); armGate(target, log); }
+  else log(`• activate: skipped (run \`${ACTIVATE.join(' && ')} && git config core.hooksPath .githooks\` to install signposts + arm the gate)`);
 
   if (dryRun) { log(`\nDry run complete — re-run without --dry-run to apply.`); return; }
   log(`\n✓ Signposts wired in (as a dev dependency). Restart your agent session so the`);
@@ -74,8 +75,15 @@ function devLinkActivate(target, packRoot, log) {
     return;
   }
   log(`  ✓ linked → node_modules/signposts. The PRE-EMPTIVE block is live after you restart the session.`);
-  log(`  (The commit gate needs lefthook, which npm can't install while signposts is unpublished —`);
-  log(`   it arms cleanly once signposts is published; \`npm install\` will pull lefthook then.)`);
+}
+
+// Arm the commit gate: point git at the committed .githooks/. core.hooksPath is per-clone local
+// config, so this runs once per clone; needs no package (that's the point of dropping lefthook).
+function armGate(target, log) {
+  const isRepo = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: target, stdio: 'ignore' }).status === 0;
+  if (!isRepo) { log(`• gate: run \`git config core.hooksPath .githooks\` once this is a git repo (arms the commit gate)`); return; }
+  const r = spawnSync('git', ['config', 'core.hooksPath', '.githooks'], { cwd: target, stdio: 'ignore' });
+  log(r.status === 0 ? `• gate: armed (core.hooksPath → .githooks)` : `• gate: arm manually with \`git config core.hooksPath .githooks\``);
 }
 
 // ── merge helpers (weave, never clobber; idempotent) ──────────────────────────
@@ -128,6 +136,15 @@ function starter(dst, srcTemplate, dryRun) {
   if (tpl == null) return 'skipped (template missing)';
   if (dryRun) return 'would create';
   writeText(dst, tpl);
+  return 'created';
+}
+
+// Like starter, but copies bytes+mode (the git hook must stay executable) via copyFile.
+function starterHook(dst, srcTemplate, dryRun) {
+  if (exists(dst)) return 'kept (already present)';
+  if (!exists(srcTemplate)) return 'skipped (template missing)';
+  if (dryRun) return 'would create';
+  copyFile(srcTemplate, dst);
   return 'created';
 }
 

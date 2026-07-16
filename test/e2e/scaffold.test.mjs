@@ -9,7 +9,7 @@ test('scaffold writes config + wiring, seeds the tour, ignores .signposts/', () 
   const dir = makeProject();
   const r = runCli(dir, ['--no-activate']);           // deps already present (base install) — just write files
   assert.equal(r.status, 0, `scaffold exit:\n${r.stdout}${r.stderr}`);
-  for (const f of ['signposts.yml', 'lefthook.yml', 'justfile', '.claude/settings.json',
+  for (const f of ['signposts.yml', '.githooks/pre-commit', 'justfile', '.claude/settings.json',
     '.claude/skills/signposts/SKILL.md', 'rules/examples/no-hardcoded-secret.sh',
     'rules/examples/ast-grep/functional-style.yml']) {
     assert.ok(has(dir, f), `scaffold should write ${f}`);
@@ -57,23 +57,23 @@ test('scaffold --dry-run writes nothing', () => {
   const dir = makeProject();
   const r = runCli(dir, ['--dry-run']);
   assert.equal(r.status, 0, r.stderr);
-  for (const f of ['signposts.yml', 'lefthook.yml', 'justfile', '.claude/settings.json', 'rules/examples/no-hardcoded-secret.sh']) {
+  for (const f of ['signposts.yml', '.githooks/pre-commit', 'justfile', '.claude/settings.json', 'rules/examples/no-hardcoded-secret.sh']) {
     assert.ok(!has(dir, f), `--dry-run must not write ${f}`);
   }
 });
 
-test('scaffold keeps an existing lefthook.yml / justfile', () => {
+test('scaffold keeps an existing .githooks/pre-commit / justfile', () => {
   const dir = makeProject();
-  write(dir, 'lefthook.yml', '# my custom lefthook\n');
+  write(dir, '.githooks/pre-commit', '# my custom hook\n');
   write(dir, 'justfile', '# my custom justfile\n');
   assert.equal(runCli(dir, ['--no-activate']).status, 0);
-  assert.match(read(dir, 'lefthook.yml'), /my custom lefthook/, 'existing lefthook.yml kept');
+  assert.match(read(dir, '.githooks/pre-commit'), /my custom hook/, 'existing .githooks/pre-commit kept');
   assert.match(read(dir, 'justfile'), /my custom justfile/, 'existing justfile kept');
 });
 
 test('scaffold does not double-list a dep already in dependencies', () => {
   const dir = makeProject();
-  // a consumer that already carries signposts (+lefthook) in dependencies
+  // a consumer that already carries signposts in dependencies
   const pkg0 = JSON.parse(read(dir, 'package.json'));
   pkg0.dependencies = { ...(pkg0.dependencies || {}), signposts: '^0.1.0' };
   write(dir, 'package.json', JSON.stringify(pkg0, null, 2));

@@ -1,0 +1,19 @@
+#!/bin/sh
+# .githooks/pre-commit — the Signposts commit gate (no lefthook).
+#
+# Runs the engine over the staged files at `git commit`, blocking on a violation. This fires
+# WITHOUT Claude — a human commit, CI, a merge — which is why the rules are committed in the repo.
+# Wired by `git config core.hooksPath .githooks` (set once per clone; `just setup` / the scaffold
+# does it). The engine ALSO runs whole-tree `project` rules here (tests, import fences, budgets),
+# so those gate the commit even when no source file is staged.
+#
+# IFS=newline + `set -f` so paths with spaces survive; --diff-filter=ACM skips deletions (nothing
+# to read). No staged files → nothing to check.
+
+IFS='
+'
+set -f
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+set -- $files
+exec node src/engine.mjs --phase commit "$@"

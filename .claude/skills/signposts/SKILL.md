@@ -43,7 +43,7 @@ pack's own rules surfaced, the check-before-you-script habit. Every onboarding f
 was built to stop happened in the gap where setup should have been.
 
 1. **Scaffold if needed.** No `signposts.yaml` yet? Run `npx signposts` — the deterministic
-   scaffold (justfile, lefthook, the hooks, the quick-start tour). Restart the session so the
+   scaffold (justfile, the commit-gate hook, the Claude hooks, the quick-start tour). Restart the session so the
    pre-emptive hook loads. (Already set up → skip to detect.)
 2. **Detect the stack.** `npx signposts detect` (`--json` to consume it) — a file census +
    `package.json` stack signals. It marks each language **native** (free — html/css/js/ts/tsx) or

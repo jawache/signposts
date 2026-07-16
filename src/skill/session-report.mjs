@@ -7,7 +7,7 @@
  *   • NUMBERS come from the engine's own event log (.signposts/log/<session>.jsonl) —
  *     deterministic ground truth. Per-rule fires, edit-catches vs commit-leaks, rules
  *     that never fired, sign injections. This replaces the old approach of scraping
- *     lefthook's emoji output out of the transcript, which silently reported
+ *     the git hook's emoji output out of the transcript, which silently reported
  *     "agent-edit fires: 0" against a hook structure the engine model had replaced.
  *   • NARRATIVE comes from the transcript — heuristic, and labelled as such: the
  *     session map (user turns), course-corrections, edit loops, retries, justfile
@@ -526,13 +526,13 @@ function selfTest() {
   // ---- transcript-side (narrative) ----
   const tools = parseRecipeTools([
     '# a comment', 'export PATH := "x"', '[doc("build")]', 'test-rules:',
-    '    ast-grep test && node src/engine.mjs --test', 'gate:', '    npx lefthook run', 'ci:', '    npm ci && vitest run',
+    '    ast-grep test && node src/engine.mjs --test', 'fmt:', '    npx prettier --write .', 'ci:', '    npm ci && vitest run',
   ].join('\n'));
   eq(tools.includes('ast-grep'), true, 'recipeTools: ast-grep from a recipe body');
   eq(tools.includes('vitest'), true, 'recipeTools: vitest from a recipe body');
   eq(tools.includes('npm'), true, 'recipeTools: npm from a recipe body');
   eq(tools.includes('node'), false, 'recipeTools: node is dropped as noise');
-  eq(tools.includes('lefthook'), false, 'recipeTools: npx-prefixed lefthook is dropped (npx is noise)');
+  eq(tools.includes('prettier'), false, 'recipeTools: an npx-prefixed tool is dropped (npx is noise)');
 
   const ev = (obj) => JSON.stringify({ type: 'assistant', message: { content: [obj] } });
   const ut = (text) => JSON.stringify({ type: 'user', message: { content: text } });

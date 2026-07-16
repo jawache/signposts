@@ -1,7 +1,8 @@
 // cli/uninstall.mjs — `npx signposts uninstall`: remove Signposts from a repo.
 //
 // Reverses a scaffold — the old vendored model AND the new dependency model:
-//   • unarms lefthook (removes the .git/hooks/* it wrote)
+//   • disarms the commit gate (unsets core.hooksPath → .githooks; also `lefthook uninstall` for
+//     repos scaffolded before the gate moved off lefthook)
 //   • deletes the vendored files the lock recorded (old model) — precise: the lock lists
 //     exactly what was copied in, so your own files are never touched
 //   • deletes the known surface (skill, coach, config, wiring) — covers the dep model
@@ -45,9 +46,15 @@ export function uninstall({ target = process.cwd(), dryRun = false, pack = null,
     return true;
   };
 
-  // 1. unarm lefthook (best effort) --------------------------------------------
+  // 1. disarm the commit gate (best effort) ------------------------------------
   if (existsSync(rel('.git'))) {
-    log(`${tag}unarm lefthook (npx lefthook uninstall)`);
+    // new model: unset core.hooksPath if it points at our .githooks
+    const hp = spawnSync('git', ['config', '--get', 'core.hooksPath'], { cwd: target, encoding: 'utf8' });
+    if ((hp.stdout || '').trim() === '.githooks') {
+      log(`${tag}disarm gate (git config --unset core.hooksPath)`);
+      if (!dryRun) spawnSync('git', ['config', '--unset', 'core.hooksPath'], { cwd: target, stdio: 'ignore' });
+    }
+    // legacy model: repos scaffolded before the move still have lefthook-written hooks
     if (!dryRun) spawnSync('bash', ['-lc', 'npx --no-install lefthook uninstall'], { cwd: target, stdio: 'ignore' });
   }
 
@@ -64,7 +71,8 @@ export function uninstall({ target = process.cwd(), dryRun = false, pack = null,
 
   // 3. the known surface (covers the dep model / anything not in a lock) --------
   for (const f of SURFACE) rm(rel(f), f);
-  // lefthook.yml only if it's the Signposts one
+  // the commit-gate hook only if it's the Signposts one (new .githooks, or legacy lefthook.yml)
+  if (/signposts\/src\/engine\.mjs/.test(readText(rel('.githooks/pre-commit')) || '')) rm(rel('.githooks/pre-commit'), '.githooks/pre-commit');
   if (/node_modules\/signposts\/rules\/_engine|name: (signposts|engine)/.test(readText(rel('lefthook.yml')) || '')) rm(rel('lefthook.yml'), 'lefthook.yml');
 
   // 4. config -------------------------------------------------------------------

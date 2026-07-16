@@ -3,8 +3,8 @@
 //
 //   • edit   — the PreToolUse hook reconstructs the would-be file and calls
 //              evaluate({phase:'edit', …}) → a `deny` before the write lands.
-//   • commit — lefthook runs this as a CLI over the staged set:
-//              node rules/_engine.mjs --phase commit <files…>   (exit 2 on violation)
+//   • commit — the .githooks/pre-commit hook runs this as a CLI over the staged set:
+//              node src/engine.mjs --phase commit <files…>   (exit 2 on violation)
 //   • push   — same CLI, --phase push.
 //
 // A rule NAMES A SCRIPT with `use:` (always a path) and carries its config inline.
@@ -182,10 +182,7 @@ function logOverride(logCtx, phase, files, tally, violations) {
 // files: repo paths to check. getContent(file)->string reconstructs the would-be
 // bytes (in-memory at edit; disk read at commit) for content rules.
 // logCtx {root, session}: when set, append run/deny events; scan passes null.
-// filesOnly: the per-file fast path (lefthook agent-edit, after each Edit/Write) — skip
-// whole-tree `project` rules (tool-gates, depcruise, budgets). They're the real gate's job at
-// pre-commit; running them on every keystroke-edit would re-scan the whole tree each time.
-export async function evaluate({ phase, files, root, getContent, configPath, logCtx = null, filesOnly = false }) {
+export async function evaluate({ phase, files, root, getContent, configPath, logCtx = null }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const violations = [];
   const { tally, record } = makeTally();
@@ -195,7 +192,7 @@ export async function evaluate({ phase, files, root, getContent, configPath, log
     if (!s || s.kind === 'command') continue;                  // command rules: see evaluateCommand
 
     if (s.kind === 'project') {                                // tool-gate: run once for the phase
-      if (!s.js || filesOnly) continue;                        // per-file fast path never runs whole-tree rules
+      if (!s.js) continue;
       try { const hits = await s.js.evaluate(rule, { root }); record(rule, hits.length); if (hits.length) violations.push({ rule, path: null, hits }); }
       catch { /* fail safe */ }
       continue;
@@ -408,23 +405,22 @@ export function formatViolation(v) {
   return `✗ ${v.rule.id} (${v.rule.use})${where}${msg}\n` + v.hits.map((h) => `    ${h}`).join('\n');
 }
 
-// ── CLI (lefthook commit/push path) ───────────────────────────────────────────
+// ── CLI (the .githooks/pre-commit gate) ───────────────────────────────────────
 async function cli(argv) {
   const args = [...argv];
-  let phase = 'commit', configPath, filesOnly = false;
+  let phase = 'commit', configPath;
   const files = [];
   while (args.length) {
     const a = args.shift();
     if (a === '--phase') phase = args.shift();
     else if (a === '--config') configPath = args.shift();
-    else if (a === '--files-only') filesOnly = true;          // per-file fast path: skip whole-tree rules
     else files.push(a);
   }
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  if (isOff(root)) process.exit(0);                            // off switch: commit gate + lefthook agent-edit silenced
+  if (isOff(root)) process.exit(0);                            // off switch: the commit gate is silenced
   const getContent = defaultGetContent(root);
-  // lefthook runs outside any Claude session — commit/push events land in commit.jsonl.
-  const violations = await evaluate({ phase, files, root, getContent, configPath, filesOnly, logCtx: { root, session: 'commit' } });
+  // the gate runs outside any Claude session — commit/push events land in commit.jsonl.
+  const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });
   const { blocks, warns } = partitionBySeverity(violations);
   if (warns.length) process.stderr.write('\n⚠ Signposts warnings (not blocking):\n' + warns.map(formatViolation).join('\n\n') + '\n');
   if (blocks.length === 0) process.exit(0);

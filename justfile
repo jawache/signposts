@@ -5,7 +5,7 @@
 # signposts.yaml and run through the engine (rules/_engine.mjs).
 # Requires `just` (brew install just).
 
-# Put repo-local CLIs (ast-grep, lefthook…) on PATH for every recipe, so recipes call them by name.
+# Put repo-local CLIs (ast-grep…) on PATH for every recipe, so recipes call them by name.
 export PATH := (justfile_directory() / "node_modules" / ".bin") + ":" + env_var("PATH")
 
 [doc("Show the catalog.")]
@@ -16,11 +16,12 @@ default:
 
 # Run this FIRST in a fresh clone/worktree. A missing local dep silently falls back
 # to whatever sits higher up the tree, which can crash hooks before their fail-safe
-# catches it. `npm ci` installs exactly the lockfile's versions; lefthook's postinstall
-# then writes the .git/hooks/* shims (this is what arms the commit gate).
-[doc("Install dependencies from the lockfile — run this first in a fresh clone/worktree.")]
+# catches it. `npm ci` installs exactly the lockfile's versions; then we point git at the
+# committed .githooks/ (core.hooksPath is per-clone local config — each clone runs this once).
+[doc("Install deps from the lockfile + arm the commit gate (core.hooksPath) — run first in a fresh clone/worktree.")]
 install:
     npm ci
+    git config core.hooksPath .githooks
 
 [doc("Create a worktree for <branch> and open it in VS Code (worktrunk; pre-start hook copies ignored setup files, writes .wt-port, links .work).")]
 worktree branch:
@@ -54,9 +55,9 @@ test-commit: test-rules test-hooks
 [doc("Run every test — the in-repo rule self-tests, the hook-moment tests, and the as-installed e2e suite. (Live tier is separate: `just test-live`.) This is the CI/full run.")]
 test: test-rules test-hooks test-e2e
 
-[doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
+[doc("Run the full commit gate against ALL tracked files (not just staged) — the engine at --phase commit.")]
 gate:
-    npx lefthook run pre-commit --all-files
+    node src/engine.mjs --phase commit $(git ls-files)
 
 # ── website (site/) ─────────────────────────────────────────────────────────────
 

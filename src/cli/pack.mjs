@@ -19,14 +19,14 @@ export const SKILL_SURFACE = [
   '.claude/agents/coach.md',
 ];
 
-// Woven into package.json. `signposts` brings the engine + its deps (yaml, ast-grep);
-// `lefthook` is per-project (it writes the repo's .git/hooks/*).
+// Woven into package.json. `signposts` brings the engine + its deps (yaml, ast-grep). The commit
+// gate needs no dependency — it's a committed .githooks/pre-commit + `git config core.hooksPath`.
 export const DEV_DEPENDENCIES = {
   signposts: '^0.1.0',
-  lefthook: '^2.1.8',
 };
 
-// Run after writing — installs the dep + arms the gate (lefthook writes .git/hooks/*).
+// Run after writing — installs the dep. The gate is armed separately (git config core.hooksPath
+// .githooks), which the scaffold does directly since it needs no package.
 export const ACTIVATE = ['npm install'];
 
 // ── small deterministic helpers ───────────────────────────────────────────────

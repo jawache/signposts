@@ -1,0 +1,18 @@
+#!/bin/sh
+# .githooks/pre-commit — the Signposts commit gate. Scaffolded by `npx signposts`.
+#
+# Runs the engine (FROM the installed package) over the staged files at `git commit`, blocking on a
+# violation. This fires WITHOUT Claude — a human commit, CI, a merge — the same rules the PreToolUse
+# hook runs pre-emptively at edit time. Each rule self-filters by its `on:` glob; whole-tree
+# `project` rules (tests, fences, budgets) run here too.
+#
+# Wired by `git config core.hooksPath .githooks` (the scaffold sets it; re-run it in a fresh clone).
+# IFS=newline + `set -f` so paths with spaces survive; --diff-filter=ACM skips deletions.
+
+IFS='
+'
+set -f
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+set -- $files
+exec node node_modules/signposts/src/engine.mjs --phase commit "$@"

@@ -8,7 +8,7 @@
 // during cache debugging wiped a file's entire uncommitted rewrite). This is a
 // PreToolUse hook on Bash — it must fire BEFORE the command runs; a post-hoc
 // check can't un-destroy work — so it is wired in .claude/settings.json, not
-// lefthook.
+// the commit gate.
 //
 // Scope is deliberately narrow (prefer false negatives over blocking real
 // work): only the `--` pathspec form of checkout (branch switching passes) and

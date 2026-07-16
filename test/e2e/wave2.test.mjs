@@ -67,7 +67,7 @@ test('uninstall --pack: removes the namespace footprint, preserves the rest', ()
   assert.doesNotMatch(read(dir, 'signposts.yml') || '', /no-raw-pool/, 'the pack\'s rule is gone');
   assert.ok(!has(dir, 'rules/neon/no-raw-pool.mjs'), 'the pack\'s script is removed');
   // user + scaffold files untouched
-  assert.ok(has(dir, 'lefthook.yml') && has(dir, 'rules/examples/no-hardcoded-secret.sh'), 'the rest of the project is intact');
+  assert.ok(has(dir, '.githooks/pre-commit') && has(dir, 'rules/examples/no-hardcoded-secret.sh'), 'the rest of the project is intact');
 });
 
 test('propagate: a rule is pushed as a branch to a local bare remote (offline git pattern)', () => {

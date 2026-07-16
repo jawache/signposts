@@ -35,14 +35,14 @@ export function tarball() {
 }
 
 // ── install the tarball once into a base project we clone per test ────────────
-// lefthook rides along so the commit-gate journey can arm a real git hook.
+// The commit gate needs no extra dependency now — it's a committed .githooks/pre-commit.
 let _base = null;
 export function baseProject() {
   if (_base && existsSync(_base)) return _base;
   const dir = mkdtempSync(join(tmpdir(), 'sg-base-'));
   writeFileSync(join(dir, 'package.json'),
     JSON.stringify({ name: 'consumer', version: '1.0.0', private: true, type: 'module' }, null, 2) + '\n');
-  const r = spawnSync('npm', ['install', '--prefer-offline', '--no-audit', '--no-fund', tarball(), 'lefthook@^2.1.8'],
+  const r = spawnSync('npm', ['install', '--prefer-offline', '--no-audit', '--no-fund', tarball()],
     { cwd: dir, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`base npm install failed:\n${r.stderr}`);
   _base = dir;

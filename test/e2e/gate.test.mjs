@@ -1,10 +1,8 @@
-// test/e2e/gate.test.mjs — the commit gate, end to end: scaffold → arm lefthook → a real
-// `git commit` of a bad file is rejected by the engine running from node_modules.
+// test/e2e/gate.test.mjs — the commit gate, end to end: scaffold → arm the .githooks gate →
+// a real `git commit` of a bad file is rejected by the engine running from node_modules.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
 import { makeProject, runCli, runGit, write } from './harness.mjs';
 
 test('a real git commit of a bad file is blocked with the message', () => {
@@ -18,10 +16,9 @@ test('a real git commit of a bad file is blocked with the message', () => {
   runGit(dir, ['config', 'user.email', 'e2e@signposts.test']);
   runGit(dir, ['config', 'user.name', 'e2e']);
 
-  // Arm the gate: lefthook writes .git/hooks/* (the installed binary, no npx/network).
-  const lefthook = join(dir, 'node_modules', '.bin', 'lefthook');
-  const armed = spawnSync(lefthook, ['install'], { cwd: dir, encoding: 'utf8' });
-  assert.equal(armed.status, 0, `lefthook install:\n${armed.stdout}${armed.stderr}`);
+  // Arm the gate: point git at the committed .githooks/ (what `npx signposts` does on activate).
+  const armed = runGit(dir, ['config', 'core.hooksPath', '.githooks']);
+  assert.equal(armed.status, 0, 'git config core.hooksPath .githooks');
 
   // A clean commit passes.
   write(dir, 'README.md', '# hi\n');

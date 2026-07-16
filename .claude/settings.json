@@ -20,15 +20,6 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/src/hooks/lefthook-on-write.sh"
-          }
-        ]
-      },
-      {
         "matcher": "Read|Glob|Grep|Edit|Write|Bash",
         "hooks": [
           {

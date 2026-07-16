@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // .claude/hooks/preemptive-block.mjs — the pre-emptive block (edit-phase trigger).
 //
-// A normal lefthook / PostToolUse check sees a file only AFTER it lands on disk.
+// A normal commit-time / PostToolUse check sees a file only AFTER it lands on disk.
 // This PreToolUse hook sees the *proposed* Edit/Write while disk is still untouched,
 // reconstructs the would-be file in memory, and runs the category engine over it at
 // phase `edit`. On a violation it returns a PreToolUse `deny` whose reason is fed

@@ -36,7 +36,7 @@ Rules default to `at: [write, commit]` — one line drives both the pre-emptive 
 <h3><Chip kind="rule">commit</Chip> · the backstop</h3>
 <div class="flow">
 <span class="box">git commit</span><span class="arrow">→</span>
-<span class="box hl">lefthook</span><span class="arrow">→</span>
+<span class="box hl">.githooks/pre-commit</span><span class="arrow">→</span>
 <span class="box hl">engine · phase commit</span><span class="arrow">→</span>
 <span class="box stop">exit 2 — commit blocked</span>
 </div>
@@ -78,7 +78,7 @@ Rules default to `at: [write, commit]` — one line drives both the pre-emptive 
 | `touch` | `PostToolUse` (Read/Edit/Write/Glob/Grep/Bash) |
 | `write` | `PreToolUse` deny (Edit/Write) |
 | `delete` | `PreToolUse` on Bash (rm / git rm / mv targets) |
-| `commit` | lefthook pre-commit |
+| `commit` | `.githooks/pre-commit` (via `core.hooksPath`) |
 | `turn` | `Stop` (and `SubagentStop` for agents) |
 
 Backwards-compatible sugar: `global: true` reads as `at: session`; the old `when:` reads as `at:` (with `write` mapping to the internal `edit` phase).

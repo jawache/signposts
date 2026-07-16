@@ -7,7 +7,7 @@ capability or stack (a `cloudflare` bundle, an `astro` bundle, and so on).
 Two things make it different from a skills repository:
 
 - **`scaffold`** sets a repo up your way in one command — the justfile, the signposts engine,
-  the npm deps, the lefthook git-hook.
+  the npm deps, the git pre-commit hook.
 - **`propagate`** pushes a rule (or a fix) *back up* to this repo as a PR. A rule is born in the
   project that hit the need, then bubbles up to be shared — decentralised authorship, the up-flow
   nobody else ships.
