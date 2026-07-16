@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, loadDoc } from '../schema.mjs';
+import { loadConfig, loadDoc, resolveConfigPath } from '../schema.mjs';
 
 // A3 (honesty): the legacy flat layout (`advisory:`, or `signs:`/`rules:` as a bare array)
 // carries no namespaces, so a diff of it finds nothing — the same "(no installable namespaces)"
@@ -158,7 +158,7 @@ if (isMain) {
   const source = resolve(sourceArg);
   const target = resolve(getArg('--target') || process.cwd());
   const only = getArg('--namespace');
-  if (!existsSync(join(source, 'signposts.yaml'))) { console.error(`no signposts.yaml in ${source}`); process.exit(1); }
+  if (!existsSync(resolveConfigPath(source))) { console.error(`no signposts.yml / signposts.yaml in ${source}`); process.exit(1); }
   const report = diffPacks(loadPacks(source), loadPacks(target), only);
   if (argv.includes('--json')) console.log(JSON.stringify(report, null, 2));
   else console.log(render(report, source, target));

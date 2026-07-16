@@ -9,7 +9,7 @@ test('scaffold writes config + wiring, seeds the tour, ignores .signposts/', () 
   const dir = makeProject();
   const r = runCli(dir, ['--no-activate']);           // deps already present (base install) — just write files
   assert.equal(r.status, 0, `scaffold exit:\n${r.stdout}${r.stderr}`);
-  for (const f of ['signposts.yaml', 'lefthook.yml', 'justfile', '.claude/settings.json',
+  for (const f of ['signposts.yml', 'lefthook.yml', 'justfile', '.claude/settings.json',
     '.claude/skills/signposts/SKILL.md', 'rules/examples/no-hardcoded-secret.sh',
     'rules/examples/ast-grep/functional-style.yml']) {
     assert.ok(has(dir, f), `scaffold should write ${f}`);
@@ -57,7 +57,7 @@ test('scaffold --dry-run writes nothing', () => {
   const dir = makeProject();
   const r = runCli(dir, ['--dry-run']);
   assert.equal(r.status, 0, r.stderr);
-  for (const f of ['signposts.yaml', 'lefthook.yml', 'justfile', '.claude/settings.json', 'rules/examples/no-hardcoded-secret.sh']) {
+  for (const f of ['signposts.yml', 'lefthook.yml', 'justfile', '.claude/settings.json', 'rules/examples/no-hardcoded-secret.sh']) {
     assert.ok(!has(dir, f), `--dry-run must not write ${f}`);
   }
 });

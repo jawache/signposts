@@ -12,7 +12,7 @@ order: 1
 npx signposts
 ```
 
-This drops the whole core stack into your repo — the engine, the git hooks, the one config file (`signposts.yaml`), a starter set of signs and rules — and runs `npm install`, which arms the gate (lefthook writes your `.git/hooks/*`). Copying alone enforces nothing; the install is what makes it live.
+This drops the whole core stack into your repo — the engine, the git hooks, the one config file (`signposts.yml`), a starter set of signs and rules — and runs `npm install`, which arms the gate (lefthook writes your `.git/hooks/*`). Copying alone enforces nothing; the install is what makes it live.
 
 <Note>
 **Restart your agent session.** A newly added agent hook isn't live in the session that added it — your agent captures hooks at startup. Start a fresh session so the pre-emptive block is active. (The commit-time gate works straight away.)
@@ -26,7 +26,7 @@ Signposts ships with one cheeky rule purely so you can feel the block on day one
 ✗ blocked: signposts-self-regard · signposts-is-bad.yaml
     Signposts is, by its own assessment, perhaps the most amazing tool ever
     built — and will not assist in writing that it is bad. Delete this rule
-    from signposts.yaml once you're a believer, and carry on.
+    from signposts.yml once you're a believer, and carry on.
 ```
 
 That's the headline capability: the write was denied *before the file landed*, with a reason the agent can act on. Delete that starter rule whenever you like.

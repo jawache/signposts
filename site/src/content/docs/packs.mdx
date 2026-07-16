@@ -1,10 +1,10 @@
 ---
 title: Packs & distribution
-description: A pack is just a namespace — a coherent set of rules and signs (and the scripts they use). Any repo with a signposts.yaml can be installed from, including your day-to-day project.
+description: A pack is just a namespace — a coherent set of rules and signs (and the scripts they use). Any repo with a signposts.yml can be installed from, including your day-to-day project.
 order: 9
 ---
 
-<p class="lede">A pack is a <strong>bundle</strong> — one contiguous block in <a href="/docs/signposts-yaml">your config</a> (its signs, rules, and <code>settings</code>) plus the scripts in <code>rules/&lt;bundle&gt;/</code>. There's no separate pack format: any repo with a <code>signposts.yaml</code> can be installed from, including your day-to-day project.</p>
+<p class="lede">A pack is a <strong>bundle</strong> — one contiguous block in <a href="/docs/signposts-yaml">your config</a> (its signs, rules, and <code>settings</code>) plus the scripts in <code>rules/&lt;bundle&gt;/</code>. There's no separate pack format: any repo with a <code>signposts.yml</code> can be installed from, including your day-to-day project.</p>
 
 ## A pack is a bundle
 
@@ -37,7 +37,7 @@ npx signposts install github:you/your-project  neon     # take the neon namespac
 npx signposts install ../my-hub  neon                   # …or from a sibling folder on disk
 ```
 
-It copies `rules/neon/` and merges the `neon` group from both `signs:` and `rules:` — the whole pack, in one move. Comments in your `signposts.yaml` are preserved (the merge edits the document in place, it doesn't re-serialise from scratch). To remove a pack later: `npx signposts uninstall --pack neon` — it drops the namespace's yaml groups, its `rules/neon/`, and any permissions it added, leaving your own config untouched.
+It copies `rules/neon/` and merges the `neon` group from both `signs:` and `rules:` — the whole pack, in one move. Comments in your `signposts.yml` are preserved (the merge edits the document in place, it doesn't re-serialise from scratch). To remove a pack later: `npx signposts uninstall --pack neon` — it drops the namespace's yaml groups, its `rules/neon/`, and any permissions it added, leaving your own config untouched.
 
 <Note>
 **Install reads the current layout only.** An older repo (flat `signs:`/`rules:` lists, or the legacy `advisory:` key) is refused with a clear message — open it with `/signposts install` (the skill) and cherry-pick by hand. No silent half-install.

@@ -35,7 +35,7 @@ export function scaffold({ packRoot, target, activate = true, dryRun = false, lo
   log(`• .claude/settings.json: ${mergeSettings(rel('.claude/settings.json'), join(packRoot, 'src/templates/settings.json'), dryRun)}`);
 
   // 4. starter files (only if absent) ------------------------------------------
-  log(`• signposts.yaml: ${starter(rel('signposts.yaml'), join(packRoot, 'src/templates/signposts.yaml'), dryRun)}`);
+  log(`• signposts.yml: ${starter(rel('signposts.yml'), join(packRoot, 'src/templates/signposts.yml'), dryRun)}`);
   log(`• sgconfig.yml: ${starter(rel('sgconfig.yml'), join(packRoot, 'src/templates/sgconfig.yml'), dryRun)}`);
   log(`• lefthook.yml: ${starter(rel('lefthook.yml'), join(packRoot, 'src/templates/lefthook.yml'), dryRun)}`);
   log(`• justfile: ${starter(rel('justfile'), join(packRoot, 'src/templates/justfile'), dryRun)}`);

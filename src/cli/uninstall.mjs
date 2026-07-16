@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
 import { PACK_NAME, readText } from './pack.mjs';
 import { editYaml, assertSafeNamespace } from './install.mjs';
+import { resolveConfigPath } from '../schema.mjs';
 
 // A hook command belongs to Signposts if it names one of our hook files or the package.
 const OURS = /(?:\.claude\/hooks\/(?:preemptive-block|command-guard|signposts|signposts-core|signposts-test|lefthook-on-write|strip-claude-attribution)|rules\/check-git-discard|node_modules\/signposts)/;
@@ -67,6 +68,7 @@ export function uninstall({ target = process.cwd(), dryRun = false, pack = null,
   if (/node_modules\/signposts\/rules\/_engine|name: (signposts|engine)/.test(readText(rel('lefthook.yml')) || '')) rm(rel('lefthook.yml'), 'lefthook.yml');
 
   // 4. config -------------------------------------------------------------------
+  rm(rel('signposts.yml'), 'signposts.yml');
   rm(rel('signposts.yaml'), 'signposts.yaml');
   rm(rel('signposts.lock.json'), 'signposts.lock.json');
 
@@ -91,8 +93,8 @@ export function uninstall({ target = process.cwd(), dryRun = false, pack = null,
 // packs: entry. Comment-preserving; hand-written config is never touched.
 export function uninstallPack({ target = process.cwd(), namespace, dryRun = false, log = console.log }) {
   assertSafeNamespace(namespace);                        // path-traversal guard before any rmSync
-  const yamlPath = join(target, 'signposts.yaml');
-  if (!existsSync(yamlPath)) { log('no signposts.yaml — nothing to uninstall'); return; }
+  const yamlPath = resolveConfigPath(target);
+  if (!existsSync(yamlPath)) { log('no signposts config — nothing to uninstall'); return; }
   const tag = dryRun ? '[dry] ' : '';
 
   // 1. work out which settings.json entries this namespace's pack(s) own AND whether any

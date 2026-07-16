@@ -1,4 +1,4 @@
-# signposts.yaml — v2, BUNDLE-FIRST. Organised around the BUNDLE (the thing you adopt and share); each bundle is one contiguous, cherry-pickable block.
+# signposts.yml — v2, BUNDLE-FIRST. Organised around the BUNDLE (the thing you adopt and share); each bundle is one contiguous, cherry-pickable block.
 #
 #   project:  stack identity — name + description.
 #   config:   engine runtime settings — drift_tokens (the sign injector's re-show cadence).
@@ -10,7 +10,7 @@
 #     • needs       (rare, on a rule) an npm dep that exists only because that rule does.
 #
 # Every sign and rule carries a one-line `description:` — a human summary (distinct from the sign's `text` / the rule's `message`), used for the docs listing.
-# A bundle owns rules/<bundle>/** — that ownership convention is how install/uninstall know what to move (no machine manifest). Old section-first files still load (a normaliser accepts both).
+# A bundle owns rules/<bundle>/** — that ownership convention is how install/uninstall know what to move (no machine manifest). Old section-first files, and the legacy signposts.yaml name, still load.
 # Authored via /signposts. Reference: the docs at signposts.asim.dev/docs + the /signposts skill.
 
 project:
@@ -31,26 +31,24 @@ bundles:
         text: |-
           The canonical docs are the Astro site under site/ (mdx) — the legacy docs/*.html redirect there.
           Repeated commands live in justfile recipes; package.json `scripts` stays empty.
-          signposts.yaml is BUNDLE-FIRST — each bundle is one block (its signs, rules, settings).
+          signposts.yml is BUNDLE-FIRST — each bundle is one block (its signs, rules, settings).
           The rails fail safe: the injector + event log never throw and never block an edit.
 
       - id: rules-self-edit
         description: A soft nudge when the agent edits the guardrails; never blocks — the AI must stay able to author rules.
-        globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
+        globs: ["signposts.yml", "signposts.yaml", "rules/**", ".claude/settings.json"]
         text: |-
-          You are editing the guardrails themselves. If this edit weakens or removes a
-          rule/permission IN RESPONSE to just being blocked by it — stop and confirm with
-          the user first. Authoring new signposts is always fine; loosening one to get an
-          edit through is the user's call, not yours.
+          You are editing the guardrails themselves.
+          If this edit weakens or removes a rule/permission IN RESPONSE to just being blocked by it — stop and confirm with the user first.
+          Authoring new signposts is always fine; loosening one to get an edit through is the user's call, not yours.
     rules:
       - id: signposts-self-regard
         description: The day-one demo block — a fresh install feels the pre-emptive deny.
         use: core/protected-path
         deny: ["**/signposts-is-bad.yaml"]
         message: |-
-          Signposts is, by its own assessment, perhaps the most amazing tool ever
-          built — and will not assist in writing that it is bad. Delete this rule
-          from signposts.yaml once you're a believer, and carry on.
+          Signposts is, by its own assessment, perhaps the most amazing tool ever built — and will not assist in writing that it is bad.
+          Delete this rule from signposts.yml once you're a believer, and carry on.
 
       - id: no-commit-engine-log
         description: Never commit the gitignored .signposts/ event log, even via `git add -f`.
@@ -66,74 +64,63 @@ bundles:
         description: How to author skills — from their templates, plain English, multimodal.
         globs: [".claude/skills/**"]
         text: |-
-          Author skills from their `templates/`; keep the plain-English bar. The skill
-          carries *how* (process); the template carries *what* (structure) — don't
-          reinvent the structure. Be multimodal: diagrams / tables over walls of prose.
+          Author skills from their `templates/`; keep the plain-English bar.
+          The skill carries *how* (process); the template carries *what* (structure) — don't reinvent the structure.
+          Be multimodal: diagrams / tables over walls of prose.
 
       - id: agents
         description: Review sub-agents are read-only and return findings to the main thread; they write no files.
         globs: [".claude/agents/**"]
         text: |-
-          Review sub-agents are read-only and RETURN findings to the main thread — they
-          write NO files. Recommendations-or-silence: surface only what should change.
+          Review sub-agents are read-only and RETURN findings to the main thread — they write NO files.
+          Recommendations-or-silence: surface only what should change.
 
       - id: rules
         description: How to author a rule — name a script, check the cheaper shapes first, ship a colocated test.
         globs: ["rules/**"]
         text: |-
-          A rule NAMES A SCRIPT with `use:` (core/<name> or <ns>/<name>), gets its config
-          verbatim, and names the decision in its message. Before writing an own-script, check
-          the cheaper shapes — most "novel" rules aren't: a code pattern is a rules/ast-grep/<name>.yml
-          (no code); a structural/path invariant is a core script + config; only then a small
-          own-script under your namespace. Diff the installed pack first. Ship a colocated
-          <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule.
-          Author with /signposts — depth lives in docs/.
+          A rule NAMES A SCRIPT with `use:` (core/<name> or <ns>/<name>), gets its config verbatim, and names the decision in its message.
+          Before writing an own-script, check the cheaper shapes — most "novel" rules aren't: a code pattern is a rules/ast-grep/<name>.yml (no code); a structural/path invariant is a core script + config; only then a small own-script under your namespace.
+          Diff the installed pack first.
+          Ship a colocated <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule.
+          Author with /signposts — depth lives in the docs.
 
       - id: site
         description: Working on the website — port from the approved reference, British English, no animation libraries.
         globs: ["site/**"]
         text: |-
-          The website (signposts.asim.dev). Port from the approved reference —
-          `.work/tasks/feat/website/landing-and-docs/spikes/spike-e-gary.html`; the palette,
-          type and animation specs are LANDED in that task's `design.md` — don't re-derive them.
-          British English; NO animation libraries (vanilla canvas + CSS + IntersectionObserver);
-          every animation needs a `prefers-reduced-motion` still. site/ is a standalone npm
-          project — drive it via `just site-dev` / `just site-build`, never root scripts.
+          The website (signposts.asim.dev). Port from the approved reference — `.work/tasks/feat/website/landing-and-docs/spikes/spike-e-gary.html`; the palette, type and animation specs are LANDED in that task's `design.md` — don't re-derive them.
+          British English; NO animation libraries (vanilla canvas + CSS + IntersectionObserver); every animation needs a `prefers-reduced-motion` still.
+          site/ is a standalone npm project — drive it via `just site-dev` / `just site-build`, never root scripts.
 
       - id: work-journal
         description: .work/ is the gitignored working-docs journal — never commit it into the code repo.
         globs: [".work/**"]
         text: |-
-          `.work/` is the gitignored working-docs journal — never commit it into the code
-          repo. Status is the `status` field in each task's `.props.yaml`; the folder at
-          tasks/<type>/<area>/<name>/ never moves.
+          `.work/` is the gitignored working-docs journal — never commit it into the code repo.
+          Status is the `status` field in each task's `.props.yaml`; the folder at tasks/<type>/<area>/<name>/ never moves.
 
       - id: engine-failsafe
         description: The event log and sign injector must never throw and never block — swallow errors.
         globs: ["src/log.mjs", "src/hooks/**"]
         text: |-
-          Side-channel, not a gate: the event log and sign injector must NEVER throw and never
-          block an edit, commit, scan, or sign. New code here swallows its own errors (logEvent
-          returns false, never raises) — a broken or unwritable log can't be allowed to break
-          the gate.
+          Side-channel, not a gate: the event log and sign injector must NEVER throw and never block an edit, commit, scan, or sign.
+          New code here swallows its own errors (logEvent returns false, never raises) — a broken or unwritable log can't be allowed to break the gate.
 
       - id: yaml-writes-keep-comments
-        description: Mutate signposts.yaml through parseDocument (editYaml), never parse → stringify — comments must survive.
+        description: Mutate the config file through parseDocument (editYaml), never parse → stringify — comments must survive.
         globs: ["src/cli/**", "src/skill/**", "src/schema.mjs"]
         text: |-
-          Mutating signposts.yaml goes through parseDocument (editYaml), never parse → stringify —
-          the round-trip strips the user's comments. install/refresh preserve them by contract
-          (that's why install.mjs moved off `parse as parseYaml`); keep it that way. The schema
-          normaliser is READ-time only — it never touches the write path.
+          Mutating the config file goes through parseDocument (editYaml), never parse → stringify — the round-trip strips the user's comments.
+          install/refresh preserve them by contract (that's why install.mjs moved off `parse as parseYaml`); keep it that way.
+          The schema normaliser is READ-time only — it never touches the write path.
 
       - id: ast-grep-grammars
         description: ast-grep parses only html/css/js/ts/tsx natively; other languages need a grammar (add or register).
         globs: ["src/core/languages.mjs", "src/cli/languages.mjs", "sgconfig.yml"]
         text: |-
-          ast-grep parses only html · css · js · ts · tsx natively. Beyond those, DON'T assume a
-          grammar is on npm: some (sql, python, go, rust) ship an `@ast-grep/lang-<x>` package
-          (`signposts languages add`), but astro/vue/svelte have none — they're built from source with
-          tree-sitter and declared in sgconfig.yml customLanguages (`signposts languages register`).
+          ast-grep parses only html · css · js · ts · tsx natively.
+          Beyond those, DON'T assume a grammar is on npm: some (sql, python, go, rust) ship an `@ast-grep/lang-<x>` package (`signposts languages add`), but astro/vue/svelte have none — they're built from source with tree-sitter and declared in sgconfig.yml customLanguages (`signposts languages register`).
           An unknown language is an honest error (resolveLang throws) — never a silent fall-through to Tsx.
     rules:
       - id: no-edit-generated
@@ -151,11 +138,11 @@ bundles:
         message: "Every rule needs a sibling <name>.test.yml (valid/invalid samples the engine runs). Add it, then `just test-rules`."
 
       - id: no-delete-guardrails
-        description: Guard signposts.yaml + rules/ against deletion; override a deliberate one with a trailing marker.
+        description: Guard the config file + rules/ against deletion; override a deliberate one with a trailing marker.
         use: core/protected-path
-        deny: ["signposts.yaml", "rules/**"]
+        deny: ["signposts.yml", "signposts.yaml", "rules/**"]
         at: [delete]
-        message: "That command would delete a guardrail (signposts.yaml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
+        message: "That command would delete a guardrail (signposts.yml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
 
       - id: no-only-in-tests
         description: Warn (never block) on a focused `.only(` left in a test — it silently skips the rest of the suite.
@@ -174,11 +161,11 @@ bundles:
         message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
 
       - id: signposts-well-formed
-        description: Lint signposts.yaml itself — it must parse and every sign/rule must carry an id, a use (rules), and a description.
+        description: Lint the config file itself — it must parse and every sign/rule must carry an id, a use (rules), and a description.
         use: core/signposts-lint
-        on: ["signposts.yaml"]
+        on: ["signposts.yml", "signposts.yaml"]
         require: [description]
-        message: "signposts.yaml isn't well-formed — each sign and rule needs an id and a `description:` (and a rule needs `use:`). See the listed entries."
+        message: "The signposts config isn't well-formed — each sign and rule needs an id and a `description:` (and a rule needs `use:`). See the listed entries."
 
   # ── an installable hygiene bundle — pull into your own projects (`/signposts install`) ──
   git-hygiene:
@@ -193,9 +180,8 @@ bundles:
           - 'gh (pr|issue)[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
           - 'gh (pr|issue)[\s\S]*(claude\.com/claude-code|🤖 Generated)'
         message: |-
-          Commit / PR / issue body contains Claude or Anthropic attribution. Remove it
-          (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic
-          mention) and retry.
+          Commit / PR / issue body contains Claude or Anthropic attribution.
+          Remove it (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic mention) and retry.
 
       - id: no-git-discard
         description: Block a `git checkout`/`restore` that would wipe uncommitted work; override with a trailing `# discard-ok`.

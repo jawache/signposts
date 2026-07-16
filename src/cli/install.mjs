@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { resolveSource } from './source.mjs';
 import { loadPacks, diffPacks } from '../skill/pack-diff.mjs';
+import { resolveConfigPath } from '../schema.mjs';
 
 export function installPack({ source, namespace, target = process.cwd(), log = console.log }) {
   const resolved = resolveSource(source);
@@ -67,7 +68,7 @@ export function applyNamespace({ srcPath, srcPacks, namespace, target, report, l
 
   // 2. merge NEW entries of both sections (skip collisions) — comment-preserving.
   let added = 0; const collisions = [];
-  editYaml(join(target, 'signposts.yaml'), (doc) => {
+  editYaml(resolveConfigPath(target), (doc) => {
     const js = doc.toJS() || {};
     for (const section of ['signs', 'rules']) {
       const incoming = srcPacks[section][namespace] || [];
@@ -133,7 +134,7 @@ function mergePermissions(target, perms, log = () => {}) {
 // install date. Plain-string entries (legacy) remain valid; installing a second namespace
 // from the same source MERGES into the existing entry. Comment-preserving.
 function addPackEntry(target, spec, { namespaces = [], settings = null } = {}) {
-  editYaml(join(target, 'signposts.yaml'), (doc) => {
+  editYaml(resolveConfigPath(target), (doc) => {
     if (doc.getIn(['packs']) == null) doc.setIn(['packs'], doc.createNode([]));
     const arr = (doc.toJS() || {}).packs || [];        // node.toJS() needs the doc; read via the Document
     const idx = arr.findIndex((p) => (typeof p === 'string' ? p : p?.source) === spec);
@@ -184,7 +185,7 @@ export function ensureGitignore(target, entry = '.signposts/') {
 // to the skill — there is NO auto-normalisation (decided), so a broken half-install can't happen.
 function assertInstallableSchema(srcPath) {
   let doc;
-  try { doc = parseDocument(readFileSync(join(srcPath, 'signposts.yaml'), 'utf8')).toJS() || {}; } catch { return; }
+  try { doc = parseDocument(readFileSync(resolveConfigPath(srcPath), 'utf8')).toJS() || {}; } catch { return; }
   const legacy = doc.advisory !== undefined || Array.isArray(doc.signs) || Array.isArray(doc.rules);
   if (legacy) throw new Error(`${srcPath} uses an older signposts layout — install can't read it. Open it with the /signposts skill instead and cherry-pick by hand.`);
 }

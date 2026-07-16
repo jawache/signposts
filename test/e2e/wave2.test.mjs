@@ -28,7 +28,7 @@ test('install: a namespace lands from a local source (rules, sign, script, prove
   const hub = makeHub();
   const r = runCli(dir, ['install', hub, 'neon']);
   assert.equal(r.status, 0, `install:\n${r.stdout}${r.stderr}`);
-  const yaml = read(dir, 'signposts.yaml') || '';
+  const yaml = read(dir, 'signposts.yml') || '';
   assert.match(yaml, /no-raw-pool/, 'rule merged into the neon namespace');
   assert.match(yaml, /db-area/, 'sign merged too');
   assert.ok(has(dir, 'rules/neon/no-raw-pool.mjs'), 'own-script copied in');
@@ -51,7 +51,7 @@ test('refresh: pulls a new upstream rule and keeps a local script edit (3-way)',
 
   const r = runCli(dir, ['refresh']);
   assert.equal(r.status, 0, `refresh:\n${r.stdout}${r.stderr}`);
-  assert.match(read(dir, 'signposts.yaml') || '', /no-select-star/, 'refresh pulled the new upstream rule');
+  assert.match(read(dir, 'signposts.yml') || '', /no-select-star/, 'refresh pulled the new upstream rule');
   assert.match(read(dir, script) || '', /LOCAL EDIT — keep me/, 'the local script edit survived');
 });
 
@@ -64,7 +64,7 @@ test('uninstall --pack: removes the namespace footprint, preserves the rest', ()
 
   const r = runCli(dir, ['uninstall', '--pack', 'neon']);
   assert.equal(r.status, 0, `uninstall:\n${r.stdout}${r.stderr}`);
-  assert.doesNotMatch(read(dir, 'signposts.yaml') || '', /no-raw-pool/, 'the pack\'s rule is gone');
+  assert.doesNotMatch(read(dir, 'signposts.yml') || '', /no-raw-pool/, 'the pack\'s rule is gone');
   assert.ok(!has(dir, 'rules/neon/no-raw-pool.mjs'), 'the pack\'s script is removed');
   // user + scaffold files untouched
   assert.ok(has(dir, 'lefthook.yml') && has(dir, 'rules/examples/no-hardcoded-secret.sh'), 'the rest of the project is intact');

@@ -1,5 +1,5 @@
 ---
-title: The config file — signposts.yaml
+title: The config file — signposts.yml
 description: Everything Signposts needs lives in one file at your repo root, organised around the thing you actually adopt and share — the bundle.
 order: 5
 ---
@@ -86,4 +86,4 @@ Each entry names a **script** with `use:` and carries that script's config inlin
 
 ## Backwards compatibility
 
-A load-time normaliser accepts **both** shapes — bundle-first and the old section-first (`signs:` / `rules:` / `settings:` grouped by namespace, plus legacy `advisory:` and flat lists) — and hands the engine the flat form it already consumes. Old files keep working forever; a repo moves to bundle-first when you touch it. See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.
+A load-time normaliser accepts **both** shapes — bundle-first and the old section-first (`signs:` / `rules:` / `settings:` grouped by namespace, plus legacy `advisory:` and flat lists) — and hands the engine the flat form it already consumes. The **filename** is equally forgiving: Signposts prefers `signposts.yml` (what a fresh scaffold writes) but still reads a legacy `signposts.yaml`. Old files keep working forever; a repo moves to bundle-first `.yml` when you touch it. See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.

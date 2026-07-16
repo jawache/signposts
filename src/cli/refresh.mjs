@@ -24,6 +24,7 @@ import { PACK_NAME, readText, SKILL_SURFACE, copyFile, exists } from './pack.mjs
 import { resolveSource } from './source.mjs';
 import { loadPacks, diffPacks, canon } from '../skill/pack-diff.mjs';
 import { installPack, applyNamespace, editYaml, snapshotBase, walk, copyInto, assertSafeNamespace, blockNode, ensureBlockSection } from './install.mjs';
+import { resolveConfigPath } from '../schema.mjs';
 
 export function refresh({ target = process.cwd(), log = console.log }) {
   log(`[${PACK_NAME}] the core ships in the signposts package — run \`npm update signposts\` to update it.`);
@@ -55,7 +56,7 @@ function refreshSkillSurface(target, log) {
 }
 
 function refreshInstalledPacks(target, log) {
-  const doc = (() => { try { return parseYaml(readText(join(target, 'signposts.yaml'))) || {}; } catch { return {}; } })();
+  const doc = (() => { try { return parseYaml(readText(resolveConfigPath(target))) || {}; } catch { return {}; } })();
   // packs: entries are plain strings (legacy) OR objects { source, namespaces, … } (Phase 4).
   const specs = (doc.packs || [])
     .map((p) => (typeof p === 'string' ? p : p?.source))
@@ -90,7 +91,7 @@ function mergeNamespace({ srcPath, src, namespace, target, log }) {
   let took = 0, kept = 0, added = 0;
 
   // 1. entries (signs + rules) — per-id three-way, comment-preserving write only if changed.
-  editYaml(join(target, 'signposts.yaml'), (doc) => {
+  editYaml(resolveConfigPath(target), (doc) => {
     const js = doc.toJS() || {};
     for (const section of ['signs', 'rules']) {
       const local = js[section]?.[namespace] || [];

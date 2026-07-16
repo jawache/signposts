@@ -136,9 +136,20 @@ export function isOff(root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
 
 // ── loaders + flatteners the runtime calls ─────────────────────────────────────
 
-// Parse signposts.yaml once (fail-safe → {}).
+// The config file: prefer signposts.yml, fall back to the legacy signposts.yaml. Anything new
+// (a fresh scaffold) writes .yml; an existing .yaml keeps being read + edited in place. When
+// neither exists yet, return the .yml path (so a first write lands there).
+export function resolveConfigPath(root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
+  const yml = join(root, 'signposts.yml');
+  if (existsSync(yml)) return yml;
+  const yaml = join(root, 'signposts.yaml');
+  if (existsSync(yaml)) return yaml;
+  return yml;
+}
+
+// Parse the config file once (fail-safe → {}).
 export function loadDoc(root, configPath) {
-  try { return parseYaml(readFileSync(configPath || join(root, 'signposts.yaml'), 'utf8')) || {}; }
+  try { return parseYaml(readFileSync(configPath || resolveConfigPath(root), 'utf8')) || {}; }
   catch { return {}; }
 }
 

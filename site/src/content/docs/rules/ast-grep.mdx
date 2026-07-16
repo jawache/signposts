@@ -13,7 +13,7 @@ A specific shape of code: `?? new Date()`, a banned import, a forbidden API call
 
 ## The patterns are files
 
-Unlike other rules, ast-grep patterns live as **files** in `rules/ast-grep/*.yml` — not inline in `signposts.yaml`. That's deliberate: the same files are used by the engine and by the test runner (`signposts test`), so there's one source of truth for a pattern.
+Unlike other rules, ast-grep patterns live as **files** in `rules/ast-grep/*.yml` — not inline in `signposts.yml`. That's deliberate: the same files are used by the engine and by the test runner (`signposts test`), so there's one source of truth for a pattern.
 
 ```yaml
 # rules/ast-grep/date-default-no-nullish.yml
@@ -27,7 +27,7 @@ rule:
     - pattern: $X ?? new Date
 ```
 
-The `core/ast-grep` runner picks up every file in that folder. To add a code-pattern rule you just drop another `.yml` in — no `signposts.yaml` entry needed.
+The `core/ast-grep` runner picks up every file in that folder. To add a code-pattern rule you just drop another `.yml` in — no `signposts.yml` entry needed.
 
 ## How it runs — in-process, so it's pre-emptive
 

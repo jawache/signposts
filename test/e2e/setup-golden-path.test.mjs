@@ -15,7 +15,7 @@ test('the setup sequence readies a project end-to-end (detect → add grammar �
 
   // 1. scaffold (step 1 of setup) — writes config + wiring, seeds the tour
   assert.equal(runCli(dir, ['--no-activate']).status, 0, 'scaffold');
-  assert.match(read(dir, 'signposts.yaml') || '', /rules:/, 'scaffold left a signposts.yaml');
+  assert.match(read(dir, 'signposts.yml') || '', /rules:/, 'scaffold left a signposts.yaml');
 
   // 2. detect (step 2) — a stack that needs a grammar
   write(dir, 'package.json', JSON.stringify({ name: 'app', type: 'module', dependencies: { astro: '^4.0.0' } }, null, 2));

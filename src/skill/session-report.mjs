@@ -37,7 +37,7 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { readEvents, sanitise } from '../log.mjs';
 import { loadRules } from '../engine.mjs';
-import { loadConfig } from '../schema.mjs';
+import { loadConfig, resolveConfigPath } from '../schema.mjs';
 import { composeOrientation } from '../hooks/session-start.mjs';
 
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -136,7 +136,7 @@ function matchGlob(glob, relpath) {
 
 // The guardrail areas — SINGLE-SOURCED with the `rules-self-edit` sign's globs so the
 // sign (injected at edit time) and this detector (surfaced at wrap-up) can't drift apart.
-export const GUARDRAIL_GLOBS = ['signposts.yaml', 'rules/**', '.claude/settings.json'];
+export const GUARDRAIL_GLOBS = ['signposts.yml', 'signposts.yaml', 'rules/**', '.claude/settings.json'];
 const isGuardrailPath = (rel) => !!rel && GUARDRAIL_GLOBS.some((g) => matchGlob(g, rel));
 
 // Weaken-after-deny: a deny event (from the log — carries ts + rule), then a transcript
@@ -219,10 +219,10 @@ function gitTouchedFiles(base) {
   } catch { return []; }
 }
 
-// Globs lifted from signposts.yaml — used to score touched-file coverage.
+// Globs lifted from the signposts config — used to score touched-file coverage.
 function readSignpostGlobs(cwd) {
   try {
-    const y = fs.readFileSync(path.join(cwd, 'signposts.yaml'), 'utf8');
+    const y = fs.readFileSync(resolveConfigPath(cwd), 'utf8');
     const globs = [];
     for (const m of y.matchAll(/globs:\s*\[([^\]]*)\]/g))
       for (const g of m[1].split(',')) {

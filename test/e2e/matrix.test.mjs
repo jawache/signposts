@@ -12,7 +12,7 @@ import { makeProject, runCli, runEngine, write } from './harness.mjs';
 function ready() {
   const dir = makeProject();
   assert.equal(runCli(dir, ['--no-activate']).status, 0);
-  write(dir, 'signposts.yaml', [
+  write(dir, 'signposts.yml', [           // overwrite the scaffolded config (resolver prefers .yml)
     'rules:',
     '  local:',
     '    - id: no-del',

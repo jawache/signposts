@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, isAbsolute } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolveConfigPath } from '../schema.mjs';
 
 // ── parse a source spec into { kind, … } (pure) ───────────────────────────────
 export function parseSource(spec) {
@@ -59,7 +60,7 @@ export function resolveSource(spec, { cacheDir } = {}) {
 
   if (src.kind === 'local') {
     const p = isAbsolute(src.path) ? src.path : resolve(process.cwd(), src.path);
-    if (!existsSync(join(p, 'signposts.yaml'))) throw new Error(`no signposts.yaml at ${p}`);
+    if (!existsSync(resolveConfigPath(p))) throw new Error(`no signposts.yml / signposts.yaml at ${p}`);
     return { ...src, path: p };
   }
   if (src.kind === 'tarball') return { ...src, path: extractTarball(resolve(src.path), cache) };
@@ -84,7 +85,7 @@ function extractTarball(tgz, cache) {
   const dest = join(cache, 'package');
   run('tar', ['-xzf', tgz, '-C', cache], `extract ${tgz}`);
   // npm tarballs unpack into ./package; a plain tarball may not — fall back to cache.
-  return existsSync(join(dest, 'signposts.yaml')) ? dest : cache;
+  return existsSync(resolveConfigPath(dest)) ? dest : cache;
 }
 
 function run(cmd, args, what) {

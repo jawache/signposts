@@ -16,7 +16,7 @@
   },
   "files": [
     "src",
-    "signposts.yaml",
+    "signposts.yml",
     "sgconfig.yml",
     "rules",
     ".claude/skills/signposts/SKILL.md",
