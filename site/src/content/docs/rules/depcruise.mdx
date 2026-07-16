@@ -1,0 +1,62 @@
+---
+title: core/depcruise — layers & fences for imports
+description: Declare your architecture as named layers and forbidden edges between them; the runner compiles it to dependency-cruiser and blocks a crossed fence. Config you read, not regexes you decode.
+order: 6.9
+group: Rules
+---
+
+<p class="lede">Declare your architecture as named <strong>layers</strong> and the <strong>fences</strong> between them; <code>core/depcruise</code> compiles that to dependency-cruiser's native config and blocks a crossed import. Config you read, not regexes you decode.</p>
+
+## What it catches
+
+Import-boundary violations — the functional-core / imperative-shell split, feature isolation, "gate first" invariants. It orchestrates [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) (never reimplements the graph walk — the same doctrine as [ast-grep](/docs/rules/ast-grep)). It's a whole-graph check, so it runs at `commit` (and `turn`), not per keystroke.
+
+## Config
+
+```yaml
+rules:
+  - id: import-fence
+    use: core/depcruise
+    layers:                                  # every name is yours — nothing built in
+      core:      ["src/lib/**/domain.ts"]    # path globs
+      effects:   ["src/lib/**/db.ts", "src/lib/**/client.ts"]
+      shell:     ["src/pages/**"]
+      pure-libs: ["zod", "date-fns"]         # bare names = npm packages
+      node-fx:   ["node:*"]                  # Node builtins are effects
+    only:                                    # FAIL-CLOSED: core may import ONLY these
+      core: [core, pure-libs]                # an unlisted import blocks, with a message
+    except: [type-only]                      # `import type {…}` runs nothing — always allowed
+    forbid:
+      - { from: core, to: effects, transitive: true, why: "purity is what core can REACH" }
+      - { from: core, to: node-fx, why: "Node builtins are effects" }
+      - circular
+      - orphans
+    require:                                 # INVERTED: these modules MUST import that
+      - { in: "src/pages/api/**", import: "src/pages/api/_runtime", why: "gate through requireSession FIRST" }
+    warn: [sdp]                              # Stable Dependencies Principle — informs, never blocks
+    message: "An import crossed a fence — the named check above says which, and why."
+```
+
+## What each affordance buys
+
+| Affordance | Closes |
+| --- | --- |
+| `only:` (allowlist) | The **fail-open** hole. A blocklist of effectful packages decays silently; an allowlist fails *closed* — the first unvetted import blocks with a message saying where to add it. |
+| `transitive: true` | **Effect-laundering.** `domain → helper → db` passes when only direct imports are checked. Purity is about what core can *reach*. |
+| `node-fx` layer | The **builtins hole** — `node:fs` in a domain file passes every naïve fence. |
+| `except: [type-only]` | **Type duplication.** A type-only import is erased at compile time; it never becomes an edge, so it's transparent to every fence. |
+| `require:` | Invariants stated only in prose ("gate FIRST") become checked. |
+
+## The native escape hatch
+
+The dialect lifts the *small, stable slice* of dependency-cruiser that covers the real use. For the long tail of its schema, point `config:` at a raw `.cjs` and it runs untouched:
+
+```yaml
+  - id: import-fence
+    use: core/depcruise
+    config: fcis/import-fence.cjs      # a native dependency-cruiser config, run verbatim
+```
+
+<Note>
+**Baseline dependency.** dependency-cruiser (and a compatible `typescript`) ship as engine baseline deps, beside `@ast-grep/napi` — a *core* script whose tool might be missing would be a broken promise. Scanning defaults to `src`; set `scan:` to point elsewhere.
+</Note>

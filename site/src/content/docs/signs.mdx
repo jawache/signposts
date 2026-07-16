@@ -10,24 +10,44 @@ Recap from [concepts](/docs/concepts): a sign is delivered the moment the agent 
 
 ## The shape
 
-Signs are grouped by **namespace** (which pack they belong to). Your own ad-hoc signs live under `local`; a shared set lives under its pack name.
+Signs live in a **bundle's** block, under its `signs:` list. Your own ad-hoc signs live in the `local` bundle; a shared set lives in its own bundle.
 
 ```yaml
-signs:
+bundles:
   local:
-    - id: db-area                 # a short unique name
-      globs: ["src/db/**"]        # the area this lights up for
-      text: |-
-        Queries go through the repository layer, never inline in a route.
-        Migrations are append-only — never edit a shipped migration.
+    signs:
+      - id: db-area                 # a short unique name
+        globs: ["src/db/**"]        # the area this lights up for
+        text: |-
+          Queries go through the repository layer, never inline in a route.
+          Migrations are append-only — never edit a shipped migration.
 ```
 
 | Field | What it does |
 | --- | --- |
-| namespace | The group key (`local`, `neon`, …). It's what [install and propagate](/docs/packs) move as a unit. |
+| bundle | The block it lives in (`local`, `fcis`, …). A bundle is what [install and propagate](/docs/packs) move as a unit. |
 | `id` | A short unique name for the sign. |
-| `globs` | The path pattern(s) that trigger it. When the agent reads/touches a matching file, the sign is injected. |
+| `at` | The [moment](/docs/wiring): `touch` (default — fires on the area), or `session` (orientation, below). |
+| `globs` | The path pattern(s) that trigger a `touch` sign. When the agent reads/touches a matching file, it's injected. |
 | `text` | The guidance itself — kept short and specific to this area. |
+| `file` | Instead of `text:`, inject the contents of a repo file (handy for a longer project brief on a `session` sign). |
+
+## Orientation — the composed CLAUDE.md (`at: session`)
+
+Every bundle may carry **one** `at: session` sign — a few terse lines of orientation. At session start (and after resume, `/clear`, and a compaction) the engine injects the **concatenation of them all**. The opening context an agent sees becomes the sum of the bundles the project adopted: install the security bundle and "the .env files are encrypted, read them freely" appears in every session; drop the bundle and the line goes with it. Nothing to keep in sync by hand, and it travels on cherry-pick — the reason this beats writing a managed block into `CLAUDE.md`.
+
+```yaml
+bundles:
+  core:
+    signs:
+      - id: orientation
+        at: session
+        text: |-
+          docs/arch/ is the system prior — read before structural work.
+          Repeated commands live in justfile recipes, never package.json scripts.
+```
+
+**Discipline:** one session sign per bundle, a few lines each — orientation says *where and what regime*; depth stays in the area signs that fire just-in-time. The report card tracks the composed size so it can't creep silently.
 
 ## The re-injection cadence
 

@@ -36,7 +36,7 @@ bundles:
       - id: orientation
         at: session
         text: |-
-          docs/arch/ is the system prior — read it before structural work.
+          The canonical docs are the Astro site under site/ (mdx) — the legacy docs/*.html redirect there.
           Repeated commands live in justfile recipes; package.json `scripts` stays empty.
           signposts.yaml is BUNDLE-FIRST — each bundle is one block (its signs, rules, settings).
           The rails fail safe: the injector + event log never throw and never block an edit.

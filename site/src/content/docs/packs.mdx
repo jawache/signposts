@@ -4,23 +4,24 @@ description: A pack is just a namespace — a coherent set of rules and signs (a
 order: 9
 ---
 
-<p class="lede">A pack is just a namespace — a coherent set of rules and signs (and the scripts they use). There's no separate pack format to maintain: any repo with a <code>signposts.yaml</code> can be installed from, including your day-to-day project.</p>
+<p class="lede">A pack is a <strong>bundle</strong> — one contiguous block in <a href="/docs/signposts-yaml">your config</a> (its signs, rules, and <code>settings</code>) plus the scripts in <code>rules/&lt;bundle&gt;/</code>. There's no separate pack format: any repo with a <code>signposts.yaml</code> can be installed from, including your day-to-day project.</p>
 
-## A pack is a namespace
+## A pack is a bundle
 
-In [your config](/docs/signposts-yaml) everything is grouped by namespace. A pack is one of those groups — its `signs:` and its `rules:` — plus the scripts those rules reference in `rules/<namespace>/`.
+A bundle is self-contained — copying it is copying its block plus its `rules/<bundle>/` folder, nothing scattered:
 
 ```yaml
-signs:
+bundles:
   neon:
-    - { id: migrations, globs: ["src/db/migrations/**"], text: "Migrations are append-only." }
-rules:
-  neon:
-    - { id: no-raw-pool, use: neon/no-raw-pool, on: "src/**/*.ts" }
-      # + rules/neon/no-raw-pool.mjs
+    signs:
+      - { id: migrations, globs: ["src/db/migrations/**"], text: "Migrations are append-only." }
+    rules:
+      - { id: no-raw-pool, use: neon/no-raw-pool, on: "src/**/*.ts" }   # + rules/neon/no-raw-pool.mjs
+    settings:
+      permissions: { deny: ["Read(.env.keys)"] }
 ```
 
-Because a pack is a slice of the file plus a folder, `signposts.yaml` itself *is* the manifest — nothing extra to write. (This mirrors how Claude Code plugins are just a repo you point at.)
+A bundle **owns** `rules/<bundle>/**` — that ownership convention is the manifest, so there's nothing extra to write and nothing to drift. (This mirrors how Claude Code plugins are just a repo you point at.)
 
 ## Author in place — never extract
 
@@ -73,25 +74,24 @@ settings:
 
 On install these merge into `.claude/settings.json`, and exactly what was added is recorded as the pack's ledger in `packs:` (below), so `uninstall --pack` removes precisely those entries — never a hand-written one, never one another installed pack still needs.
 
-## Refresh keeps your local tweaks
+## Refresh keeps your local tweaks — the `from:` pin
 
-Your config records installed packs so `npx signposts refresh` can pull updates. Install writes an *object* entry — the source, the namespaces it owns, the permissions ledger, and the date (a plain string still works for a legacy entry):
+A vendored bundle carries a `from:` pin recording where it came from and at what version. It's the whole ledger — no separate manifest — and it's what makes the bundle **editable in place**: editing the vendored copy *is* your local override, and the pin makes that drift visible.
 
 ```yaml
-packs:
-  - "@signposts/neon@^2"                    # legacy string — still valid
-  - source: "github:you/signposts-mystyle#v1"
-    namespaces: [mystyle]
-    settings: { deny: ["Read(./.env.keys)"] }   # exactly what install added
-    installed: "2026-07-06"
+bundles:
+  mystyle:
+    from: github:you/signposts-mystyle#v1     # provenance — the base refresh diffs against
+    rules:
+      - { id: house-style, use: mystyle/house-style, severity: warn }   # ← a deliberate local edit
 ```
 
-Refresh does a **three-way merge** against a snapshot install took (kept under a gitignored `.signposts/base/<ns>/`): it compares what the pack originally shipped, what's in your repo now, and what the pack ships today. Only upstream changed → take theirs; only you changed → keep yours; *both* changed → it surfaces a conflict and touches nothing (for a script it drops a `<file>.upstream` sidecar beside yours — never conflict markers in a live rule). That's what makes "install, then tune it locally" safe to combine with "stay current".
+`/signposts refresh` (agent-driven — see [the skill](/docs/skills)) does a **semantic three-way** against the pin: "upstream fixed this regex" merges cleanly under "you deliberately downgraded this severity"; only upstream changed → take theirs; only you changed → keep + flag yours; *both* diverged → surface it. A conflicting script drops a `<file>.upstream` sidecar beside yours — never conflict markers in a live rule. A local improvement worth sharing gets offered back via [propagate](/docs/skills). That's what makes "install, then tune it locally" safe to combine with "stay current".
 
 <Note>
-**Fresh clone?** `.signposts/` is gitignored, so the base snapshot isn't in the repo. Refresh notices and keeps your local versions with a notice — re-install the pack to re-arm merging.
+**Lifecycle is agent-driven.** install · refresh · propagate · uninstall are flows of the [`/signposts` skill](/docs/skills): an agent reads the bundle block and orchestrates the deterministic primitives (source resolution, comment-preserving edits, the three-way merge). For one release the `npx signposts install|refresh|uninstall` commands still run, behind a pointer to the skill.
 </Note>
 
 <Note>
-**core is a pack too.** The baked-in scripts and starter rules ship as the `core` namespace — same mechanism as `neon` or your own. Nothing is special; it's just the pack that comes pre-installed.
+**core is a bundle too.** The baked-in scripts and starter rules ship as the `core` bundle — same mechanism as `neon` or your own. Nothing is special; it's just the bundle that comes pre-installed.
 </Note>

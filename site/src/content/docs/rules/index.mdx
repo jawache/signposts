@@ -19,6 +19,7 @@ Everything is a script — no special cases, nothing auto-magic. `use:` is alway
 | A banned word or pattern in text/prose | [core/text-ban](/docs/rules/text-ban) |
 | A dangerous shell command | [core/command-guard](/docs/rules/command-guard) |
 | Any hand-edit of a protected path (generated, vendored) | [core/protected-path](/docs/rules/protected-path) |
+| An import crossing an architecture boundary (layers & fences) | [core/depcruise](/docs/rules/depcruise) |
 | A whole-project tool failing (import graph, coverage, types) | [core/tool-gate](/docs/rules/tool-gate) |
 
 ## Two families
@@ -37,5 +38,5 @@ All but the last. Signposts owns the logic; the config is in your `signposts.yam
 </Modes>
 
 <Note>
-**On `when:`.** Native scripts default to `[edit, commit]` — leave it off. A tool-gate must set `when: [commit]` (it's too heavy to run pre-emptively). That's the only place `when:` earns its keep. Rules are [grouped by namespace](/docs/signposts-yaml) in your config.
+**On `at:`.** Native scripts default to `at: [write, commit]` — leave it off. A whole-graph check ([tool-gate](/docs/rules/tool-gate), [depcruise](/docs/rules/depcruise)) sets `at: [commit]` (too heavy to run pre-emptively); an end-of-turn check sets `at: [turn]`. See [the moments](/docs/wiring). Rules live in their [bundle's block](/docs/signposts-yaml).
 </Note>

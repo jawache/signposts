@@ -1,24 +1,30 @@
 ---
 title: The config file — signposts.yaml
-description: Everything Signposts needs lives in one file at your repo root. A handful of sections, each with a single consumer, so nothing is wired in two places.
+description: Everything Signposts needs lives in one file at your repo root, organised around the thing you actually adopt and share — the bundle.
 order: 5
 ---
 
-<p class="lede">Everything Signposts needs lives in one file at your repo root. A handful of sections, each with a single consumer, so nothing is wired in two places.</p>
+<p class="lede">Everything Signposts needs lives in one file at your repo root, organised around the thing you actually adopt and share — the <strong>bundle</strong>. Each bundle is one contiguous, cherry-pickable block.</p>
 
 | Section | Holds | Read by |
 | --- | --- | --- |
 | `project` | Stack identity — a name and description. | the CLI |
 | `config` | Engine runtime settings — currently `drift_tokens` (the sign re-injection cadence). | the sign injector |
-| `signs` | Your <Chip kind="sign">sign</Chip> notes, **grouped by namespace**. | the sign injector |
-| `rules` | Your <Chip kind="rule">rule</Chip> blocks, **grouped by namespace**. | the engine |
-| `settings` | Optional. Host-permission entries a pack carries, per namespace — merged into `.claude/settings.json` on install. | the CLI (install) |
-| `packs` | The installed packs + what each owns, so `refresh` / `uninstall --pack` can track them. | the CLI |
-| `install` | What to copy, which deps to add, how to arm it. | the CLI |
+| `bundles` | The unit of value. Each key is a bundle (its namespace); each block carries up to five keys. | everything |
 
-## Grouped by namespace
+## A bundle is one block
 
-Both `signs:` and `rules:` are grouped by **namespace** — the pack each belongs to. `core` is the built-in pack; `local` is your own ad-hoc stuff; a name like `neon` is a coherent set you might share. A namespace is what [install and propagate](/docs/packs) move as one unit — its signs *and* rules together.
+The old layout scattered a namespace across five top-level sections (`signs:`, `rules:`, `settings:`, `packs:`, `install:`) — cherry-picking one meant harvesting from all five. Bundle-first puts each bundle in **one place**. Copying a bundle between repos is copying its block plus its `rules/<bundle>/` folder — nothing else. The five keys a bundle may carry:
+
+| Key | What it is |
+| --- | --- |
+| `from` | Provenance pin — **vendored bundles only** (`github:owner/repo#ref` or a local path). The base `refresh` diffs against. Local bundles simply omit it. |
+| `signs` | Steering <Chip kind="sign">sign</Chip> notes. `at: session \| touch \| turn` (default `touch`). A `session` sign is [orientation](/docs/signs). |
+| `rules` | <Chip kind="rule">rule</Chip> blocks. `use:` names a script; config rides inline. `at: write \| commit \| delete \| turn` (default `[write, commit]`). |
+| `settings` | Host-permission entries merged into `.claude/settings.json` on install (`deny` auto-applied; `allow` surfaced for you). |
+| `needs` | *(rare, on a rule)* an npm dep that exists only because that rule does. Baseline tools ride the engine, not bundles. |
+
+A bundle **owns** `rules/<bundle>/**` — that ownership convention is how install and uninstall know what to copy and remove, so there's no machine manifest to drift. Gone from the old schema: `packs:`, `install: files`, install dates.
 
 ## A worked example
 
@@ -30,61 +36,54 @@ project:
 config:
   drift_tokens: 200000          # re-inject a sign after ~this many tokens of drift
 
-signs:
-  local:
-    - id: db-area
-      globs: ["src/db/**"]
-      text: |-
-        Queries go through the repository layer, never inline in a route.
+bundles:
 
-rules:
-  local:
-    - id: no-edit-generated
-      use: core/protected-path
-      deny: ["**/*.generated.ts", "vendor/**"]
-      message: "Generated / vendored — change the source, then regenerate."
-  imports:
-    - id: boundaries           # a tool-gate is heavy → commit-only, so set when:
-      use: core/tool-gate
-      run: "npx depcruise src --config .dependency-cruiser.cjs"
-      carries: [".dependency-cruiser.cjs"]
-      when: [commit]
+  # ── a LOCAL bundle — born here, may propagate upstream one day ──
+  core:
+    signs:
+      - id: orientation
+        at: session                        # the composed-CLAUDE.md slot (session start)
+        text: |-
+          docs/arch/ is the system prior — read before structural work.
+          Repeated commands live in justfile recipes, never package.json scripts.
+      - id: db-area
+        globs: ["src/db/**"]               # at: touch is the default for signs
+        text: "Queries go through the repository layer, never inline in a route."
+    rules:
+      - id: no-edit-generated
+        use: core/protected-path
+        deny: ["**/*.generated.ts", "vendor/**"]   # at: [write, commit] is the default
+        message: "Generated / vendored — change the source, then regenerate."
 
-packs:
-  - "@signposts/core"          # the baked-in pack
-install:
-  activate: ["npm install"]    # arms the gate (lefthook writes .git/hooks/*)
+  # ── a VENDORED bundle — pinned provenance, content editable in place ──
+  fcis:
+    from: github:you/hub#v1.4.2
+    rules:
+      - id: import-fence
+        use: core/depcruise                # the layers-&-fences dialect (see below)
+        layers:
+          core:    ["src/lib/**/domain.ts"]
+          effects: ["src/lib/**/db.ts"]
+        forbid:
+          - { from: core, to: effects, transitive: true, why: "purity is transitive" }
+    settings:
+      permissions:
+        deny: ["Read(.env.keys)"]          # merged into .claude/settings.json on install
 ```
 
 ## How a rule reads
 
 Each entry names a **script** with `use:` and carries that script's config inline. The whole entry is handed to the script **verbatim**.
 
-- `use: core/<name>` — a [core script](/docs/rules); or `<namespace>/<name>` for [your own](/docs/authoring).
+- `use: core/<name>` — a [core script](/docs/rules); or `<bundle>/<name>` for [your own](/docs/authoring).
 - `on:` — the glob(s) it applies to (some scripts use `deny:` or `run:` instead).
-- `when:` — defaults to `[edit, commit]`; **omit it** unless you need to override (a tool-gate that's `[commit]` only).
+- `at:` — the [moment](/docs/wiring) it fires on. Rules default to `[write, commit]`; reach for `[commit]` (a whole-tree tool-gate), `[delete]`, or `[turn]` (end of turn). The legacy `when:` still loads.
 - `message:` — the reason, fed back to the agent on a block.
 
 <Note>
-**Code patterns are files, not inline.** ast-grep rules stay as `rules/ast-grep/*.yml` (so the engine and `signposts test` use the same files); the `core/ast-grep` runner executes them in-process. See [core/ast-grep](/docs/rules/ast-grep). Everything else is a normal `rules:` entry.
+**Code patterns are files, not inline.** ast-grep rules stay as `rules/ast-grep/*.yml` (so the engine and `signposts test` use the same files); the `core/ast-grep` runner executes them in-process. Import fences ride the declarative [`core/depcruise`](/docs/rules/depcruise) dialect. Everything else is a normal `rules:` entry.
 </Note>
 
-## Permissions a pack carries — `settings:` and the `packs:` ledger
+## Backwards compatibility
 
-A pack can carry **host permissions** the engine can't enforce (denying a read, an MCP tool call) via an optional `settings:` block — install merges them into `.claude/settings.json`. And `packs:` records what each install owns, so refresh and `uninstall --pack` know exactly what to touch. A plain string entry is still valid; install writes the richer object form:
-
-```yaml
-settings:
-  neon:
-    permissions:
-      deny: ["Read(./.env.keys)"]      # enforced by the host, delivered by the pack
-
-packs:
-  - "@signposts/core"                  # legacy string — fine
-  - source: "github:you/hub#main"      # object form, written by install
-    namespaces: [neon]
-    settings: { deny: ["Read(./.env.keys)"] }   # the ledger uninstall reverses
-    installed: "2026-07-06"
-```
-
-See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.
+A load-time normaliser accepts **both** shapes — bundle-first and the old section-first (`signs:` / `rules:` / `settings:` grouped by namespace, plus legacy `advisory:` and flat lists) — and hands the engine the flat form it already consumes. Old files keep working forever; a repo moves to bundle-first when you touch it. See [Packs & distribution](/docs/packs) for the install / refresh / uninstall flow.

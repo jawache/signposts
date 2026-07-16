@@ -1,13 +1,26 @@
 ---
-title: How it wires together
-description: Three small mechanisms, one config file. You don't wire signposts into triggers by hand — a rule's when does it, and a sign's globs do.
+title: How it wires together — the moments
+description: You author against the work loop, not against hooks. A shared `at:` key names the moment; the engine owns which hook delivers it.
 order: 10
 ---
 
-<p class="lede">Three small mechanisms, one config file. You don't wire signposts into triggers by hand — a rule's <code>when:</code> does it, and a sign's <code>globs:</code> do.</p>
+<p class="lede">You author against the <strong>work loop</strong>, not against hooks. One shared key — <code>at:</code> — names the moment on both signs and rules; the engine owns which hook actually delivers it, so nobody authoring a bundle ever names a <code>PreToolUse</code>.</p>
+
+## The moments
+
+| Moment | Kind | What happens |
+| --- | --- | --- |
+| `session` | <Chip kind="sign">steer</Chip> | Every bundle's one orientation sign, composed and injected at **session start** (and after resume, `/clear`, compaction) — the [composed CLAUDE.md](/docs/signs). |
+| `touch` | <Chip kind="sign">steer</Chip> | An area sign fires when the agent **reads / writes / runs** in its path or command (the default for signs). |
+| `write` | <Chip kind="rule">block</Chip> | A rule blocks the **edit before it lands** — the deny reason reaches the model and re-guides it. |
+| `commit` | <Chip kind="rule">block</Chip> | The gate — rules run over the **whole staged change**, once, with no agent in the loop. |
+| `delete` | <Chip kind="rule">block</Chip> | A rule guards the targets of `rm` / `git rm` / `mv` before they run. |
+| `turn` | <Chip kind="rule">block</Chip> | End of **every** turn — hold it open until something is done (`use sparingly`; prefer `commit`). |
+
+Rules default to `at: [write, commit]` — one line drives both the pre-emptive block and the commit gate. Signs default to `at: touch`. The platform itself forces the split: Claude Code's hook API has no "advise but allow" before a tool runs, so *steer-after-read* and *block-at-write* are the only two mid-session shapes possible — the vocabulary makes that honest.
 
 <div class="lane">
-<h3><Chip kind="rule">rule</Chip> · edit-time (the pre-emptive block)</h3>
+<h3><Chip kind="rule">write</Chip> · the pre-emptive block</h3>
 <div class="flow">
 <span class="box">agent tries Edit/Write</span><span class="arrow">→</span>
 <span class="box hl">PreToolUse hook</span><span class="arrow">→</span>
@@ -20,53 +33,66 @@ order: 10
 </div>
 
 <div class="lane">
-<h3><Chip kind="rule">rule</Chip> · commit-time (the backstop)</h3>
+<h3><Chip kind="rule">commit</Chip> · the backstop</h3>
 <div class="flow">
 <span class="box">git commit</span><span class="arrow">→</span>
 <span class="box hl">lefthook</span><span class="arrow">→</span>
 <span class="box hl">engine · phase commit</span><span class="arrow">→</span>
 <span class="box stop">exit 2 — commit blocked</span>
 </div>
-<p class="muted">Same engine, same rules — over the staged files, with no agent in the loop.</p>
 </div>
 
 <div class="lane">
-<h3><Chip kind="sign">sign</Chip> · read-time (just-in-time context)</h3>
+<h3><Chip kind="sign">session</Chip> + <Chip kind="sign">touch</Chip> · steering context</h3>
+<div class="flow">
+<span class="box">session starts</span><span class="arrow">→</span>
+<span class="box hl">SessionStart hook</span><span class="arrow">→</span>
+<span class="box soft">compose + inject orientation</span>
+</div>
 <div class="flow">
 <span class="box">agent reads a file</span><span class="arrow">→</span>
 <span class="box hl">PostToolUse hook</span><span class="arrow">→</span>
 <span class="box">match area globs</span><span class="arrow">→</span>
-<span class="box soft">inject the sign</span>
+<span class="box soft">inject the area sign</span>
 </div>
-<p class="muted">Re-injected every <code>drift_tokens</code> as the context grows.</p>
+<p class="muted">Orientation is composed from every bundle's <code>at: session</code> sign; area signs re-inject every <code>drift_tokens</code> as context grows.</p>
 </div>
 
 <div class="lane">
-<h3><Chip kind="rule">scan</Chip> · on-demand (the whole-tree audit)</h3>
+<h3><Chip kind="rule">turn</Chip> · the end-of-turn check</h3>
 <div class="flow">
-<span class="box"><code>npx signposts scan</code></span><span class="arrow">→</span>
-<span class="box hl">engine · phase&nbsp;scan</span><span class="arrow">→</span>
-<span class="box">every per-file rule, whole tree</span><span class="arrow">→</span>
-<span class="box soft">report the violations</span>
+<span class="box">agent ends its turn</span><span class="arrow">→</span>
+<span class="box hl">Stop hook</span><span class="arrow">→</span>
+<span class="box hl">engine · phase turn</span><span class="arrow">→</span>
+<span class="box stop">held open + the reason</span>
 </div>
-<p class="muted">The third door into the same engine — but it <strong>never blocks</strong> (always exits 0). Edit and commit stop new violations; scan reveals the ones already there (adopting a rule on an old repo, or pre-sizing a proposed rule). See [the CLI](/docs/skills).</p>
+<p class="muted">Never traps: Claude Code's own <code>stop_hook_active</code> means a blocked turn nags at most once, then ends. Reach for <code>turn</code> only when the turn boundary is genuinely the right moment — most checks belong at <code>commit</code>.</p>
 </div>
+
+<details>
+<summary>The moment → hook mapping the engine owns</summary>
+
+| Moment | Delivered by |
+| --- | --- |
+| `session` | `SessionStart` (matchers: startup · resume · clear · compact). `PostCompact` still re-briefs area signs. |
+| `touch` | `PostToolUse` (Read/Edit/Write/Glob/Grep/Bash) |
+| `write` | `PreToolUse` deny (Edit/Write) |
+| `delete` | `PreToolUse` on Bash (rm / git rm / mv targets) |
+| `commit` | lefthook pre-commit |
+| `turn` | `Stop` (and `SubagentStop` for agents) |
+
+Backwards-compatible sugar: `global: true` reads as `at: session`; the old `when:` reads as `at:` (with `write` mapping to the internal `edit` phase).
+</details>
+
+## The off switch
+
+`npx signposts off` writes one gitignored marker (`.signposts/off`) that **every rail checks first** and exits instantly — no sign injection, no pre-emptive block, no command guard, no commit gate. `npx signposts on` restores them. The point is honest A/B testing: run the same task with the rails on and off and compare. Status shows in the CLI so a silenced project can't masquerade as a guarded one.
 
 ## The engine keeps its own event log
 
-Every evaluation appends one line to a local, **gitignored** log at `.signposts/log/<session>.jsonl`: a `run` with per-rule tallies, a `deny` per violation, and a `sign` per injection. It's the deterministic ground truth behind `npx signposts facts` and its HTML report card — per-rule fires, **edit-catches vs commit-leaks**, rules that never fired. It stays on your machine (it's for your own metrics, never sent anywhere), and — like every hook path — writing it is fail-safe: an unwritable log can never block an edit. The report card reads *numbers* from here and *narrative* from the transcript, kept strictly apart.
-
-## How config reaches a script
-
-The engine reads `rules:` from `signposts.yaml`. For each entry it loads the script named by `use:` and calls it with the entry **verbatim** as the rule config, plus the file (in-memory at edit, from disk at commit). One uniform path:
-
-| Step | What happens |
-| --- | --- |
-| 1 · resolve | `use: core/ast-grep` → the core script; `use: neon/x` → your stack script. No special cases — even code patterns are a script. |
-| 2 · pass config | The whole YAML entry is handed to the script as-is. The script reads its own fields (`rule`, `sibling`, `deny`, …). |
-| 3 · feed the target | The script's `kind` says what it needs — file content, just the path, the command, or the whole project. |
+Every evaluation appends one line to a local, **gitignored** log at `.signposts/log/<session>.jsonl`: a `run` with per-rule tallies, a `deny` per violation, and a `sign` per injection. It's the deterministic ground truth behind `npx signposts facts` and its HTML report card — per-rule fires, **edit-catches vs commit-leaks**, rules that never fired, plus the composed-orientation size so it can't creep silently. Writing it is fail-safe: an unwritable log can never block an edit.
 
 ## Two things that always hold
 
 - **Fail-safe.** If a script or the hook itself errors, it exits cleanly and lets the edit through. A broken rule can never wedge your agent — it just stops enforcing until fixed.
-- **All local, in-process.** Rules run inside the hook (no temp files, nothing sent anywhere). The pre-emptive check is fast enough to sit on every write — which is exactly why [ast-grep is a core script](/docs/rules/ast-grep), not a tool-gate: it runs in-process, so it can block before the write. A whole-project tool can't, so it's commit-only.
+- **All local, in-process.** Rules run inside the hook (no temp files, nothing sent anywhere). The pre-emptive check is fast enough to sit on every write — which is why [ast-grep is a core script](/docs/rules/ast-grep), not a tool-gate. A whole-project tool can't block pre-write, so it's commit-only.
