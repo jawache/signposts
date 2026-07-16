@@ -193,7 +193,9 @@ export async function evaluate({ phase, files, root, getContent, configPath, log
 
     if (s.kind === 'project') {                                // tool-gate: run once for the phase
       if (!s.js) continue;
-      try { const hits = await s.js.evaluate(rule, { root }); record(rule, hits.length); if (hits.length) violations.push({ rule, path: null, hits }); }
+      // `files` (the staged set at commit / all-tracked at `just gate`) lets a project rule scope
+      // itself — e.g. a tool-gate that only runs when its area changed (rule.changed).
+      try { const hits = await s.js.evaluate(rule, { root, files }); record(rule, hits.length); if (hits.length) violations.push({ rule, path: null, hits }); }
       catch { /* fail safe */ }
       continue;
     }

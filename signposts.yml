@@ -245,6 +245,15 @@ fcis:
       sibling: "{dir}/{name}.test.mjs"
       message: "A pure module needs a sibling {dir}/{name}.test.mjs (unit tests for the decision fn). Add it, then `just test-pure`."
 
+    - type: rule
+      id: pure-covered
+      description: Blocks a commit if the functional core's line coverage drops below 95% (only runs when pure/ changed).
+      at: [commit]
+      use: core/tool-gate
+      changed: ["src/core/pure/**"]
+      run: "just test-coverage"
+      message: "Line coverage of the functional core (src/core/pure/**) fell below 95% — add tests for the new/changed code, then `just test-coverage`."
+
 # ── tdd — how we test here ──
 tdd:
   title: Testing discipline
@@ -318,6 +327,15 @@ typescript:
           matches: strict
           required: true
       message: "site/tsconfig.json must keep extending a strict preset (astro/tsconfigs/strict) — strictness here is load-bearing."
+
+    - type: rule
+      id: site-typechecks
+      description: Type-checks the website at commit (astro check) — only runs when a site/ file changed.
+      at: [commit]
+      use: core/tool-gate
+      changed: ["site/**"]
+      run: "just site-check"
+      message: "`astro check` found a type error in the site — fix it, then `just site-check`. (Runs only when site/ changes.)"
 
 # ── web — quality gates for the docs site ──
 web:

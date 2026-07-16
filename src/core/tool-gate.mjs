@@ -6,10 +6,14 @@
 // owns its config file; Signposts orchestrates (run + block) and vendors that file
 // via `carries:` so the rule travels as one unit.
 //
-// Config:  run: "npx depcruise src --config .dependency-cruiser.cjs"
-// Contract: kind 'project' → ctx = { root } (nothing per-file).
+// Config:  run: "just test-commit"
+//          changed: ["site/**"]     # (optional) only run when a checked file matches — so a slow
+//                                   #   gate (a type-checker) skips commits that don't touch its area
+// Contract: kind 'project' → ctx = { root, files } (files = the staged/checked set, for `changed`).
 
 import { spawnSync } from 'node:child_process';
+import { skipForChanged, failureExcerpt } from './pure/tool-gate.mjs';
+export { skipForChanged, failureExcerpt };
 
 // Git exports these to a hook's environment; they REDIRECT any nested `git` command to the
 // parent repo (a `git init` in a temp dir would suddenly write the real index). A tool-gate runs
@@ -26,9 +30,10 @@ function hermeticEnv() {
 export default {
   kind: 'project',
   evaluate(rule, ctx) {
+    if (skipForChanged(ctx.files, rule.changed)) return [];    // area unchanged → don't run the tool
     const r = spawnSync('bash', ['-lc', rule.run], { cwd: ctx.root, encoding: 'utf8', env: hermeticEnv() });
     if (r.status === 0) return [];
-    return [`tool-gate failed (exit ${r.status}): ${rule.run}\n${(r.stderr || r.stdout || '').trim().split('\n').slice(-3).join('\n')}`];
+    return [`\`${rule.run}\` failed (exit ${r.status}):\n${failureExcerpt(r.stderr || r.stdout || '')}`];
   },
   test() {
     const root = process.cwd();
@@ -38,6 +43,8 @@ export default {
     process.env.GIT_DIR = '/some/parent/.git';
     const scrubbed = this.evaluate({ run: '[ -z "$GIT_DIR" ]' }, { root }).length === 0;
     delete process.env.GIT_DIR;
-    return { name: 'core/tool-gate', pass: legal && illegal && scrubbed };
+    // changed-scoping: a gate for site/** doesn't run when only src/ changed
+    const scoped = this.evaluate({ run: 'exit 3', changed: ['site/**'] }, { root, files: ['src/x.mjs'] }).length === 0;
+    return { name: 'core/tool-gate', pass: legal && illegal && scrubbed && scoped };
   },
 };

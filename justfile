@@ -33,6 +33,10 @@ worktree branch:
 test-pure:
     node --test "src/core/pure/*.test.mjs"
 
+[doc("Coverage gate for the functional core: fails if src/core/pure/** line coverage drops below 95%.")]
+test-coverage:
+    node --test --experimental-test-coverage --test-coverage-include='src/core/pure/**' --test-coverage-exclude='src/core/pure/**/*.test.mjs' --test-coverage-lines=95 "src/core/pure/*.test.mjs"
+
 [doc("Run every rules/ check + self-test: the pure decision layer, then the engine internals (adapters, shell contract, log, signs, session-report, pack-diff, source, install, refresh, the rule-test runner) then `signposts test` (every rule's .test.yml through the real engine + ast-grep validation).")]
 test-rules: test-pure
     node src/schema.mjs --test && node src/engine.mjs --test && node src/log.mjs --test && node src/core/languages.mjs --test && node src/hooks/signs-core.mjs --test && node src/hooks/signs-test.mjs && node src/hooks/session-start.mjs --test && node src/skill/session-report.mjs --test && node src/skill/pack-diff.mjs --test && node src/skill/detect.mjs --test && node src/skill/rule-test.mjs --test && node src/cli/source.mjs --test && node src/cli/install.mjs --test && node src/cli/languages.mjs --test && node src/cli/refresh.mjs --test && node src/cli/signposts.mjs test
@@ -70,3 +74,7 @@ site-dev:
 [doc("Build the website (site/) to site/dist — static output for Cloudflare.")]
 site-build:
     cd site && npm run build
+
+[doc("Type-check the website (site/) — astro check (tsc on .ts + the Astro language server on .astro).")]
+site-check:
+    cd site && npm run check
