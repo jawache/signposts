@@ -1,9 +1,0 @@
-# Test for no-only-in-tests (D — severity: warn). The CHECK still fires (produces a hit); the
-# `warn` severity only changes the RESPONSE (inform, don't block) — that routing is tested at
-# the hook level in the e2e. Here we prove the check itself: `.only(` in a test is caught.
-path: src/thing.test.ts
-invalid:
-  - test.only('x', () => {});
-  - describe.only('suite', () => {});
-valid:
-  - test('x', () => {});

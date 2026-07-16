@@ -4,14 +4,19 @@
 #   config:   engine runtime settings — drift_tokens (the sign injector's re-show cadence).
 #   bundles:  the unit of value. Each key is a bundle (its namespace), carrying up to five keys:
 #     • from        provenance pin (vendored bundles only: github:owner/repo#ref or a local path). Local bundles — born here — omit it.
-#     • signs       steering notes. `at: session | touch | turn` (default touch). A `session` sign is ORIENTATION — composed across bundles and injected at session start.
+#     • signs       steering notes. `at: session | touch | turn` (default touch). A `session` sign is ORIENTATION — composed across the installed bundles and injected at session start.
 #     • rules       blocks. `use:` names a script (core/<name> or <bundle>/<name>); config rides inline. `at: write | commit | delete | turn` (default [write, commit]).
 #     • settings    host-permission entries merged into .claude/settings.json (deny auto-applied; allow surfaced for you — it widens autonomy).
 #     • needs       (rare, on a rule) an npm dep that exists only because that rule does.
 #
 # Every sign and rule carries a one-line `description:` — a human summary (distinct from the sign's `text` / the rule's `message`), used for the docs listing.
 # A bundle owns rules/<bundle>/** — that ownership convention is how install/uninstall know what to move (no machine manifest). Old section-first files, and the legacy signposts.yaml name, still load.
-# Authored via /signposts. Reference: the docs at signposts.asim.dev/docs + the /signposts skill.
+#
+# The bundles below:
+#   • signposts    — the DEFAULT bundle: the guards + guidance you want on any repo that uses Signposts. This is what a fresh install / cherry-pick carries.
+#   • tooling      — justfile-first command hygiene (installable, opt-in).
+#   • git-hygiene  — commit / PR / issue hygiene (installable, opt-in).
+#   • local        — ONLY for developing Signposts itself (this codebase). Never installed elsewhere.
 
 project:
   name: signposts-core
@@ -22,17 +27,15 @@ config:
 
 bundles:
 
-  # ── the shipped `core` bundle — what a fresh `npx signposts` install carries ──
-  core:
+  # ── signposts — the DEFAULT bundle: what you want on any Signposts-guarded repo ──
+  signposts:
     signs:
       - id: orientation
-        description: The composed CLAUDE.md — every bundle's session sign, injected at session start.
+        description: What Signposts is and how it steers — injected at the start of every session in a guarded repo.
         at: session
         text: |-
-          The canonical docs are the Astro site under site/ (mdx) — the legacy docs/*.html redirect there.
-          Repeated commands live in justfile recipes; package.json `scripts` stays empty.
-          signposts.yml is BUNDLE-FIRST — each bundle is one block (its signs, rules, settings).
-          The rails fail safe: the injector + event log never throw and never block an edit.
+          This repo is guarded by Signposts. Rules block risky edits before they land (at write) and again at commit; signs steer you by area, just in time as you touch files.
+          Author or refine a guardrail with the /signposts skill — never loosen a rule just to get an edit through; that's the user's call, not yours.
 
       - id: rules-self-edit
         description: A soft nudge when the agent edits the guardrails; never blocks — the AI must stay able to author rules.
@@ -41,6 +44,31 @@ bundles:
           You are editing the guardrails themselves.
           If this edit weakens or removes a rule/permission IN RESPONSE to just being blocked by it — stop and confirm with the user first.
           Authoring new signposts is always fine; loosening one to get an edit through is the user's call, not yours.
+
+      - id: authoring-rules
+        description: How to author a rule — name a script, check the cheaper shapes first, ship a colocated test.
+        globs: ["rules/**"]
+        text: |-
+          A rule NAMES A SCRIPT with `use:` (core/<name> or <bundle>/<name>), gets its config verbatim, and names the decision in its message.
+          Before writing an own-script, check the cheaper shapes — most "novel" rules aren't: a code pattern is a rules/ast-grep/<name>.yml (no code); an import boundary is a core/depcruise fence; a structural/path invariant is a core script + config; only then a small own-script under your bundle.
+          Ship a colocated <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule. Author with /signposts.
+
+      - id: ast-grep-grammars
+        description: ast-grep parses only html/css/js/ts/tsx natively; other languages need a grammar (add or register).
+        globs: ["rules/**/ast-grep/**", "sgconfig.yml"]
+        text: |-
+          A code-shape rule is a rules/<bundle>/ast-grep/<name>.yml — but ast-grep parses only html · css · js · ts · tsx natively.
+          Beyond those, DON'T assume a grammar is on npm: some (sql, python, go, rust) ship an `@ast-grep/lang-<x>` package (`npx signposts languages add`), but astro/vue/svelte have none — they're built from source with tree-sitter and registered in sgconfig.yml (`npx signposts languages register`).
+          An unknown language is an honest error — never a silent fall-through to Tsx.
+
+      - id: depcruise-fences
+        description: Import boundaries ride the declarative core/depcruise dialect (layers & fences), not hand-written regexes.
+        globs: ["rules/**/*.cjs", "**/.dependency-cruiser.cjs"]
+        text: |-
+          An import boundary (functional core / imperative shell, feature isolation) is a `use: core/depcruise` rule — declare named `layers` and the `forbid`/`only`/`require` fences between them, not regexes.
+          The dialect closes the holes a hand-written fence leaves open: fail-closed allowlists (`only:`), transitive reach (`transitive: true`), Node builtins (a `node:*` layer), and a type-only carve-out (`except: [type-only]`).
+          Reach for a raw `.cjs` via `config:` only for the long tail the dialect doesn't cover. It needs a depcruise-compatible typescript (ships as a baseline dep).
+
     rules:
       - id: signposts-self-regard
         description: The day-one demo block — a fresh install feels the pre-emptive deny.
@@ -57,9 +85,104 @@ bundles:
         at: [commit]
         message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
 
-  # ── this repo's own bundle — `local`: dogfood guards for working ON signposts ──
+      - id: no-edit-generated
+        description: Don't hand-edit generated / vendored files — change the source they derive from.
+        use: core/protected-path
+        deny: ["**/*.generated.ts", "vendor/**"]
+        message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
+
+      - id: rules-have-tests
+        description: Every rule authored under rules/ ships a colocated <name>.test.yml the engine runs.
+        use: core/sibling-exists
+        on: ["rules/**/*.mjs", "rules/**/*.sh", "rules/**/*.yml"]
+        ignore: ["**/*.test.yml"]
+        sibling: "{dir}/{name}.test.yml"
+        message: "Every rule needs a sibling <name>.test.yml (valid/invalid samples the engine runs). Add it, then `just test-rules`."
+
+      - id: no-delete-guardrails
+        description: Guard the config file + rules/ against deletion; override a deliberate one with a trailing marker.
+        use: core/protected-path
+        deny: ["signposts.yml", "signposts.yaml", "rules/**"]
+        at: [delete]
+        message: "That command would delete a guardrail (signposts.yml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
+
+      - id: rules-tested-this-turn
+        description: Hold the turn open if rules/ changed this turn but the rule tests never ran.
+        use: core/ran-since-edit
+        at: [turn]
+        edited: ["rules/**"]
+        must_run: "just test-rules"
+        message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
+
+      - id: signposts-well-formed
+        description: Lint the config file itself — it must parse and every sign/rule must carry an id, a use (rules), and a description.
+        use: core/signposts-lint
+        on: ["signposts.yml", "signposts.yaml"]
+        require: [description]
+        message: "The signposts config isn't well-formed — each sign and rule needs an id and a `description:` (and a rule needs `use:`). See the listed entries."
+
+  # ── tooling — justfile-first command hygiene (installable, opt-in) ──
+  tooling:
+    signs:
+      - id: tooling-first
+        description: The justfile is the canonical toolbox; recurring commands become recipes.
+        at: session
+        text: |-
+          The justfile is this repo's canonical toolbox — run `just` to list every recipe (the commands you can use here); look there first.
+          A one-off command or chain is fine to run directly. But any command you'll run more than once — or a multi-step sequence worth a name — becomes a justfile recipe (each with a [doc("…")]); package.json `scripts` stays empty.
+    rules:
+      - id: no-package-scripts
+        description: Keep package.json `scripts` empty (//-prefixed comment keys only) — the justfile is the one command source.
+        use: core/json-invariant
+        on: "package.json"
+        assert: { path: scripts, keysPrefixedWith: "//" }
+        message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
+
+      - id: justfile-docs
+        description: Every justfile recipe carries an explicit [doc("…")] — the command catalogue's help screen.
+        use: tooling/justfile-docs
+        on: "justfile"
+        exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
+        message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
+
+  # ── git-hygiene — commit / PR / issue hygiene (installable, opt-in) ──
+  git-hygiene:
+    signs:
+      - id: commit-hygiene
+        description: How commits are written here — no AI attribution, no silent discards.
+        at: session
+        text: |-
+          Commits, PRs and issues carry NO Claude/Anthropic attribution — no Co-Authored-By line, no "Generated with Claude", no mention. Author them as your own.
+          A `git checkout` / `git restore` that would silently wipe uncommitted work is blocked — stash first, or append `# discard-ok` if you truly mean it.
+    rules:
+      - id: no-ai-attribution-in-commits
+        description: Block Claude/Anthropic attribution in commit / PR / issue bodies (the command-guard rail).
+        use: core/command-guard
+        ban:
+          - 'git commit[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
+          - 'git commit[\s\S]*[Gg]enerated with[\s\S]*[Cc]laude'
+          - 'git commit[\s\S]*(claude\.com/claude-code|🤖 Generated)'
+          - 'gh (pr|issue)[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
+          - 'gh (pr|issue)[\s\S]*(claude\.com/claude-code|🤖 Generated)'
+        message: |-
+          Commit / PR / issue body contains Claude or Anthropic attribution.
+          Remove it (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic mention) and retry.
+
+      - id: no-git-discard
+        description: Block a `git checkout`/`restore` that would wipe uncommitted work; override with a trailing `# discard-ok`.
+        use: git-hygiene/no-git-discard
+        message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
+
+  # ── local — ONLY for developing Signposts itself (this codebase); never installed elsewhere ──
   local:
     signs:
+      - id: dev-orientation
+        description: Orientation for working ON the Signposts codebase.
+        at: session
+        text: |-
+          You are in the Signposts codebase itself. The canonical docs are the Astro site under site/ (mdx); the legacy docs/*.html redirect there.
+          Everything under src/ is the engine + hooks + CLI; rules/ holds this repo's own guard scripts; the website is a standalone project in site/.
+
       - id: skills
         description: How to author skills — from their templates, plain English, multimodal.
         globs: [".claude/skills/**"]
@@ -74,16 +197,6 @@ bundles:
         text: |-
           Review sub-agents are read-only and RETURN findings to the main thread — they write NO files.
           Recommendations-or-silence: surface only what should change.
-
-      - id: rules
-        description: How to author a rule — name a script, check the cheaper shapes first, ship a colocated test.
-        globs: ["rules/**"]
-        text: |-
-          A rule NAMES A SCRIPT with `use:` (core/<name> or <ns>/<name>), gets its config verbatim, and names the decision in its message.
-          Before writing an own-script, check the cheaper shapes — most "novel" rules aren't: a code pattern is a rules/ast-grep/<name>.yml (no code); a structural/path invariant is a core script + config; only then a small own-script under your namespace.
-          Diff the installed pack first.
-          Ship a colocated <name>.test.yml (a valid + an invalid sample); rules-have-tests blocks an untested rule.
-          Author with /signposts — depth lives in the docs.
 
       - id: site
         description: Working on the website — port from the approved reference, British English, no animation libraries.
@@ -114,93 +227,3 @@ bundles:
           Mutating the config file goes through parseDocument (editYaml), never parse → stringify — the round-trip strips the user's comments.
           install/refresh preserve them by contract (that's why install.mjs moved off `parse as parseYaml`); keep it that way.
           The schema normaliser is READ-time only — it never touches the write path.
-
-      - id: ast-grep-grammars
-        description: ast-grep parses only html/css/js/ts/tsx natively; other languages need a grammar (add or register).
-        globs: ["src/core/languages.mjs", "src/cli/languages.mjs", "sgconfig.yml"]
-        text: |-
-          ast-grep parses only html · css · js · ts · tsx natively.
-          Beyond those, DON'T assume a grammar is on npm: some (sql, python, go, rust) ship an `@ast-grep/lang-<x>` package (`signposts languages add`), but astro/vue/svelte have none — they're built from source with tree-sitter and declared in sgconfig.yml customLanguages (`signposts languages register`).
-          An unknown language is an honest error (resolveLang throws) — never a silent fall-through to Tsx.
-    rules:
-      - id: no-edit-generated
-        description: Don't hand-edit generated / vendored files — change the source they derive from.
-        use: core/protected-path
-        deny: ["**/*.generated.ts", "vendor/**"]
-        message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
-
-      - id: rules-have-tests
-        description: Every rule authored under rules/ ships a colocated <name>.test.yml the engine runs.
-        use: core/sibling-exists
-        on: ["rules/**/*.mjs", "rules/**/*.sh", "rules/**/*.yml"]
-        ignore: ["**/*.test.yml"]
-        sibling: "{dir}/{name}.test.yml"
-        message: "Every rule needs a sibling <name>.test.yml (valid/invalid samples the engine runs). Add it, then `just test-rules`."
-
-      - id: no-delete-guardrails
-        description: Guard the config file + rules/ against deletion; override a deliberate one with a trailing marker.
-        use: core/protected-path
-        deny: ["signposts.yml", "signposts.yaml", "rules/**"]
-        at: [delete]
-        message: "That command would delete a guardrail (signposts.yml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
-
-      - id: no-only-in-tests
-        description: Warn (never block) on a focused `.only(` left in a test — it silently skips the rest of the suite.
-        use: core/text-ban
-        on: ["**/*.test.{mjs,js,ts,tsx}"]
-        ban: ['\.only\(']
-        severity: warn
-        message: "A focused `.only(` will silently skip the rest of the suite — remove it before you commit."
-
-      - id: rules-tested-this-turn
-        description: Hold the turn open if rules/ changed this turn but `just test-rules` never ran.
-        use: core/ran-since-edit
-        at: [turn]
-        edited: ["rules/**"]
-        must_run: "just test-rules"
-        message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
-
-      - id: signposts-well-formed
-        description: Lint the config file itself — it must parse and every sign/rule must carry an id, a use (rules), and a description.
-        use: core/signposts-lint
-        on: ["signposts.yml", "signposts.yaml"]
-        require: [description]
-        message: "The signposts config isn't well-formed — each sign and rule needs an id and a `description:` (and a rule needs `use:`). See the listed entries."
-
-  # ── an installable hygiene bundle — pull into your own projects (`/signposts install`) ──
-  git-hygiene:
-    rules:
-      - id: no-ai-attribution-in-commits
-        description: Block Claude/Anthropic attribution in commit / PR / issue bodies (the command-guard rail).
-        use: core/command-guard
-        ban:
-          - 'git commit[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
-          - 'git commit[\s\S]*[Gg]enerated with[\s\S]*[Cc]laude'
-          - 'git commit[\s\S]*(claude\.com/claude-code|🤖 Generated)'
-          - 'gh (pr|issue)[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
-          - 'gh (pr|issue)[\s\S]*(claude\.com/claude-code|🤖 Generated)'
-        message: |-
-          Commit / PR / issue body contains Claude or Anthropic attribution.
-          Remove it (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic mention) and retry.
-
-      - id: no-git-discard
-        description: Block a `git checkout`/`restore` that would wipe uncommitted work; override with a trailing `# discard-ok`.
-        use: git-hygiene/no-git-discard
-        message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
-
-  # ── an installable hygiene bundle — the justfile is the single command source ──
-  justfile:
-    rules:
-      - id: no-package-scripts
-        description: Keep package.json `scripts` empty (//-prefixed comment keys only) — the justfile is the one command source.
-        use: core/json-invariant
-        on: "package.json"
-        assert: { path: scripts, keysPrefixedWith: "//" }
-        message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
-
-      - id: justfile-docs
-        description: Every justfile recipe carries an explicit [doc("…")] — the command catalogue's help screen.
-        use: justfile/justfile-docs
-        on: "justfile"
-        exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
-        message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."

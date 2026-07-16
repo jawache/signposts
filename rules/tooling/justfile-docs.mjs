@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// rules/justfile/justfile-docs.mjs — every justfile recipe carries a [doc("…")].
+// rules/tooling/justfile-docs.mjs — every justfile recipe carries a [doc("…")].
 //
 // A JS own-script in the `justfile` pack, built like any core script. It's
-// wired in signposts.yaml as `use: justfile/justfile-docs`.
+// wired in signposts.yaml as `use: tooling/justfile-docs`.
 //
 // `just --list` is the command catalogue's help screen; without an explicit [doc]
 // attribute it falls back to the LAST comment line above a recipe, which for
@@ -12,8 +12,8 @@
 // Contract: kind 'content' → evaluate(rule, ctx={ path, content, root, … }); the
 // whole rule entry (incl. `exempt:`) arrives verbatim as `rule`.
 //
-// Usage:  node rules/justfile/justfile-docs.mjs <justfile> [...]   (exit 2)
-//         node rules/justfile/justfile-docs.mjs --test             (self-test)
+// Usage:  node rules/tooling/justfile-docs.mjs <justfile> [...]   (exit 2)
+//         node rules/tooling/justfile-docs.mjs --test             (self-test)
 
 import { readFileSync } from 'node:fs';
 
@@ -94,11 +94,11 @@ function selfTest() {
   })();
 
   const ok = legalOk && illegalOk && exemptAllOk && exemptOneOk;
-  console.log(ok ? 'PASS justfile/justfile-docs' : 'FAIL justfile/justfile-docs');
+  console.log(ok ? 'PASS tooling/justfile-docs' : 'FAIL tooling/justfile-docs');
   process.exit(ok ? 0 : 1);
 }
 
-// The rule object the engine loads via `use: justfile/justfile-docs` — config (incl.
+// The rule object the engine loads via `use: tooling/justfile-docs` — config (incl.
 // `exempt`) arrives verbatim as `rule`; ctx.content is the reconstructed justfile.
 export default {
   kind: 'content',

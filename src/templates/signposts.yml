@@ -20,8 +20,8 @@ config:
 
 bundles:
 
-  # ── the shipped `core` bundle — ships with every scaffold ──
-  core:
+  # ── the default `signposts` bundle — the guards you want on any Signposts-guarded repo ──
+  signposts:
     signs:
       - id: orientation
         description: The composed orientation injected at session start — edit this to fit your repo.
