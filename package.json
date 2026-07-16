@@ -27,6 +27,8 @@
   },
   "dependencies": {
     "@ast-grep/napi": "^0.42.3",
+    "dependency-cruiser": "^18.1.0",
+    "typescript": "^6.0.3",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
