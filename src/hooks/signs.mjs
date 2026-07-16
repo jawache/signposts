@@ -13,11 +13,10 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
-import { parse as parseYaml } from 'yaml'
 import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signs-core.mjs'
+import { loadSigns } from '../schema.mjs'
 import { logEvent } from '../log.mjs'
 
-const THRESHOLD = 200_000
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd()
 
 try {
@@ -33,7 +32,7 @@ try {
   const target = matchTarget(input, ROOT)
   if (!target) process.exit(0)
 
-  const { signs, drift } = loadMap(join(ROOT, 'signposts.yaml'))
+  const { signs, drift } = loadSigns(ROOT)
   if (!signs.length) process.exit(0)
 
   const tokensSoFar = readTranscriptTokens(input.transcript_path)
@@ -68,23 +67,6 @@ process.exit(0)
 
 // ── IO helpers ───────────────────────────────────────────────────────────────
 
-function loadMap(p) {
-  try {
-    const d = parseYaml(readFileSync(p, 'utf8')) || {}
-    // `signs:` is the canonical section, GROUPED BY NAMESPACE (namespace → [entries]);
-    // we flatten in YAML order. A flat list, and the legacy `advisory:` name, are tolerated.
-    const raw = d.signs ?? d.advisory
-    let list = []
-    if (Array.isArray(raw)) list = raw
-    else if (raw && typeof raw === 'object') list = Object.values(raw).flat() // grouped
-    else if (Array.isArray(d)) list = d
-    const signs = list.filter((e) => e && e.id)
-    const drift = Number(d.config && d.config.drift_tokens) || THRESHOLD
-    return { signs, drift }
-  } catch {
-    return { signs: [], drift: THRESHOLD }
-  }
-}
 function readTranscriptTokens(path) {
   if (!path || !existsSync(path)) return 0
   try {

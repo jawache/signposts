@@ -11,27 +11,10 @@
 // Fails safe: a missing/malformed signposts.yaml or section yields `{}`, so a script
 // with no config behaves exactly as it would with its built-in defaults.
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { ruleById } from './schema.mjs';
 
+// Delegates to the shared normaliser so a standalone script CLI reads the SAME shape
+// (bundle-first or section-first) the engine does, and gets the entry moment-normalised.
 export function ruleConfig(name, root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
-  try {
-    const doc = parseYaml(readFileSync(join(root, 'signposts.yaml'), 'utf8')) || {};
-    const rules = doc.rules;
-    // Grouped form (namespace → [entries]): search every namespace for the id.
-    if (rules && typeof rules === 'object' && !Array.isArray(rules)) {
-      for (const list of Object.values(rules)) {
-        if (!Array.isArray(list)) continue;
-        const hit = list.find((r) => r && r.id === name);
-        if (hit) return hit;
-      }
-      return {};
-    }
-    // Tolerate a legacy flat list.
-    if (Array.isArray(rules)) return rules.find((r) => r && r.id === name) || {};
-    return {};
-  } catch {
-    return {};
-  }
+  return ruleById(name, root);
 }

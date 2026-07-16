@@ -27,6 +27,7 @@ import { parse as parseYaml } from 'yaml';
 import { matchAny } from './util.mjs';
 import { logEvent } from './log.mjs';
 import { defaultGetContent, walkFiles } from './core/fs.mjs';
+import { loadRuleEntries } from './schema.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the library)
 // The built-in rule types live in the package, next to the engine (src/core). A
@@ -40,21 +41,10 @@ const CORE = ['ast-grep', 'sibling-exists', 'symbols-in-sibling', 'json-invarian
 
 // ── load + normalise rules ────────────────────────────────────────────────────
 export function loadRules(root, configPath) {
-  const rules = [];
-
-  // 1. instances from signposts.yaml `rules:` — GROUPED BY NAMESPACE (ns → [entries])
-  try {
-    const doc = parseYaml(readFileSync(configPath || join(root, 'signposts.yaml'), 'utf8')) || {};
-    const grouped = doc.rules;
-    if (grouped && typeof grouped === 'object' && !Array.isArray(grouped)) {
-      for (const [ns, list] of Object.entries(grouped)) {
-        if (!Array.isArray(list)) continue;
-        for (const r of list) if (r && r.use) rules.push(normalise({ ...r, namespace: ns }));
-      }
-    } else if (Array.isArray(grouped)) {                        // tolerate a legacy flat list
-      for (const r of grouped) if (r && r.use) rules.push(normalise(r));
-    }
-  } catch { /* no config / malformed → just the ast-grep rules below */ }
+  // 1. instances from signposts.yaml `rules:` — via the shared normaliser (schema.mjs),
+  //    which accepts bundle-first AND section-first and folds `at:` / `when:` into the
+  //    internal phase list. Each entry arrives flat, namespaced, and `when`-defaulted.
+  const rules = loadRuleEntries(root, configPath);
 
   // 2. auto-discovered ast-grep pattern files → synthetic `core/ast-grep` rules.
   // They live in any `ast-grep/` folder under rules/ — rules/ast-grep/ (namespace core) or

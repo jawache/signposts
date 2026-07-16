@@ -259,6 +259,20 @@ export function selfTest() {
     ok('provenance ledger records no allow', !packEntry?.settings?.allow);
     ok('.signposts/ added to consumer .gitignore', /(^|\n)\.signposts\/?(\n|$)/.test(readFileSync(join(tgtDir, '.gitignore'), 'utf8')));
 
+    // COMMENT PRESERVATION on the BUNDLE-FIRST shape: mutating a v2 yaml through editYaml
+    // (parseDocument, not parse→stringify) keeps the user's comments — same contract, new shape.
+    const bfPath = join(root, 'bundle-first.yaml');
+    const bfMarker = '# BUNDLE-COMMENT — must survive';
+    writeFileSync(bfPath, [
+      bfMarker, 'project:', '  name: app', 'bundles:', '  core:   # the local bundle',
+      '    signs:', '      - id: orient   # inline kept', '        at: session', '        text: hi', '',
+    ].join('\n'));
+    editYaml(bfPath, (doc) => doc.setIn(['project', 'name'], 'app2'));
+    const bfOut = readFileSync(bfPath, 'utf8');
+    ok('bundle-first: block comment survives a mutation', bfOut.includes(bfMarker));
+    ok('bundle-first: inline comments survive a mutation', bfOut.includes('the local bundle') && bfOut.includes('inline kept'));
+    ok('bundle-first: the mutation applied', /name: app2/.test(bfOut));
+
     // SECURITY: a namespace used as a path segment is validated — traversal is refused.
     ok('assertSafeNamespace rejects traversal', (() => { try { assertSafeNamespace('../../.ssh'); return false; } catch { return true; } })());
     ok('assertSafeNamespace accepts a plain name', (() => { try { assertSafeNamespace('neon'); return true; } catch { return false; } })());
