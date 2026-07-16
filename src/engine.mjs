@@ -27,7 +27,7 @@ import { parse as parseYaml } from 'yaml';
 import { matchAny } from './util.mjs';
 import { logEvent } from './log.mjs';
 import { defaultGetContent, walkFiles } from './core/fs.mjs';
-import { loadRuleEntries } from './schema.mjs';
+import { loadRuleEntries, isOff } from './schema.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the library)
 // The built-in rule types live in the package, next to the engine (src/core). A
@@ -416,6 +416,7 @@ async function cli(argv) {
     else files.push(a);
   }
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  if (isOff(root)) process.exit(0);                            // off switch: commit gate + lefthook agent-edit silenced
   const getContent = defaultGetContent(root);
   // lefthook runs outside any Claude session — commit/push events land in commit.jsonl.
   const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });

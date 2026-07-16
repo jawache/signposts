@@ -18,11 +18,13 @@
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { scaffold } from './scaffold.mjs';
 import { refresh } from './refresh.mjs';
 import { installPack } from './install.mjs';
 import { uninstall } from './uninstall.mjs';
 import { scan } from './scan.mjs';
+import { isOff, offMarkerPath } from '../schema.mjs';
 
 // PACK_ROOT = the package root. Running from this repo it's the repo root; installed via
 // npm it's node_modules/signposts. Either way: two up from src/cli/.
@@ -56,6 +58,8 @@ Usage:
   npx signposts uninstall             remove Signposts: delete its files + unwire the hooks
   npx signposts uninstall --pack <ns> remove one installed pack namespace (yaml, scripts, permissions)
   npx signposts test                  run every rule's .test.yml through the real engine (+ validate ast-grep ymls)
+  npx signposts off | on              silence / restore EVERY rail (one gitignored marker; honest A/B testing)
+  npx signposts status                is the project armed or off?
   npx signposts detect                what languages this project uses (file census + stack signals; --json)
   npx signposts languages <list|add|register>   ast-grep grammars (add = prebuilt npm pkg; register = a built .so in sgconfig)
   npx signposts facts [...]           session facts (the coach's input)
@@ -70,6 +74,26 @@ Options:
 Judgement lives in the /signposts skill (setup · reflect · propagate · install).`);
 }
 
+// The off switch: one gitignored marker (.signposts/off) that every rail checks first.
+// Writing it silences EVERYTHING (sign injection, pre-emptive block, command guard, commit
+// gate); removing it restores all four. No settings surgery, perfectly reversible.
+function setOff(target, off) {
+  const marker = offMarkerPath(target);
+  if (off) { mkdirSync(dirname(marker), { recursive: true }); writeFileSync(marker, `off since ${new Date().toISOString()}\n`); }
+  else if (existsSync(marker)) rmSync(marker);
+  printStatus(target);
+}
+function printStatus(target) {
+  console.log(isOff(target)
+    ? `Signposts is OFF — every rail is silenced (marker: ${offMarkerPath(target)}). Run \`npx signposts on\` to restore.`
+    : 'Signposts is ON — signs, pre-emptive blocks, the command guard and the commit gate are all armed.');
+}
+// A loud banner so a silenced project can never masquerade as a guarded one: any invocation
+// (scaffold, help, a passthrough) surfaces the OFF state up front.
+function offBanner(target) {
+  if (isOff(target)) console.error(`\n⚠  SIGNPOSTS IS OFF — all rails are silenced (\`npx signposts on\` to restore).\n`);
+}
+
 // Passthrough to a package helper script, forwarding every arg after the subcommand.
 function passthrough(script, cmd) {
   const tail = process.argv.slice(process.argv.indexOf(cmd) + 1);
@@ -79,7 +103,11 @@ function passthrough(script, cmd) {
 
 const opts = parse(process.argv.slice(2));
 try {
+  if (!['off', 'on', 'status'].includes(opts.cmd)) offBanner(opts.target);  // other commands surface an OFF project
   if (opts.cmd === 'help') help();
+  else if (opts.cmd === 'off') setOff(opts.target, true);
+  else if (opts.cmd === 'on') setOff(opts.target, false);
+  else if (opts.cmd === 'status') printStatus(opts.target);
   else if (opts.cmd === 'facts') passthrough('src/skill/session-report.mjs', 'facts');
   else if (opts.cmd === 'diff') passthrough('src/skill/pack-diff.mjs', 'diff');
   else if (opts.cmd === 'test') passthrough('src/skill/rule-test.mjs', 'test');

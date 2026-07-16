@@ -13,10 +13,12 @@
 
 import { readFileSync } from 'node:fs';
 import { evaluateCommand, evaluateDelete, partitionBySeverity, formatViolation } from '../engine.mjs';
+import { isOff } from '../schema.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 async function main() {
+  if (isOff(ROOT)) return;                                      // off switch: guard silenced
   let raw = '';
   try { raw = readFileSync(0, 'utf8'); } catch { return; }
   const input = JSON.parse(raw || '{}');

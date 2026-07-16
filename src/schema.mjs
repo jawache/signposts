@@ -15,8 +15,9 @@
 //
 // FAILS SAFE like every rail: a missing / malformed file yields empty config, never raises.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { parse as parseYaml } from 'yaml';
 
 const THRESHOLD = 200_000;
@@ -119,6 +120,18 @@ export function normalizeDoc(doc) {
   }
 
   return { project: d.project || {}, config: d.config || {}, signs, rules, settings, bundles, warnings };
+}
+
+// ── the off switch: one marker every rail checks first ─────────────────────────
+// `.signposts/off` (gitignored) nullifies the WHOLE system — no sign injection, no
+// pre-emptive block, no command guard, no commit gate. Every rail calls isOff() first and
+// bails instantly, so an A/B run (rails on vs off) needs no settings surgery. Fail-safe:
+// any error reading the marker → treat as ON, so a filesystem hiccup can't silence the gate.
+export function offMarkerPath(root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
+  return join(root, '.signposts', 'off');
+}
+export function isOff(root = process.env.CLAUDE_PROJECT_DIR || process.cwd()) {
+  try { return existsSync(offMarkerPath(root)); } catch { return false; }
 }
 
 // ── loaders + flatteners the runtime calls ─────────────────────────────────────
@@ -229,6 +242,17 @@ function selfTest() {
   check('config.drift_tokens carried', normalizeDoc(sectionDoc).config.drift_tokens, 1000);
   check('malformed doc → empty, no throw', normalizeDoc('garbage'), { project: {}, config: {}, signs: {}, rules: {}, settings: {}, bundles: {}, warnings: [] });
   check('bundle from: recorded', normalizeDoc({ bundles: { fcis: { from: 'github:x#v1' } } }).bundles.fcis.from, 'github:x#v1');
+
+  // 5. off marker: isOff true only when .signposts/off exists.
+  const offRoot = mkdtempSync(join(tmpdir(), 'sg-off-'));
+  try {
+    check('isOff false when no marker', isOff(offRoot), false);
+    mkdirSync(join(offRoot, '.signposts'), { recursive: true });
+    writeFileSync(offMarkerPath(offRoot), 'off\n');
+    check('isOff true when marker present', isOff(offRoot), true);
+    rmSync(offMarkerPath(offRoot));
+    check('isOff false again once removed', isOff(offRoot), false);
+  } finally { rmSync(offRoot, { recursive: true, force: true }); }
 
   let pass = 0;
   for (const [name, ok, got, want] of cases) {

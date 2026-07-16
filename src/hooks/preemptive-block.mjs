@@ -23,6 +23,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { evaluate, partitionBySeverity } from '../engine.mjs';
+import { isOff } from '../schema.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
@@ -142,6 +143,7 @@ function inform(context) {
 
 async function main() {
   if (process.env.SIGNPOSTS_FORCE_ERROR) throw new Error('forced error (fail-safe test)');
+  if (isOff(ROOT)) { trace('off switch → allow'); return; }    // off switch: pre-emptive block silenced
 
   const raw = readStdin();
   trace(`invoked · stdin ${raw.length}B`);

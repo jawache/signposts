@@ -14,12 +14,13 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
 import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signs-core.mjs'
-import { loadSigns } from '../schema.mjs'
+import { loadSigns, isOff } from '../schema.mjs'
 import { logEvent } from '../log.mjs'
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd()
 
 try {
+  if (isOff(ROOT)) process.exit(0)                     // off switch: no sign injection
   const input = JSON.parse(readFileSync(0, 'utf8'))
   const session = input.session_id || 'unknown'
   const stateFile = statePath(session, input.agent_id || 'main')
