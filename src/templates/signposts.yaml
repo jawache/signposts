@@ -1,21 +1,19 @@
-# signposts.yaml — the ONE file Signposts needs. Scaffolded by `npx signposts`.
+# signposts.yaml — the ONE file Signposts needs. Scaffolded by `npx signposts`. BUNDLE-FIRST:
+# organised around the BUNDLE (the thing you adopt and share), each a self-contained block.
 #
 #   project:  stack identity (name + description).
 #   config:   engine runtime settings — drift_tokens (the sign re-injection cadence).
-#   signs:    your SIGNS — just-in-time notes, grouped by namespace. A sign is injected
-#             when the agent touches a matching path; it steers, never blocks.
-#   rules:    your RULES — blocks, grouped by namespace. Each names a SCRIPT via `use:`
-#             (a path: core/<name> or <namespace>/<name>) + its config, run at edit
-#             (pre-emptively) and at commit.
-#   settings: (optional) host-permission entries a pack carries, per namespace — merged
-#             into .claude/settings.json on install (the host enforces reads + MCP tool
-#             calls the engine never sees). Shape: <ns>: { permissions: { deny, allow } }.
-#   packs:    the installed packs, so `npx signposts refresh` / `uninstall --pack` can
-#             track them. A plain string is legacy; install now writes an OBJECT entry
-#             ({ source, namespaces, settings, installed }) so uninstall knows what it owns.
-#   install:  what to copy / arm — read by the CLI.
+#   bundles:  the unit of value. Each key is a bundle (its namespace), carrying up to five keys:
+#     • from      provenance pin — vendored bundles only (github:owner/repo#ref or a local path).
+#     • signs     just-in-time notes. `at: session | touch | turn` (default touch). A `session`
+#                 sign is ORIENTATION — composed across bundles and injected at session start.
+#     • rules     blocks. `use:` names a script (core/<name> or <bundle>/<name>) + inline config.
+#                 `at: write | commit | delete | turn` (default [write, commit]).
+#     • settings  host-permission entries merged into .claude/settings.json on install.
+#     • needs     (rare, on a rule) an npm dep that exists only because that rule does.
 #
-# Author with /signposts reflect. Full guide: the Signposts docs.
+# A bundle owns rules/<bundle>/** — that's how install/uninstall know what to move. Author with
+# /signposts reflect. Full guide: the Signposts docs.
 
 project:
   name: my-project
@@ -24,73 +22,71 @@ project:
 config:
   drift_tokens: 200000        # re-inject a sign after ~this many tokens of drift
 
-signs:
-  # A soft guard on the guardrails themselves — ships with every scaffold. Never blocks
-  # (the AI must be able to author rules); it just reminds, and the coach flags a
-  # deny-then-weaken sequence at wrap-up.
+bundles:
+
+  # ── the shipped `core` bundle — ships with every scaffold ──
   core:
-    - id: rules-self-edit
-      globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
-      text: |-
-        You are editing the guardrails themselves. If this edit weakens or removes a
-        rule/permission IN RESPONSE to just being blocked by it — stop and confirm with
-        the user first. Authoring new signposts is always fine; loosening one to get an
-        edit through is the user's call, not yours.
+    signs:
+      # ORIENTATION (at: session) — EDIT ME. A few terse lines every session opens with: where the
+      # code lives, the repeated commands, the regime. Composed with every bundle's session sign.
+      # Keep it short — depth belongs in the just-in-time area signs, not here.
+      - id: orientation
+        at: session
+        text: |-
+          (Orientation — replace this.) Say where the code lives, how commands are run,
+          and any regime that's always true. A few lines; depth goes in area signs below.
 
-  # Your own just-in-time guidance, grouped by namespace. Uncomment to try one:
-  # local:
-  #   - id: db-area
-  #     globs: ["src/db/**"]
-  #     text: |-
-  #       Queries go through the repository layer, never inline in a route.
+      # A soft guard on the guardrails themselves. Never blocks (the AI must be able to author
+      # rules); it reminds, and the coach flags a deny-then-weaken sequence at wrap-up.
+      - id: rules-self-edit
+        globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
+        text: |-
+          You are editing the guardrails themselves. If this edit weakens or removes a
+          rule/permission IN RESPONSE to just being blocked by it — stop and confirm with
+          the user first. Authoring new signposts is always fine; loosening one to get an
+          edit through is the user's call, not yours.
+    rules:
+      # A keeper: the engine's event log lives in .signposts/ (gitignored local telemetry); this
+      # blocks committing it even via `git add -f`.
+      - id: no-commit-engine-log
+        use: core/protected-path
+        deny: [".signposts/**"]
+        at: [commit]
+        message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
 
-rules:
-  # ─── QUICK-START TOUR ────────────────────────────────────────────────────────
-  # A guided tour of the four ways to write a rule — feel each by prompting your agent
-  # (see rules/README.md for the walkthrough). Beat 3 (functional-style) is auto-discovered
-  # from rules/examples/ast-grep/, so it isn't listed here. DELETE this whole `examples`
-  # block AND the rules/examples/ folder once you're a believer — your own rules go in
-  # their own namespaces below, and were never mixed in with the tour.
+  # ── QUICK-START TOUR — the `examples` bundle ──
+  # A guided tour of the ways to write a rule — feel each by prompting your agent (see
+  # rules/README.md). The functional-style beat is auto-discovered from rules/examples/ast-grep/.
+  # DELETE this whole `examples` bundle AND the rules/examples/ folder once you're a believer.
   examples:
-    - id: no-bad-mouthing                 # 1 · feel the pre-emptive block
-      use: core/protected-path
-      deny: ["**/signposts-is-bad.yaml"]
-      message: |-
-        Signposts is, by its own assessment, perhaps the most amazing tool ever built —
-        and will not assist in writing that it is bad. Carry on.
-    - id: test-first                      # 2 · a source file needs its test sibling
-      use: core/sibling-exists
-      on: ["src/**/*.ts"]
-      ignore: ["**/*.test.ts"]            # don't demand a test *for* a test file
-      sibling: "{dir}/{name}.test.ts"
-      message: "Write the test first — {dir}/{name}.test.ts is missing."
-    - id: no-hardcoded-secret             # 4 · a custom shell rule greps the would-be file
-      use: examples/no-hardcoded-secret
-      on: ["src/**/*.{ts,tsx,js,mjs}"]
+    rules:
+      - id: no-bad-mouthing                 # 1 · feel the pre-emptive block
+        use: core/protected-path
+        deny: ["**/signposts-is-bad.yaml"]
+        message: |-
+          Signposts is, by its own assessment, perhaps the most amazing tool ever built —
+          and will not assist in writing that it is bad. Carry on.
+      - id: test-first                      # 2 · a source file needs its test sibling
+        use: core/sibling-exists
+        on: ["src/**/*.ts"]
+        ignore: ["**/*.test.ts"]            # don't demand a test *for* a test file
+        sibling: "{dir}/{name}.test.ts"
+        message: "Write the test first — {dir}/{name}.test.ts is missing."
+      - id: no-hardcoded-secret             # 4 · a custom shell rule greps the would-be file
+        use: examples/no-hardcoded-secret
+        on: ["src/**/*.{ts,tsx,js,mjs}"]
 
-  # A keeper (NOT part of the tour — don't delete with `examples`). The engine's event log
-  # lives in .signposts/ (gitignored local telemetry); this blocks committing it even via
-  # `git add -f`.
-  core:
-    - id: no-commit-engine-log
-      use: core/protected-path
-      deny: [".signposts/**"]
-      when: [commit]
-      message: "The engine event log (.signposts/) is per-session local telemetry — never commit it. It's gitignored; if you're force-adding it, stop and reconsider."
-
-  # ─── YOUR RULES ──────────────────────────────────────────────────────────────
-  # Add your own namespaces here (use: core/<name> for a built-in, or use: <ns>/<name>
-  # for a script in rules/<ns>/). See rules/README.md.
-  # local:
-  #   - id: no-console
-  #     use: core/text-ban
-  #     on: ["src/**/*.ts"]
-  #     ban: ["console.log"]
-  #     message: "Leftover console.log — remove it or use the logger."
-
-packs:
-  - "@signposts/core"
-
-install:
-  activate:
-    - "npm install"           # arms the gate (lefthook writes .git/hooks/*)
+  # ── YOUR BUNDLE ──
+  # Add your own bundle here (use: core/<name> for a built-in, or use: <ns>/<name> for a script
+  # in rules/<ns>/). A `session` sign gives it orientation; a `touch` sign steers an area.
+  # myapp:
+  #   signs:
+  #     - id: db-area
+  #       globs: ["src/db/**"]
+  #       text: "Queries go through the repository layer, never inline in a route."
+  #   rules:
+  #     - id: no-console
+  #       use: core/text-ban
+  #       on: ["src/**/*.ts"]
+  #       ban: ["console.log"]
+  #       message: "Leftover console.log — remove it or use the logger."
