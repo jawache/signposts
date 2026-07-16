@@ -24,16 +24,29 @@ export function lint(doc, required = ['description']) {
       if (v == null || String(v).trim() === '') hits.push(`${where}: missing ${f}`);
     }
   };
+  const RESERVED = new Set(['project', 'config', 'signs', 'rules', 'settings', 'advisory', 'packs', 'install', 'bundles']);
   const walk = (ns, block) => {
     if (!block || typeof block !== 'object') return;
+    // current shape: a `signposts:` list of typed signposts.
+    (Array.isArray(block.signposts) ? block.signposts : []).forEach((e, i) => {
+      const kind = e && e.type === 'sign' ? 'sign' : e && e.type === 'rule' ? 'rule' : null;
+      if (!kind) hits.push(`signpost ${ns}/${(e && e.id) || `#${i + 1}`}: missing or unknown \`type\` (expected sign | rule)`);
+      else check(kind, ns, e, i);
+    });
+    // legacy grouped-inside-a-bundle.
     if (Array.isArray(block.signs)) block.signs.forEach((e, i) => check('sign', ns, e, i));
     if (Array.isArray(block.rules)) block.rules.forEach((e, i) => check('rule', ns, e, i));
   };
-  // bundle-first: bundles.<ns>.{signs,rules}
+  // current shape: every non-reserved top-level key is a bundle.
+  for (const [ns, b] of Object.entries(doc)) {
+    if (RESERVED.has(ns) || !b || typeof b !== 'object' || Array.isArray(b)) continue;
+    walk(ns, b);
+  }
+  // legacy `bundles:` wrapper.
   if (doc.bundles && typeof doc.bundles === 'object' && !Array.isArray(doc.bundles)) {
     for (const [ns, b] of Object.entries(doc.bundles)) walk(ns, b);
   }
-  // section-first back-compat: signs.<ns>[] / rules.<ns>[]
+  // legacy section-first: signs.<ns>[] / rules.<ns>[].
   for (const kind of ['signs', 'rules']) {
     const g = doc[kind];
     if (g && typeof g === 'object' && !Array.isArray(g)) {
@@ -52,17 +65,20 @@ export default {
     return lint(doc, rule.require || ['description']);
   },
   test() {
-    const good = 'bundles:\n  core:\n    signs:\n      - id: s\n        description: a sign\n        globs: ["x"]\n        text: hi\n    rules:\n      - id: r\n        description: a rule\n        use: core/protected-path\n        deny: ["y"]\n';
-    const noDesc = 'bundles:\n  core:\n    rules:\n      - id: r\n        use: core/protected-path\n        deny: ["y"]\n';
-    const noUse = 'bundles:\n  core:\n    rules:\n      - id: r\n        description: a rule\n';
-    const broken = 'bundles: [oops\n';
-    const legacy = 'rules:\n  local:\n    - id: r\n      description: ok\n      use: core/x\n';
+    // current shape: a top-level bundle with a typed `signposts:` list.
+    const good = 'mybundle:\n  title: T\n  summary: S\n  signposts:\n    - type: sign\n      id: s\n      description: a sign\n      on: ["x"]\n      text: hi\n    - type: rule\n      id: r\n      description: a rule\n      use: core/protected-path\n      deny: ["y"]\n';
+    const noDesc = 'mybundle:\n  signposts:\n    - type: rule\n      id: r\n      use: core/protected-path\n      deny: ["y"]\n';
+    const noUse = 'mybundle:\n  signposts:\n    - type: rule\n      id: r\n      description: a rule\n';
+    const noType = 'mybundle:\n  signposts:\n    - id: r\n      description: a thing\n';
+    const broken = 'mybundle: [oops\n';
+    const legacy = 'bundles:\n  local:\n    rules:\n      - id: r\n        description: ok\n        use: core/x\n';
     const ev = (content) => this.evaluate({}, { content });
     const pass = ev(good).length === 0
       && ev(noDesc).some((h) => /missing description/.test(h))
       && ev(noUse).some((h) => /must name a script/.test(h))
+      && ev(noType).some((h) => /unknown `type`/.test(h))
       && ev(broken).some((h) => /not valid YAML/.test(h))
-      && ev(legacy).length === 0                                     // section-first still lints
+      && ev(legacy).length === 0                                     // legacy shape still lints
       && this.evaluate({ require: ['description', 'message'] }, { content: good }).some((h) => /missing message/.test(h));
     return { name: 'core/signposts-lint', pass };
   },

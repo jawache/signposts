@@ -1,7 +1,8 @@
 ---
 // Signposts.astro — the live listing of THIS repo's own signposts, generated at build time from
-// the root signposts.yml. Every bundle → its signs and rules, each with its one-line description.
-// Reading the real config means the page can never drift from what the project actually ships.
+// the root signposts.yml. Every bundle → its title, summary, and its `signposts:` list (each a
+// typed sign or rule with a one-line description). Reading the real config means the page can
+// never drift from what the project actually ships.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -11,66 +12,41 @@ let doc: any = {};
 for (const name of ['signposts.yml', 'signposts.yaml']) {
   try { doc = parseYaml(fs.readFileSync(root + name, 'utf8')) || {}; break; } catch { /* try next */ }
 }
-const bundles: Record<string, any> = (doc && doc.bundles) || {};
+const RESERVED = new Set(['project', 'config', 'signs', 'rules', 'settings', 'advisory', 'packs', 'install', 'bundles']);
+const bundles = Object.entries(doc).filter(([k, v]: [string, any]) => !RESERVED.has(k) && v && typeof v === 'object' && !Array.isArray(v)) as [string, any][];
 
-// Moment shown per entry: a rule's `at` (default write+commit) or a sign's `at` (default touch).
-const moments = (e: any, kind: 'sign' | 'rule') => {
-  const at = e.at ?? e.when;
-  if (at) return [].concat(at).join(' · ');
-  return kind === 'rule' ? 'write · commit' : 'touch';
-};
-const nbsp = (s: string) => s || '—';
+// The lifecycle moment(s) shown per signpost — its explicit `at`, or the type's default.
+const moment = (e: any) => (Array.isArray(e.at) ? e.at.join(' · ') : (e.at || (e.type === 'sign' ? 'touch' : 'write · commit')));
 ---
 <div class="sp-list">
-  {Object.entries(bundles).map(([name, b]) => (
+  {bundles.map(([name, b]) => (
     <section class="sp-bundle">
-      <h3 id={`bundle-${name}`}>{name}{b?.from && <span class="sp-from">from {b.from}</span>}</h3>
-
-      {Array.isArray(b?.signs) && b.signs.length > 0 && (
-        <>
-          <p class="sp-kind">Signs — steer</p>
-          <table>
-            <thead><tr><th>id</th><th>moment</th><th>what it does</th></tr></thead>
-            <tbody>
-              {b.signs.map((s: any) => (
-                <tr>
-                  <td><code>{s.id}</code></td>
-                  <td class="sp-moment">{moments(s, 'sign')}</td>
-                  <td>{nbsp(s.description)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {Array.isArray(b?.rules) && b.rules.length > 0 && (
-        <>
-          <p class="sp-kind">Rules — block</p>
-          <table>
-            <thead><tr><th>id</th><th>uses</th><th>moment</th><th>what it does</th></tr></thead>
-            <tbody>
-              {b.rules.map((r: any) => (
-                <tr>
-                  <td><code>{r.id}</code></td>
-                  <td><code>{r.use}</code></td>
-                  <td class="sp-moment">{moments(r, 'rule')}</td>
-                  <td>{nbsp(r.description)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+      <h3 id={`bundle-${name}`}>{b.title || name}</h3>
+      {b.summary && <p class="sp-summary">{b.summary}</p>}
+      <table>
+        <thead><tr><th>type</th><th>id</th><th>moment</th><th>what it does</th></tr></thead>
+        <tbody>
+          {(b.signposts || []).map((e: any) => (
+            <tr>
+              <td><span class={`sp-chip sp-${e.type}`}>{e.type}</span></td>
+              <td><code>{e.id}</code>{e.use && <span class="sp-use"> · {e.use}</span>}</td>
+              <td class="sp-moment">{moment(e)}</td>
+              <td>{e.description || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   ))}
 </div>
 
 <style>
   .sp-bundle { margin: 1.6rem 0 2rem; }
-  .sp-bundle h3 { display: flex; align-items: baseline; gap: .6rem; }
-  .sp-from { font-size: .72rem; font-weight: 400; color: var(--mut, #6b726a); font-family: "Overpass Mono", monospace; }
-  .sp-kind { font: 700 .7rem/1 "Overpass", system-ui, sans-serif; text-transform: uppercase; letter-spacing: .05em; color: var(--mut, #6b726a); margin: 1rem 0 .3rem; }
+  .sp-summary { color: var(--mut, #6b726a); margin: .2rem 0 .7rem; font-size: .95rem; }
+  .sp-chip { font: 700 .62rem "Overpass", system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; padding: .1rem .45rem; border-radius: 999px; }
+  .sp-chip.sp-sign { background: #eaf2ff; color: #2a6fb0; }
+  .sp-chip.sp-rule { background: #fdeee2; color: #c2410c; }
+  .sp-use { color: var(--mut, #6b726a); font-family: "Overpass Mono", monospace; font-size: .8em; }
   .sp-moment { white-space: nowrap; font-family: "Overpass Mono", monospace; font-size: .82em; }
   .sp-list table { font-size: .92rem; }
   .sp-list td, .sp-list th { vertical-align: top; }

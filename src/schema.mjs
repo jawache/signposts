@@ -25,8 +25,19 @@ const THRESHOLD = 200_000;
 // Authoring moment → internal engine phase. `write` is the human word for the pre-emptive
 // PreToolUse block, which the engine has always called `edit`. The rest pass straight through,
 // including the legacy internal names so an old `when: [edit, commit]` still normalises to itself.
-const RULE_MOMENTS = { write: 'edit', edit: 'edit', commit: 'commit', delete: 'delete', push: 'push', turn: 'turn' };
-const SIGN_MOMENTS = new Set(['session', 'touch', 'turn']);
+// Authoring moment → internal engine phase. `command` (a command-guard rule) and `delete` both
+// fire at PreToolUse, which the engine drives at internal phase `edit`/`delete`; `turn-end` is the
+// Stop hook (`turn`). Internal names (edit/turn) stay accepted for the legacy grouped shape.
+// A moment maps to one or more internal phases. `command` (a command-guard rule) fires at
+// PreToolUse (internal `edit`) AND must satisfy the commit-gate path the rule-tester drives it on,
+// so it expands to both. `turn-end` is the Stop hook (`turn`).
+const RULE_MOMENTS = { write: 'edit', edit: 'edit', command: ['edit', 'commit'], commit: 'commit', delete: 'delete', push: 'push', 'turn-end': 'turn', turn: 'turn' };
+const SIGN_MOMENTS = new Set(['session', 'touch', 'turn-end', 'turn']);
+
+// Top-level keys that are NOT bundles. Everything else at the top of the file is a bundle
+// (its `title` / `summary` + a `signposts:` list). `signs`/`rules`/`settings`/`advisory`/`packs`/
+// `install`/`bundles` are only here so a legacy-shaped file still loads.
+const RESERVED = new Set(['project', 'config', 'signs', 'rules', 'settings', 'advisory', 'packs', 'install', 'bundles']);
 
 // ── per-entry normalisation ────────────────────────────────────────────────────
 
@@ -40,7 +51,7 @@ export function normaliseRule(r, warnings = []) {
   for (const m of [].concat(raw)) {
     const phase = RULE_MOMENTS[m];
     if (!phase) { warnings.push(`rule '${r.id ?? '?'}': unknown moment '${m}' — entry skipped`); return null; }
-    if (!when.includes(phase)) when.push(phase);
+    for (const p of [].concat(phase)) if (!when.includes(p)) when.push(p);   // a moment may map to >1 phase
   }
   const { at: _at, when: _when, ...rest } = r;
   return { ...rest, when };
@@ -52,9 +63,11 @@ export function normaliseRule(r, warnings = []) {
 // until the SessionStart delivery lands. Returns null on an unknown moment.
 export function normaliseSign(s, warnings = []) {
   if (!s || typeof s !== 'object') return null;
-  const at = s.at || (s.global ? 'session' : 'touch');
+  const at = (s.at != null ? [].concat(s.at)[0] : (s.global ? 'session' : 'touch'));
   if (!SIGN_MOMENTS.has(at)) { warnings.push(`sign '${s.id ?? '?'}': unknown moment '${at}' — entry skipped`); return null; }
-  const out = { ...s, at };
+  const { on, ...rest } = s;
+  const out = { ...rest, at };
+  if (on != null && out.globs == null) out.globs = on;      // unify: `on` is the file glob for both signs and rules
   if (at === 'session') out.global = true;
   return out;
 }
@@ -100,15 +113,37 @@ export function normalizeDoc(doc) {
       if (n) (rules[ns] ||= []).push(n);
     }
   };
+  // A bundle's `signposts:` list: one ordered list, each item a SIGNPOST tagged `type: sign | rule`,
+  // so a sign and its related rule sit together in reading order. Split by type into the internal
+  // signs/rules maps the engine consumes.
+  const addSignposts = (ns, list) => {
+    for (const e of list || []) {
+      if (!e || !e.id) continue;
+      if (e.type === 'sign') { const n = normaliseSign(e, warnings); if (n) (signs[ns] ||= []).push(n); }
+      else if (e.type === 'rule') { const n = normaliseRule(e, warnings); if (n) (rules[ns] ||= []).push(n); }
+      else warnings.push(`signpost '${e.id}': missing or unknown \`type\` (expected sign | rule)`);
+    }
+  };
+  // Inline bundle metadata (title/summary/cite/needs) — renders in browse / the docs listing.
+  const meta = (b) => ({ title: b.title ?? null, summary: b.summary ?? null, cite: b.cite ?? null, from: b.from ?? null, needs: b.needs ?? b.devDependencies ?? null });
 
-  // 1. bundle-first: each bundle contributes to its own namespace.
+  // 1. CURRENT shape: each top-level key that isn't reserved IS a bundle, carrying `title` /
+  //    `summary` and a `signposts:` list. No `bundles:` wrapper.
+  for (const [ns, b] of Object.entries(d)) {
+    if (RESERVED.has(ns) || !b || typeof b !== 'object' || Array.isArray(b)) continue;
+    addSignposts(ns, b.signposts);
+    addSigns(ns, b.signs); addRules(ns, b.rules);           // tolerate a grouped block inside a bundle
+    if (b.settings) settings[ns] = b.settings;
+    bundles[ns] = meta(b);
+  }
+
+  // 2. LEGACY: an explicit `bundles:` wrapper (older bundle-first files still load).
   if (d.bundles && typeof d.bundles === 'object' && !Array.isArray(d.bundles)) {
     for (const [ns, b] of Object.entries(d.bundles)) {
       if (!b || typeof b !== 'object') continue;
-      addSigns(ns, b.signs);
-      addRules(ns, b.rules);
+      addSignposts(ns, b.signposts); addSigns(ns, b.signs); addRules(ns, b.rules);
       if (b.settings) settings[ns] = b.settings;
-      bundles[ns] = { from: b.from ?? null, needs: b.needs ?? null };  // provenance/meta (consumed in P6)
+      bundles[ns] = meta(b);
     }
   }
 
