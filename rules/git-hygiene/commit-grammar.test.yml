@@ -1,0 +1,23 @@
+# Test for commit-grammar (a command rule). It reads the `-m` message of a `git commit` and
+# checks the first line against Conventional Commits. Pure command-string parsing — no git repo.
+cases:
+  - command: 'git commit -m "feat(auth): renew session on refresh"'
+    expect: pass
+  - command: 'git commit -m "fix: correct off-by-one"'
+    expect: pass
+  - command: 'git commit -m "release: 0.3.0"'
+    expect: pass
+  - command: 'git commit -m "docs(schema)!: drop the old shape"'
+    expect: pass
+  - command: 'git commit'                       # editor commit — no message to judge
+    expect: pass
+  - command: 'ls -la'                           # not a commit
+    expect: pass
+  - command: 'echo "git commit -m nope"'        # quoted mention, not a real commit
+    expect: pass
+  - command: 'git commit -m "just fixing stuff"'   # no conventional type
+    expect: block
+    message: /not Conventional Commits/
+  - command: 'git commit -m "Fix: capitalised"'    # type must be a lowercase word
+    expect: block
+    message: /not Conventional Commits/

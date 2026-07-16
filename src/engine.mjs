@@ -37,7 +37,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));           // …/src (the 
 const CORE_DIR = join(HERE, 'core');
 const TS_GLOB = '**/*.{ts,tsx,mts,cts}';
 const CORE = ['ast-grep', 'sibling-exists', 'symbols-in-sibling', 'json-invariant',
-              'text-ban', 'command-guard', 'protected-path', 'tool-gate', 'ran-since-edit', 'depcruise', 'signposts-lint'];
+              'text-ban', 'command-guard', 'protected-path', 'tool-gate', 'ran-since-edit', 'depcruise',
+              'change-together', 'max-size', 'signposts-lint'];
 
 // ── load + normalise rules ────────────────────────────────────────────────────
 export function loadRules(root, configPath) {

@@ -161,6 +161,7 @@ git-hygiene:
       at: [session]
       text: |-
         Commits, PRs and issues carry NO Claude/Anthropic attribution — no Co-Authored-By line, no "Generated with Claude", no mention. Author them as your own.
+        Commit headers speak Conventional Commits — `type(scope)!: description` (feat/fix/docs/refactor/… + release). The type is your judgement; the grammar is enforced.
         A `git checkout` / `git restore` that would silently wipe uncommitted work is blocked — stash first, or append `# discard-ok` if you truly mean it.
 
     - type: rule
@@ -184,6 +185,156 @@ git-hygiene:
       at: [command]
       use: git-hygiene/no-git-discard
       message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
+
+    - type: rule
+      id: commit-grammar
+      description: Checks a git commit message speaks Conventional Commits before the commit runs.
+      at: [command]
+      use: git-hygiene/commit-grammar
+      types: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release]
+      message: "Commit header must match Conventional Commits: type(scope)!: description — e.g. `fix(engine): renew session on refresh`."
+
+# ── fcis — functional core, imperative shell: the architecture this engine is built on ──
+fcis:
+  title: Functional core, imperative shell
+  summary: Keep decision logic pure and testable, push effects to the edges — and fence the import graph so it stays that way.
+  signposts:
+    - type: sign
+      id: fcis
+      description: The functional-core / imperative-shell model, shown when you touch the decision core.
+      at: [touch]
+      on: ["src/core/**", "src/schema.mjs"]
+      text: |-
+        Functional Core, Imperative Shell (Gary Bernhardt, "Boundaries"): decisions live in pure functions — no I/O, no clock, no randomness, no env; inject them as arguments, because determinism IS testability.
+        Here that's the core scripts' evaluate() and the normaliser: they compute a verdict from their inputs. The effects — reading files, spawning tools, writing the log — live in the hooks and the CLI, the thin shell around the core.
+        A core script that must shell out (depcruise, tool-gate, change-together) is itself a small adapter; keep the DECISION pure and hand the effect its inputs, so a plain function can be unit-tested.
+
+    - type: rule
+      id: import-fence
+      description: A dependency-cruiser fence — the decision core must not import the CLI shell.
+      at: [commit]
+      use: core/depcruise
+      scan: src
+      layers:
+        core: ["src/core/**", "src/schema.mjs"]
+        cli: ["src/cli/**"]
+      forbid:
+        - from: core
+          to: cli
+          why: "the decision core never reaches up into the CLI shell"
+      message: "An import crosses the FCIS boundary the wrong way — the decision core (src/core, src/schema.mjs) must not import the CLI shell. Dependencies point inward: the shell imports the core, never the reverse."
+
+# ── tdd — how we test here ──
+tdd:
+  title: Testing discipline
+  summary: Test behaviour, not implementation; spend effort where confidence-per-cost is highest.
+  signposts:
+    - type: sign
+      id: philosophy
+      description: What to test and how much, shown when you touch a test.
+      at: [touch]
+      on: ["**/*.test.mjs", "rules/**/*.test.yml", "test/**"]
+      text: |-
+        Spend where confidence-per-cost is highest (Kent C. Dodds' testing trophy): a static base, a modest unit layer, a dominant integration layer, a thin e2e cap.
+        Test behaviour as the caller sees it, never implementation detail — if a behaviour-preserving refactor breaks a test, the test was wrong. A core script proves itself with its own test() (a legal + an illegal sample); a rule proves itself with a colocated .test.yml the engine runs.
+
+# ── node — package & dependency hygiene for the engine ──
+node:
+  title: Node app hygiene
+  summary: A new dependency is an audit surface; the lockfile moves with it, and the version stays SemVer.
+  signposts:
+    - type: sign
+      id: dependencies
+      description: What to weigh before adding a dependency, shown when you touch the manifest.
+      at: [touch]
+      on: ["package.json", "package-lock.json"]
+      text: |-
+        A new dependency is an audit surface (supply-chain risk): prefer the platform or a dep you already have; pin versions; the lockfile change ships in the SAME commit as the package.json change.
+        Signposts keeps its runtime deps deliberately tiny — @ast-grep/napi, dependency-cruiser, typescript, yaml. Adding to that list is a real decision, not a reflex.
+
+    - type: rule
+      id: lockfile-in-step
+      description: package.json and the lockfile must change in the same commit.
+      at: [commit]
+      use: core/change-together
+      groups:
+        - if: ["package.json"]
+          then-any: ["package-lock.json"]
+      message: "package.json changed but the lockfile didn't. Run the install and stage package-lock.json in the same commit."
+
+    - type: rule
+      id: version-is-semver
+      description: package.json version is valid SemVer 2.0.0.
+      at: [write, commit]
+      on: "package.json"
+      use: core/json-invariant
+      assert:
+        - path: version
+          matches: '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+      message: "package.json `version` must be valid SemVer 2.0.0 (MAJOR.MINOR.PATCH[-prerelease][+build])."
+
+# ── typescript — discipline for the site's TypeScript (the engine itself is plain .mjs) ──
+typescript:
+  title: TypeScript discipline
+  summary: In the site's TypeScript, never silence the checker; the strict preset stays on.
+  signposts:
+    - type: sign
+      id: types-as-design
+      description: Use types as a design tool, shown when you touch the site's TypeScript.
+      at: [touch]
+      on: ["site/**/*.ts", "site/tsconfig.json"]
+      text: |-
+        Keep the strict preset on — weakening tsconfig is a decision, not a fix for a red squiggle. Model impossible states as impossible: two sibling boolean flags (isLoading + isError) are a smell — reach for a discriminated union so the illegal combination cannot be constructed.
+
+    - type: rule
+      id: tsconfig-stays-strict
+      description: The site's tsconfig keeps extending Astro's strict preset.
+      at: [write, commit]
+      on: "site/tsconfig.json"
+      use: core/json-invariant
+      assert:
+        - path: extends
+          matches: strict
+          required: true
+      message: "site/tsconfig.json must keep extending a strict preset (astro/tsconfigs/strict) — strictness here is load-bearing."
+
+# ── web — quality gates for the docs site ──
+web:
+  title: Web quality
+  summary: The lintable slices of accessibility and performance for the docs site.
+  signposts:
+    - type: sign
+      id: accessibility
+      description: The a11y checks a linter can't make, shown when you touch the site's UI.
+      at: [touch]
+      on: ["site/src/components/**", "site/src/pages/**", "site/src/layouts/**"]
+      text: |-
+        The static rules catch only the lintable slice of WCAG. The rest needs a rendered page: colour contrast, target size ≥24px, focus order. Interactive means keyboard-reachable — a real <button>, not a <div onClick>.
+
+    - type: sign
+      id: performance
+      description: The edit-time performance rules of thumb for the site.
+      at: [touch]
+      on: ["site/src/pages/**", "site/src/layouts/**", "site/public/**"]
+      text: |-
+        Core Web Vitals (LCP, INP, CLS) are field metrics — measure them, don't lint them. Edit-time rules of thumb: never lazy-load the largest above-the-fold image, and new assets respect the byte budget (a budget you don't enforce is a wish).
+
+    - type: rule
+      id: asset-budget
+      description: Committed site assets respect a byte budget.
+      at: [commit]
+      use: core/max-size
+      on: ["site/public/**", "site/src/assets/**"]
+      budgets:
+        - glob: "**/*.{png,jpg,jpeg,gif}"
+          max: 300KB
+          hint: "convert to webp/avif or resize"
+        - glob: "**/*.{webp,avif,svg,woff2}"
+          max: 300KB
+        - glob: "**/*"
+          max: 500KB
+      allow_marker: ".budget-ok."
+      message: "A site asset exceeds its byte budget. Compress or resize it, or rename it with `.budget-ok.` and defend it in review."
 
 # ── local — ONLY for developing Signposts itself (this codebase); never installed elsewhere ──
 local:
