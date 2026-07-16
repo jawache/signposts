@@ -4,22 +4,26 @@ description: ALWAYS invoke when the user says "/signposts", "/signposts setup", 
 allowed-tools: Read, Write, Edit, Glob, Grep, Task, Bash(ls *), Bash(cp *), Bash(mkdir *), Bash(just *), Bash(npx signposts *), Bash(git status*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git checkout*), Bash(gh pr*)
 ---
 
-# Signposts — setup · reflect · propagate · install
+# Signposts — setup · reflect · propagate · install · refresh
 
-One skill, **four modes**. Each is the *judgement* half of a job whose *facts* come
+One skill, several modes. Each is the *judgement* half of a job whose *facts* come
 from a deterministic script — so you never rediscover what a script can just tell you.
+The unit people adopt and share is the **bundle**: one contiguous block under `bundles:`
+(its signs, rules, `settings`, and a `from:` pin when vendored) plus its `rules/<bundle>/`.
 
 | Mode | What it does | Its fact-provider |
 |---|---|---|
-| **setup** | onboard a repo: install the right grammars, surface the pack's own rules, teach check-before-you-script | `npx signposts detect` / `diff` / `languages` |
+| **setup** | onboard a repo: install the right grammars, surface the pack's own bundles, teach check-before-you-script | `npx signposts detect` / `diff` / `languages` |
 | **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ `--html` report card; + the `coach` agent) |
+| **install** | cherry-pick a bundle from another repo (git/**local folder**) into this one | `npx signposts diff` |
+| **refresh** | pull upstream fixes for a vendored bundle, keeping your local edits (semantic three-way) | the bundle's `from:` pin |
 | **propagate** | send a rule/sign to a repo you name (your hub, or upstream) | `git` / `gh` |
-| **install** | cherry-pick signs/rules from another repo (git/npm/**local folder**) into this one | `npx signposts diff` |
+| **uninstall** | remove a bundle: its block, its `rules/<bundle>/`, only the permissions nothing else needs | the `from:` pin + settings ledger |
 
-Two more deterministic helpers you can reach for in any mode: **`npx signposts scan`** (audit
-the whole tree against the rules — reports, never blocks: see what an existing repo already
-violates, or how many hits a rule you're about to add would have) and **`npx signposts
-uninstall --pack <ns>`** (reverse one installed pack).
+The lifecycle modes (install · refresh · propagate · uninstall) are **agent-driven**: you read
+the bundle block and orchestrate; deterministic primitives (source resolution, comment-preserving
+`editYaml`, the three-way merge) do the mechanical parts. Reach for **`npx signposts scan`**
+(audit the whole tree — reports, never blocks) in any mode.
 
 **The rule between the two halves:** the script emits facts (what drifted, what's in
 that repo, what collides); *you* apply the judgement (which to keep, how to genericise,
@@ -108,41 +112,57 @@ guardrails born in real work bubble up to be shared.
    user — a path/URL to their hub, or the upstream pack. **Never guess the destination.**
 2. **Genericise.** Strip what was specific to this project — a hard-coded path, a repo
    name, a private detail — so it lands usable. This is judgement; do it deliberately.
-3. **Choose the namespace** it belongs to in the target (e.g. `neon`, or the user's hub
-   namespace). A pack *is* a namespace — its `signs:`/`rules:` groups plus the scripts in
-   `rules/<namespace>/`.
-4. **Apply.** Into the target repo: copy the script(s) into `rules/<namespace>/`, and merge
-   the entry into the matching `signs:`/`rules:` group in its `signposts.yaml` (create the
-   group if absent). Keep the `--test`.
+3. **Choose the bundle** it belongs to in the target (e.g. `fcis`, or the user's hub bundle).
+   A bundle *is* the unit — one block under `bundles:` (its `signs:` / `rules:` / `settings`)
+   plus the scripts in `rules/<bundle>/`.
+4. **Apply.** Into the target repo: copy the script(s) into `rules/<bundle>/`, and merge the
+   entry into that bundle's `signs:` / `rules:` list in its `signposts.yaml` via `editYaml`
+   (create the bundle block if absent, comments preserved). Keep the `--test`.
 5. **Ship** — for your hub, `git add/commit/push`; for upstream, open a PR (`gh pr create`)
    with a one-line why. **Sending is outward-facing — confirm before you push or open a PR.**
 
 ---
 
-## Mode: `install` — cherry-pick from any repo
+## Mode: `install` — cherry-pick a bundle from any repo
 
 Point at any repo — your hub, a teammate's project, an official pack — **or a local folder on
-disk** (`../my-hub`, the common private-repo case) — and pull what you want. Any repo with a
-current-shape `signposts.yaml` is installable; there's no separate pack format. (An older-layout
-repo is refused with a pointer to cherry-pick by hand.) Reverse one later with
-`npx signposts uninstall --pack <ns>` — it removes the namespace's entries, scripts, and any
-permissions it added, and nothing else.
+disk** (`../my-hub`, the common private-repo case) — and pull the **bundle** you want. In the
+bundle-first schema a bundle is **one contiguous block** under `bundles:` (its signs, rules,
+`settings`, and — for a vendored bundle — a `from:` provenance pin) plus its `rules/<bundle>/`
+folder. Copying a bundle is copying that block plus that folder — nothing scattered. This is
+**agent-driven**: you read the block and orchestrate the copy; the deterministic primitives
+(source resolution, comment-preserving `editYaml`) do the mechanical parts.
 
-1. **Diff.** `npx signposts diff <source-repo>` (add `--json` to consume it) — reports, per
-   namespace, for both signs and rules: **new** (take freely), **COLLIDE** (you both have
-   the id, differing), **same** (already have), plus the script files each namespace ships.
-   Facts, deterministically.
-2. **Present the picker.** Walk the user through it: offer whole **namespaces** ("take all
-   of `neon`") or individual **entries**. Show what each is.
-3. **Resolve collisions in conversation** — this is exactly where judgement beats a rigid
-   rule. For each COLLIDE, show both versions and ask: keep mine, take theirs, or merge.
-   Don't silently clobber.
-4. **Apply the picks.** `npx signposts install <src> <ns>` does the deterministic apply: copies
-   `rules/<namespace>/…`, merges the entries into your `signs:`/`rules:` groups (comments
-   preserved), merges any host-permissions the pack carries into `.claude/settings.json`, and
-   records what it owns in `packs:` so `refresh` (three-way merge) and `uninstall --pack` can
-   track it.
+1. **Diff.** `npx signposts diff <source-repo>` (add `--json`) — reports, per bundle, for signs
+   and rules: **new** (take freely), **COLLIDE** (you both have the id, differing), **same**,
+   plus the script files each bundle ships. Facts, deterministically — bundle-first and
+   section-first sources both read correctly.
+2. **Present the picker.** Offer whole **bundles** ("take all of `fcis`") or individual
+   **entries**. Show what each is and, for a vendored bundle, where it came from.
+3. **Resolve collisions in conversation** — judgement beats a rigid rule. For each COLLIDE, show
+   both versions and ask: keep mine, take theirs, or merge. Never silently clobber.
+4. **Apply the bundle.** Copy the source bundle's block into this repo's `bundles:` (via
+   `editYaml`, comments preserved) and its `rules/<bundle>/**` folder across; merge any
+   host-permissions the bundle's `settings` carries into `.claude/settings.json` (deny-only is
+   auto-applied — an `allow` widens autonomy, so surface it for the user to add by hand);
+   aggregate any rule-level `needs:` deps; write a `from:` pin recording the source + version.
+   *(For one release the deterministic `npx signposts install <src> <ns>` still performs this
+   apply — it prints a pointer here first.)*
 5. **Test + arm.** `just test-rules` green; the new rules fire on next edit/commit.
+
+## Mode: `refresh` — pull upstream fixes, keep your local edits
+
+A vendored bundle is **editable in place** — editing it *is* your local override, and the `from:`
+pin makes drift visible. Refresh is a **semantic three-way**, not a blind overwrite.
+
+1. **Fetch the pin.** Resolve the bundle's `from:` source at its recorded (or a newer) version.
+2. **Three-way per entry.** For each sign/rule, compare *base* (the pin) → *yours* → *upstream*:
+   an upstream fix to something you never touched merges cleanly; a line you deliberately changed
+   (a downgraded severity, a tuned glob) is **kept and flagged**; a genuine divergence surfaces
+   for a call. Scripts merge the same way; a conflicting script lands a `.upstream` sidecar, never
+   markers in the live file.
+3. **Offer the up-flow.** A local improvement worth sharing → hand it to `propagate`.
+   *(The deterministic `npx signposts refresh` still runs this three-way for one release.)*
 
 ---
 
@@ -152,15 +172,16 @@ Full detail is in `docs/` (see `07-authoring`); the shape at a glance:
 
 | Want to… | Author | Where |
 |---|---|---|
-| **steer** an area (shape, judgement, a constraint no check can make) | a **sign** | a `signs:` entry (`id` + `globs` + `text`), grouped by namespace |
-| **block** a mechanically-checkable mistake | a **rule** | a `rules:` entry naming a script via `use:` (core or your own), grouped by namespace |
+| **steer** an area (shape, judgement, a constraint no check can make) | a **sign** | a `signs:` entry (`id` + `globs` + `text`) in its bundle's block; `at: session` for orientation |
+| **block** a mechanically-checkable mistake | a **rule** | a `rules:` entry naming a script via `use:` (core or your own) in its bundle's block |
 | ban/require a **code shape** (TS/TSX) | a rule | drop a `rules/ast-grep/<name>.yml` — zero code |
 | something **novel** | a rule | a small own-script `rules/<ns>/<name>.{mjs,sh}` with a `--test` |
 
 - **A sign** is delivered when the agent touches its area; keep it short and specific.
   Overlapping signs *both* apply, in file order.
 - **A rule** names the decision in its `message:`, ships a `--test` (a legal + an illegal
-  sample), and defaults to `when: [edit, commit]` (omit unless a tool-gate → `[commit]`).
+  sample), and speaks the **moment vocabulary** `at: write | commit | delete | turn` (default
+  `[write, commit]`; a whole-project tool-gate → `[commit]`; an end-of-turn check → `[turn]`).
 - **Prefer a rule whenever it's checkable** — a sign for something a check could catch is
   hope, not enforcement. And **never restate an enforced rule in a sign** — omit it, no
   pointer.

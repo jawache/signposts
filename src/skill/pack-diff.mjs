@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse as parseYaml } from 'yaml';
+import { loadConfig, loadDoc } from '../schema.mjs';
 
 // A3 (honesty): the legacy flat layout (`advisory:`, or `signs:`/`rules:` as a bare array)
 // carries no namespaces, so a diff of it finds nothing — the same "(no installable namespaces)"
@@ -24,20 +24,16 @@ export function isLegacyDoc(doc) {
   return !!doc && (doc.advisory !== undefined || Array.isArray(doc.signs) || Array.isArray(doc.rules));
 }
 
-// ── load a repo's packs (grouped: section → namespace → [entries]) ────────────
+// ── load a repo's packs (grouped: namespace → [entries]) via the shared normaliser, so a
+//    BUNDLE-FIRST source diffs exactly like a section-first one (bundle name = namespace), and
+//    both sides are moment-normalised so `at:` vs legacy `when:` never masquerades as a diff.
 export function loadPacks(root) {
-  let doc = {};
-  try { doc = parseYaml(readFileSync(join(root, 'signposts.yaml'), 'utf8')) || {}; } catch { /* none */ }
-  // `settings:` (optional) carries host-permission entries per namespace — travels with
-  // the namespace on install (merged into .claude/settings.json). Shape: ns → { permissions: { deny, allow } }.
-  return { signs: grouped(doc.signs), rules: grouped(doc.rules), settings: (doc.settings && typeof doc.settings === 'object') ? doc.settings : {}, root, legacy: isLegacyDoc(doc) };
-}
-function grouped(section) {
-  const out = {};
-  if (section && typeof section === 'object' && !Array.isArray(section)) {
-    for (const [ns, list] of Object.entries(section)) if (Array.isArray(list)) out[ns] = list.filter((e) => e && e.id);
-  }
-  return out;
+  const c = loadConfig(root);
+  // The normaliser buckets a legacy FLAT list under the '' namespace (namespace-less). A pack is
+  // a named unit, so drop it — a legacy-layout source then reads as "no installable namespaces"
+  // and the diff explains WHY (via `legacy`), instead of inventing an unnamed pack.
+  const named = (g) => Object.fromEntries(Object.entries(g).filter(([ns]) => ns !== ''));
+  return { signs: named(c.signs), rules: named(c.rules), settings: named(c.settings), root, legacy: isLegacyDoc(loadDoc(root)) };
 }
 
 // stable stringify (sorted keys) so formatting never masquerades as a difference.

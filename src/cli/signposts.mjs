@@ -94,6 +94,14 @@ function offBanner(target) {
   if (isOff(target)) console.error(`\n⚠  SIGNPOSTS IS OFF — all rails are silenced (\`npx signposts on\` to restore).\n`);
 }
 
+// Lifecycle (install / refresh / uninstall) is moving into the /signposts skill, where an agent
+// reads a bundle block, copies it + rules/<bundle>/, merges settings, and does a semantic
+// three-way on refresh. For ONE release these CLI commands still run, behind a pointer to the
+// skill — the deterministic apply they call remains the primitive the skill leans on.
+function lifecycleNotice(mode) {
+  console.error(`ℹ  \`npx signposts ${mode}\` is moving into the /signposts skill — run \`/signposts ${mode}\` for the agent-driven flow (bundle-first, semantic merges). This direct command still runs for now.`);
+}
+
 // Passthrough to a package helper script, forwarding every arg after the subcommand.
 function passthrough(script, cmd) {
   const tail = process.argv.slice(process.argv.indexOf(cmd) + 1);
@@ -115,11 +123,12 @@ try {
   else if (opts.cmd === 'languages') passthrough('src/cli/languages.mjs', 'languages');
   else if (opts.cmd === 'install') {
     if (!opts.args[0]) { console.error('usage: npx signposts install <source> [namespace]'); process.exit(1); }
+    lifecycleNotice('install');
     installPack({ source: opts.args[0], namespace: opts.args[1], target: opts.target });
   }
   else if (opts.cmd === 'scan') scan({ root: opts.target, json: opts.json });
-  else if (opts.cmd === 'refresh') refresh({ target: opts.target });
-  else if (opts.cmd === 'uninstall') uninstall({ target: opts.target, dryRun: opts.dryRun, pack: opts.pack });
+  else if (opts.cmd === 'refresh') { lifecycleNotice('refresh'); refresh({ target: opts.target }); }
+  else if (opts.cmd === 'uninstall') { lifecycleNotice('uninstall'); uninstall({ target: opts.target, dryRun: opts.dryRun, pack: opts.pack }); }
   else if (!opts.cmd || opts.cmd === 'scaffold') scaffold({ packRoot: PACK_ROOT, target: opts.target, activate: opts.activate, dryRun: opts.dryRun });
   else { console.error(`Unknown command: ${opts.cmd}\n`); help(); process.exit(1); }
 } catch (e) {
