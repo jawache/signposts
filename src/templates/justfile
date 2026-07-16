@@ -1,24 +1,25 @@
 # Command catalog — scaffolded by `npx signposts`. `just` (no recipe) lists everything.
 # Every recipe carries a [doc("…")]. Requires `just` (brew install just).
 
-# Put repo-local CLIs (ast-grep, lefthook…) on PATH for every recipe.
+# Put repo-local CLIs (ast-grep…) on PATH for every recipe.
 export PATH := (justfile_directory() / "node_modules" / ".bin") + ":" + env_var("PATH")
 
 [doc("Show the catalog.")]
 default:
     @just --list
 
-[doc("Install dependencies from the lockfile — run this first in a fresh clone/worktree.")]
+[doc("Install deps + arm the commit gate (core.hooksPath) — run this first in a fresh clone/worktree.")]
 install:
     npm ci
+    git config core.hooksPath .githooks
 
 [doc("Run every rule's .test.yml through the real engine (+ validate ast-grep ymls), from the installed signposts package.")]
 test-rules:
     node node_modules/signposts/src/cli/signposts.mjs test
 
-[doc("Run the full commit gate against all files (what lefthook runs pre-commit).")]
+[doc("Run the full commit gate against ALL tracked files (not just staged) — the engine at --phase commit.")]
 gate:
-    npx lefthook run pre-commit --all-files
+    node node_modules/signposts/src/engine.mjs --phase commit $(git ls-files)
 
 [doc("Pull updates for installed packs (npm update signposts for the core).")]
 refresh:
