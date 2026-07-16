@@ -1,4 +1,5 @@
 id: date-default-no-nullish
+description: Use `||`, not `??`, for optional date defaults — `??` lets an empty string / 0 / bad placeholder flow through as a bad date.
 language: tsx
 severity: error
 message: |
@@ -13,7 +14,7 @@ message: |
   Fix:
     const published = row.published_at || new Date();   // not ?? new Date()
 
-  Read more: docs/arch/architecture.md (Forbidden / standardised choices)
+  Read more: signposts.asim.dev/docs/rules/ast-grep
 
 rule:
   any:

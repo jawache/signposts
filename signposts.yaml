@@ -1,23 +1,17 @@
-# signposts.yaml — v2, BUNDLE-FIRST. The file is organised around the thing people adopt and
-# share: the BUNDLE. Each bundle is one contiguous, cherry-pickable block — copying it between
-# repos is copying the block plus its rules/<bundle>/ folder, nothing scattered.
+# signposts.yaml — v2, BUNDLE-FIRST. Organised around the BUNDLE (the thing you adopt and share); each bundle is one contiguous, cherry-pickable block.
 #
 #   project:  stack identity — name + description.
 #   config:   engine runtime settings — drift_tokens (the sign injector's re-show cadence).
-#   bundles:  the unit of value. Each bundle (the key is its namespace) carries up to five keys:
-#     • from      provenance pin (vendored bundles only: github:owner/repo#ref or a local path).
-#                 Local bundles — born here — simply omit it.
-#     • signs     steering notes. `at: session | touch | turn` (default touch). A `session` sign
-#                 is ORIENTATION — composed with every bundle's and injected at session start.
-#     • rules     blocks. `use:` names a script (core/<name> or <bundle>/<name>); config rides
-#                 inline. `at: write | commit | delete | turn` (default [write, commit]).
-#     • settings  host-permission entries merged into .claude/settings.json (deny is auto-applied;
-#                 allow is surfaced for the user — it widens autonomy).
-#     • needs     (rare, on a rule) an npm dep that exists only because that rule does.
+#   bundles:  the unit of value. Each key is a bundle (its namespace), carrying up to five keys:
+#     • from        provenance pin (vendored bundles only: github:owner/repo#ref or a local path). Local bundles — born here — omit it.
+#     • signs       steering notes. `at: session | touch | turn` (default touch). A `session` sign is ORIENTATION — composed across bundles and injected at session start.
+#     • rules       blocks. `use:` names a script (core/<name> or <bundle>/<name>); config rides inline. `at: write | commit | delete | turn` (default [write, commit]).
+#     • settings    host-permission entries merged into .claude/settings.json (deny auto-applied; allow surfaced for you — it widens autonomy).
+#     • needs       (rare, on a rule) an npm dep that exists only because that rule does.
 #
-# A bundle owns rules/<bundle>/** — that ownership convention is how install/uninstall know what to
-# copy and remove (no machine manifest). Old section-first files still load (a normaliser accepts
-# both). Authored via /signposts. Reference: docs/ (canonical) + the /signposts skill.
+# Every sign and rule carries a one-line `description:` — a human summary (distinct from the sign's `text` / the rule's `message`), used for the docs listing.
+# A bundle owns rules/<bundle>/** — that ownership convention is how install/uninstall know what to move (no machine manifest). Old section-first files still load (a normaliser accepts both).
+# Authored via /signposts. Reference: the docs at signposts.asim.dev/docs + the /signposts skill.
 
 project:
   name: signposts-core
@@ -31,9 +25,8 @@ bundles:
   # ── the shipped `core` bundle — what a fresh `npx signposts` install carries ──
   core:
     signs:
-      # ORIENTATION (at: session) — composed with every other bundle's session sign and injected
-      # at session start. Terse: WHERE and WHAT REGIME; depth lives in the just-in-time area signs.
       - id: orientation
+        description: The composed CLAUDE.md — every bundle's session sign, injected at session start.
         at: session
         text: |-
           The canonical docs are the Astro site under site/ (mdx) — the legacy docs/*.html redirect there.
@@ -41,10 +34,8 @@ bundles:
           signposts.yaml is BUNDLE-FIRST — each bundle is one block (its signs, rules, settings).
           The rails fail safe: the injector + event log never throw and never block an edit.
 
-      # A SOFT guard on the guardrails themselves: Signposts must stay editable by the AI (reflect
-      # authors rules — that's the product), so this never blocks. It injects a reminder the moment
-      # the agent touches a rule file; the coach flags a deny-then-weaken sequence at wrap-up.
       - id: rules-self-edit
+        description: A soft nudge when the agent edits the guardrails; never blocks — the AI must stay able to author rules.
         globs: ["signposts.yaml", "rules/**", ".claude/settings.json"]
         text: |-
           You are editing the guardrails themselves. If this edit weakens or removes a
@@ -52,9 +43,8 @@ bundles:
           the user first. Authoring new signposts is always fine; loosening one to get an
           edit through is the user's call, not yours.
     rules:
-      # The cheeky day-one demo, so a fresh install FEELS the pre-emptive block: try to create a
-      # file named signposts-is-bad.yaml and it's denied before it lands.
       - id: signposts-self-regard
+        description: The day-one demo block — a fresh install feels the pre-emptive deny.
         use: core/protected-path
         deny: ["**/signposts-is-bad.yaml"]
         message: |-
@@ -62,9 +52,8 @@ bundles:
           built — and will not assist in writing that it is bad. Delete this rule
           from signposts.yaml once you're a believer, and carry on.
 
-      # The engine's event log lives in .signposts/ — per-session local telemetry, gitignored.
-      # The enforcement backstop: even a `git add -f` can't sneak it into a commit.
       - id: no-commit-engine-log
+        description: Never commit the gitignored .signposts/ event log, even via `git add -f`.
         use: core/protected-path
         deny: [".signposts/**"]
         at: [commit]
@@ -74,6 +63,7 @@ bundles:
   local:
     signs:
       - id: skills
+        description: How to author skills — from their templates, plain English, multimodal.
         globs: [".claude/skills/**"]
         text: |-
           Author skills from their `templates/`; keep the plain-English bar. The skill
@@ -81,12 +71,14 @@ bundles:
           reinvent the structure. Be multimodal: diagrams / tables over walls of prose.
 
       - id: agents
+        description: Review sub-agents are read-only and return findings to the main thread; they write no files.
         globs: [".claude/agents/**"]
         text: |-
           Review sub-agents are read-only and RETURN findings to the main thread — they
           write NO files. Recommendations-or-silence: surface only what should change.
 
       - id: rules
+        description: How to author a rule — name a script, check the cheaper shapes first, ship a colocated test.
         globs: ["rules/**"]
         text: |-
           A rule NAMES A SCRIPT with `use:` (core/<name> or <ns>/<name>), gets its config
@@ -98,6 +90,7 @@ bundles:
           Author with /signposts — depth lives in docs/.
 
       - id: site
+        description: Working on the website — port from the approved reference, British English, no animation libraries.
         globs: ["site/**"]
         text: |-
           The website (signposts.asim.dev). Port from the approved reference —
@@ -108,6 +101,7 @@ bundles:
           project — drive it via `just site-dev` / `just site-build`, never root scripts.
 
       - id: work-journal
+        description: .work/ is the gitignored working-docs journal — never commit it into the code repo.
         globs: [".work/**"]
         text: |-
           `.work/` is the gitignored working-docs journal — never commit it into the code
@@ -115,6 +109,7 @@ bundles:
           tasks/<type>/<area>/<name>/ never moves.
 
       - id: engine-failsafe
+        description: The event log and sign injector must never throw and never block — swallow errors.
         globs: ["src/log.mjs", "src/hooks/**"]
         text: |-
           Side-channel, not a gate: the event log and sign injector must NEVER throw and never
@@ -123,6 +118,7 @@ bundles:
           the gate.
 
       - id: yaml-writes-keep-comments
+        description: Mutate signposts.yaml through parseDocument (editYaml), never parse → stringify — comments must survive.
         globs: ["src/cli/**", "src/skill/**", "src/schema.mjs"]
         text: |-
           Mutating signposts.yaml goes through parseDocument (editYaml), never parse → stringify —
@@ -131,6 +127,7 @@ bundles:
           normaliser is READ-time only — it never touches the write path.
 
       - id: ast-grep-grammars
+        description: ast-grep parses only html/css/js/ts/tsx natively; other languages need a grammar (add or register).
         globs: ["src/core/languages.mjs", "src/cli/languages.mjs", "sgconfig.yml"]
         text: |-
           ast-grep parses only html · css · js · ts · tsx natively. Beyond those, DON'T assume a
@@ -139,45 +136,37 @@ bundles:
           tree-sitter and declared in sgconfig.yml customLanguages (`signposts languages register`).
           An unknown language is an honest error (resolveLang throws) — never a silent fall-through to Tsx.
     rules:
-      # generated / vendored files — a content-free edit/commit block. `at: [write, commit]` is the
-      # default (omitted): ONE rule, BOTH moments.
       - id: no-edit-generated
+        description: Don't hand-edit generated / vendored files — change the source they derive from.
         use: core/protected-path
         deny: ["**/*.generated.ts", "vendor/**"]
         message: "Generated / vendored file — don't edit by hand. Change the source it derives from, then regenerate."
 
-      # Dogfood: every rule authored under rules/ ships a colocated <name>.test.yml (valid/invalid
-      # samples run through the REAL engine by `signposts test`). "Every rule has a test" is itself
-      # a Signposts rule. `.test.yml` files opt out.
       - id: rules-have-tests
+        description: Every rule authored under rules/ ships a colocated <name>.test.yml the engine runs.
         use: core/sibling-exists
         on: ["rules/**/*.mjs", "rules/**/*.sh", "rules/**/*.yml"]
         ignore: ["**/*.test.yml"]
         sibling: "{dir}/{name}.test.yml"
         message: "Every rule needs a sibling <name>.test.yml (valid/invalid samples the engine runs). Add it, then `just test-rules`."
 
-      # DELETE coverage: the guardrails guard themselves against deletion, not just edits. An
-      # `at: [delete]` rule checks the targets of rm / git rm / mv at PreToolUse Bash. Append
-      # `# signposts-delete-ok` to a command to override.
       - id: no-delete-guardrails
+        description: Guard signposts.yaml + rules/ against deletion; override a deliberate one with a trailing marker.
         use: core/protected-path
         deny: ["signposts.yaml", "rules/**"]
         at: [delete]
         message: "That command would delete a guardrail (signposts.yaml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
 
-      # severity WARN: a triggered CHECK that INFORMS instead of blocking. Catches a `.only(` left
-      # in a test — it would silently skip the rest of the suite — but never blocks the edit/commit.
       - id: no-only-in-tests
+        description: Warn (never block) on a focused `.only(` left in a test — it silently skips the rest of the suite.
         use: core/text-ban
         on: ["**/*.test.{mjs,js,ts,tsx}"]
         ban: ['\.only\(']
         severity: warn
         message: "A focused `.only(` will silently skip the rest of the suite — remove it before you commit."
 
-      # The TURN moment (dogfood): at the end of a turn where rules/ changed but `just test-rules`
-      # never ran, hold the turn open. Prefer `commit` for most checks — `turn` earns its place here
-      # because an untested rule edit should be caught before the turn ends, not only at commit.
       - id: rules-tested-this-turn
+        description: Hold the turn open if rules/ changed this turn but `just test-rules` never ran.
         use: core/ran-since-edit
         at: [turn]
         edited: ["rules/**"]
@@ -185,11 +174,10 @@ bundles:
         message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
 
   # ── an installable hygiene bundle — pull into your own projects (`/signposts install`) ──
-  # COMMAND rules: they block the Bash command before it runs, via the command-guard hook.
   git-hygiene:
     rules:
-      # No Claude/Anthropic attribution in commits / PRs / issues.
       - id: no-ai-attribution-in-commits
+        description: Block Claude/Anthropic attribution in commit / PR / issue bodies (the command-guard rail).
         use: core/command-guard
         ban:
           - 'git commit[\s\S]*[Cc]o-[Aa]uthored-[Bb]y:[\s\S]*([Cc]laude|[Aa]nthropic)'
@@ -202,26 +190,23 @@ bundles:
           (the Co-Authored-By line, the "Generated with Claude" line, any Claude/Anthropic
           mention) and retry.
 
-      # Block a `git checkout -- <paths>` / `git restore <paths>` that would silently wipe
-      # UNCOMMITTED work. An own-script (rules/git-hygiene/no-git-discard.mjs) — it inspects live
-      # git state, not just a regex — firing through the SAME command hook. Append `# discard-ok`.
       - id: no-git-discard
+        description: Block a `git checkout`/`restore` that would wipe uncommitted work; override with a trailing `# discard-ok`.
         use: git-hygiene/no-git-discard
         message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
 
   # ── an installable hygiene bundle — the justfile is the single command source ──
   justfile:
     rules:
-      # package.json `scripts` stays empty (only //-prefixed comment keys) — the justfile is the
-      # one command source.
       - id: no-package-scripts
+        description: Keep package.json `scripts` empty (//-prefixed comment keys only) — the justfile is the one command source.
         use: core/json-invariant
         on: "package.json"
         assert: { path: scripts, keysPrefixedWith: "//" }
         message: "package.json `scripts` must stay empty — the justfile is the single command source. Only //-prefixed comment keys are allowed; move commands into a justfile recipe."
 
-      # every justfile recipe carries a [doc("…")] — a JS own-script (rules/justfile/justfile-docs.mjs).
       - id: justfile-docs
+        description: Every justfile recipe carries an explicit [doc("…")] — the command catalogue's help screen.
         use: justfile/justfile-docs
         on: "justfile"
         exempt: []               # recipe names that don't require a [doc("…")] (throwaway helpers)
