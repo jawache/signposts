@@ -173,6 +173,13 @@ bundles:
         must_run: "just test-rules"
         message: "You changed rules/ this turn but never ran `just test-rules` — run it before finishing."
 
+      - id: signposts-well-formed
+        description: Lint signposts.yaml itself — it must parse and every sign/rule must carry an id, a use (rules), and a description.
+        use: core/signposts-lint
+        on: ["signposts.yaml"]
+        require: [description]
+        message: "signposts.yaml isn't well-formed — each sign and rule needs an id and a `description:` (and a rule needs `use:`). See the listed entries."
+
   # ── an installable hygiene bundle — pull into your own projects (`/signposts install`) ──
   git-hygiene:
     rules:
