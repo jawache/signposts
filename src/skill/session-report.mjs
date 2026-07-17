@@ -233,14 +233,60 @@ function readSignpostGlobs(cwd) {
   } catch { return []; }
 }
 
+// A rule's scope globs (its `on:` or, for a deny-rule, its `deny:`) — so a file guarded by a
+// RULE (not just a sign) doesn't count as an uncovered gap. Uses the normalised rule list.
+function readRuleGlobs(cwd) {
+  try {
+    const globs = [];
+    for (const r of loadRules(cwd)) {
+      const g = r.on != null ? r.on : (r.deny != null ? r.deny : null);
+      if (g != null) globs.push(...[].concat(g));
+    }
+    return globs;
+  } catch { return []; }
+}
+
+// ── rule + sign config, joined into the report ─────────────────────────────
+// Verbatim config the report shows (glob / message / description / sign text) — so a row is
+// legible without guessing. Read once, fail-safe.
+function ruleUniverse(root) {
+  try {
+    return loadRules(root).map((r) => ({
+      id: r.id, ns: r.namespace ?? null, when: r.when || [],
+      message: r.message ?? null, description: r.description ?? null,
+      scope: r.on != null ? { kind: 'on', globs: [].concat(r.on) }
+        : (r.deny != null ? { kind: 'deny', globs: [].concat(r.deny) } : null),
+      use: r.use ?? null,
+    }));
+  } catch { return []; }
+}
+function signUniverse(root) {
+  const out = {};
+  try {
+    const cfg = loadConfig(root);
+    for (const [ns, list] of Object.entries(cfg.signs || {})) {
+      for (const s of list || []) {
+        if (!s || !s.id) continue;
+        out[s.id] = { id: s.id, ns: ns || null,
+          watches: s.global ? 'session' : (s.globs ? [].concat(s.globs).join(', ') : (s.at || 'touch')),
+          text: s.text ?? s.note ?? null };
+      }
+    }
+  } catch { /* fail-safe */ }
+  return out;
+}
+
 // ── the hard numbers, from the event log ───────────────────────────────────
-// session = the Claude session id (transcript basename). Per-session run/deny/sign
-// events give fires + edit-catches + injections; commit-phase denies (logged under
-// the shared 'commit' session) that fall after this session started count as leaks.
-// never-fired is computed across ALL sessions (a rule that never fired anywhere is a
-// retire candidate). Fails loud: a missing log and an armed-but-empty log are distinct.
+// session = the Claude session id (transcript basename). Per-rule the report answers "did this
+// rule ENGAGE with my work, and did it catch anything?" via `matched` (a touched file fell in
+// the rule's scope) and `blocked`/`overridden` (from the per-file `check` trace). Commit-phase
+// events attribute to the live session when the marker worked, else to commit.jsonl in this
+// session's window [started, nextStart). Legacy logs (no `matched`, no `check`) degrade to the
+// old evaluated/deny counts, flagged. never-fired spans ALL sessions (a retire candidate).
 function logMetrics(root, session) {
-  const universe = (() => { try { return loadRules(root).map((r) => ({ id: r.id, ns: r.namespace ?? null })); } catch { return []; } })();
+  const universe = ruleUniverse(root);
+  const cfgById = Object.fromEntries(universe.map((u) => [u.id, u]));
+  const signsCfg = signUniverse(root);
   const sessionLog = readEvents(root, { session });
   const allLog = readEvents(root, {});
 
@@ -250,32 +296,55 @@ function logMetrics(root, session) {
     const ts = sessionLog.events.map((e) => e.ts).filter(Boolean).sort();
     return ts[0] || null;
   })();
-  // Upper bound for commit-leak attribution = the NEXT real session's start. Commit-gate runs
-  // log under the shared 'commit' id (no session), so a session owns the commit denies from its
-  // start until the next Claude session begins. Without this bound, re-running facts on an old
-  // session would sweep up every later commit as its "leak", and overlapping sessions would
-  // cross-attribute. (The newest session has no next start yet — it self-corrects once one exists.)
   const nextStart = allLog.events
     .filter((e) => e.kind === 'meta' && e.started && e.session && e.session !== 'commit' && started && e.started > started)
     .map((e) => e.started).sort()[0] || null;
+  const inWindow = (e) => !started || (e.ts && e.ts >= started && (!nextStart || e.ts < nextStart));
+
+  // The events this session accounts for: its own file (includes commit events the marker
+  // attributed here), PLUS commit/push-phase events from commit.jsonl in the window (the
+  // marker-less fallback). Guard the double-count when the session IS 'commit'.
+  const commitFile = session === 'commit' ? { events: [] } : readEvents(root, { session: 'commit' });
+  const windowCommit = commitFile.events.filter((e) => (e.phase === 'commit' || e.phase === 'push') && inWindow(e));
+  const consider = [...sessionLog.events, ...windowCommit];
 
   const perRule = {};
-  const ensure = (id, ns) => (perRule[id] ||= { id, ns: ns ?? null, fires: 0, hits: 0, caught: 0, leaked: 0 });
-  for (const e of sessionLog.events) {
-    if (e.kind === 'run') for (const r of e.rules || []) { const t = ensure(r.id); t.fires += r.evaluated || 0; t.hits += r.hits || 0; }
-    else if (e.kind === 'deny' && e.phase === 'edit') ensure(e.rule, e.ns).caught++;
+  const ensure = (id, ns) => (perRule[id] ||= {
+    id, ns: (cfgById[id]?.ns) ?? ns ?? null,
+    when: cfgById[id]?.when || [], message: cfgById[id]?.message ?? null,
+    description: cfgById[id]?.description ?? null, scope: cfgById[id]?.scope ?? null,
+    retired: !cfgById[id],                                     // in the log but gone from config
+    evaluated: 0, matched: 0, hasMatched: false, hits: 0,
+    blockedEdit: 0, blockedCommit: 0, overridden: 0,
+    denyEdit: 0, denyCommit: 0, overrideEvents: 0, checkSeen: false, trace: [],
+  });
+  for (const e of consider) {
+    if (e.kind === 'run') {
+      for (const r of e.rules || []) {
+        const t = ensure(r.id);
+        t.evaluated += r.evaluated || 0; t.hits += r.hits || 0;
+        if (r.matched !== undefined) { t.hasMatched = true; t.matched += r.matched || 0; }
+      }
+    } else if (e.kind === 'check') {
+      const t = ensure(e.rule, e.ns); t.checkSeen = true;
+      t.trace.push({ path: e.path, ts: e.ts, out: e.out, msg: e.msg || null });
+      if (e.out === 'deny') (e.phase === 'edit' ? t.blockedEdit++ : t.blockedCommit++);
+      else if (e.out === 'override') t.overridden++;
+    } else if (e.kind === 'deny') {
+      const t = ensure(e.rule, e.ns); (e.phase === 'edit' ? t.denyEdit++ : t.denyCommit++);
+    } else if (e.kind === 'override') {
+      ensure(e.rule, e.ns).overrideEvents++;
+    }
   }
-  // commit/push denies live in commit.jsonl (no session id) — attribute the ones in this
-  // session's window [started, nextStart).
-  for (const e of allLog.events) {
-    if (e.kind === 'deny' && (e.phase === 'commit' || e.phase === 'push')
-        && (!started || (e.ts && e.ts >= started && (!nextStart || e.ts < nextStart)))) ensure(e.rule, e.ns).leaked++;
+  // Legacy fallback per rule: no `check` events → derive blocked/overridden from deny/override
+  // events; no `matched` field on any run → matched is unknown (shown as "—", flagged legacy).
+  let legacy = false;
+  for (const t of Object.values(perRule)) {
+    if (!t.checkSeen) { t.blockedEdit = t.denyEdit; t.blockedCommit = t.denyCommit; t.overridden = t.overrideEvents; }
+    if (!t.hasMatched && t.evaluated > 0) { t.matched = null; legacy = true; }
+    t.blocked = t.blockedEdit + t.blockedCommit;
+    t.missingGuidance = !t.message && !t.description && !t.retired;
   }
-
-  // run tallies carry only {id, evaluated, hits} — backfill each row's namespace from
-  // the rule universe (a static property) so the table isn't blank for never-denied rules.
-  const nsById = Object.fromEntries(universe.map((u) => [u.id, u.ns]));
-  for (const r of Object.values(perRule)) if (r.ns == null && nsById[r.id] != null) r.ns = nsById[r.id];
 
   const firesAll = {};
   for (const e of allLog.events) if (e.kind === 'run') for (const r of e.rules || []) firesAll[r.id] = (firesAll[r.id] || 0) + (r.evaluated || 0);
@@ -283,26 +352,26 @@ function logMetrics(root, session) {
 
   const signs = {};
   for (const e of sessionLog.events) if (e.kind === 'sign') {
-    const t = (signs[e.sign] ||= { id: e.sign, firstTouch: 0, drift: 0 });
+    const c = signsCfg[e.sign] || {};
+    const t = (signs[e.sign] ||= { id: e.sign, ns: c.ns ?? null, watches: c.watches ?? null, text: c.text ?? null, firstTouch: 0, drift: 0 });
     if (e.reason === 'drift') t.drift++; else t.firstTouch++;
   }
 
   const rows = Object.values(perRule).sort((a, b) => a.id.localeCompare(b.id));
   const realEvents = sessionLog.events.filter((e) => e.kind && e.kind !== 'meta').length;
-  // Composed-orientation size: the SessionStart block every session pays for up front. Tracked so
-  // the coach can flag creep — orientation should stay terse (a few lines per bundle); depth belongs
-  // in the just-in-time area signs, not here.
   const orientation = (() => {
     try { const { text, ids } = composeOrientation(loadConfig(root)); return { bundles: ids.length, lines: text ? text.split('\n').length : 0, bytes: text.length }; }
     catch { return { bundles: 0, lines: 0, bytes: 0 }; }
   })();
+  const sum = (f) => rows.reduce((s, r) => s + (f(r) || 0), 0);
   return {
-    logPresent: allLog.files > 0,           // the .signposts/log dir has any file
-    sessionArmed: sessionLog.files > 0,      // THIS session recorded events
-    realEvents, badLines: allLog.badLines,
+    logPresent: allLog.files > 0,
+    sessionArmed: sessionLog.files > 0,
+    realEvents, badLines: allLog.badLines, legacy,
     rows, neverFired, signs: Object.values(signs).sort((a, b) => a.id.localeCompare(b.id)),
-    caught: rows.reduce((s, r) => s + r.caught, 0),
-    leaked: rows.reduce((s, r) => s + r.leaked, 0),
+    matched: sum((r) => r.matched), blocked: sum((r) => r.blocked), overridden: sum((r) => r.overridden),
+    flagged: rows.filter((r) => r.missingGuidance).map((r) => r.id),
+    retired: rows.filter((r) => r.retired).map((r) => r.id),
     universeCount: universe.length, orientation,
   };
 }
@@ -330,6 +399,8 @@ function analyze({ events, cwd, base, tools }) {
   const justCalls = {}, bypasses = {};
   const reads = { justfile: 0 };
   const editedFilesByDir = {};
+  const touches = {};                              // in-repo file → Read+Edit+Write count (uncovered-file signal)
+  const inRepoRel = (r) => r && !r.startsWith('/') && !r.startsWith('..');
   const userTurns = [], corrections = [], bypassSites = [], editLoops = [], retries = [];
   const bashByCmd = {};
   let loopFile = null, loopFrom = null, loopLast = null, loopCount = 0;
@@ -346,13 +417,15 @@ function analyze({ events, cwd, base, tools }) {
 
     if (e.name === 'Edit' || e.name === 'Write') {
       if (e.name === 'Edit') edits++; else writes++;
-      const inRepo = e.rel && !e.rel.startsWith('/') && !e.rel.startsWith('..');
+      const inRepo = inRepoRel(e.rel);
       if (inRepo && e.rel === loopFile) { loopCount++; loopLast = e.line; }
       else { flushLoop(); loopFile = inRepo ? e.rel : null; loopFrom = e.line; loopLast = e.line; loopCount = inRepo ? 1 : 0; }
       if (!inRepo) continue;
       (editedFilesByDir[path.dirname(e.rel)] ||= new Set()).add(e.rel);
+      touches[e.rel] = (touches[e.rel] || 0) + 1;
     } else if (e.name === 'Read') {
       if (e.rel === 'justfile' || /(^|\/)justfile$/.test(e.rel)) reads.justfile++;
+      if (inRepoRel(e.rel)) touches[e.rel] = (touches[e.rel] || 0) + 1;
     } else if (e.name === 'Bash') {
       const cmd = e.input.command || '';
       const { justCalls: jc, bypasses: bp, isCommit } = classifyBash(cmd, tools);
@@ -366,16 +439,19 @@ function analyze({ events, cwd, base, tools }) {
   flushLoop();
   for (const [cmd, ls] of Object.entries(bashByCmd)) if (ls.length >= 3) retries.push({ cmd, count: ls.length, lines: ls });
 
-  const signGlobs = readSignpostGlobs(cwd);
-  const touchedFiles = [...new Set(Object.values(editedFilesByDir).flatMap((s) => [...s]))];
+  // A touched file is "watched" if it matches a sign glob OR a rule's scope globs (on/deny) —
+  // the spec's "files you touched that no rule or sign watched". Each gap carries a touch count.
+  const watchGlobs = [...readSignpostGlobs(cwd), ...readRuleGlobs(cwd)];
+  const editedFiles = [...new Set(Object.values(editedFilesByDir).flatMap((s) => [...s]))];
   const covered = [], uncovered = [];
-  for (const f of touchedFiles) (signGlobs.some((g) => matchGlob(g, f)) ? covered : uncovered).push(f);
+  for (const f of editedFiles) (watchGlobs.some((g) => matchGlob(g, f)) ? covered : uncovered).push(f);
+  const uncoveredWithCounts = uncovered.sort().map((f) => ({ file: f, touches: touches[f] || 1 }));
 
   return {
     stats: { edits, writes, commits, justCalls, bypasses, reads,
       coverage: { covered: covered.sort(), uncovered: uncovered.sort() }, touched: gitTouchedFiles(base) },
     drift: { userTurns, corrections, bypassSites, editLoops, retries },
-    signpostGaps: uncovered.sort(),
+    signpostGaps: uncoveredWithCounts,
   };
 }
 
@@ -399,26 +475,48 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
   L.push('Investigate any spot with: `npx signposts facts --around <line>`');
   L.push('');
 
-  L.push('## Event log — the hard numbers (deterministic)');
+  L.push('## Event log — did the guardrails engage? (deterministic)');
+  const num = (n) => (n == null ? '—' : String(n));
   const h = numbersHealth(m);
   if (h.blocked) { L.push(`- **${h.blocked}**`); }
   else {
     for (const w of h.warn) L.push(`- **${w}**`);
-    L.push(`- health: **${m.caught} caught pre-emptively (edit)** · **${m.leaked} leaked to the commit gate** · **${m.neverFired.length} of ${m.universeCount} rules never fired**` + (m.signs.length ? ` · ${m.signs.length} sign${m.signs.length > 1 ? 's' : ''} injected` : ''));
+    L.push(`- health: **${m.matched} matched** (a touched file fell in a rule's scope) · **${m.blocked} blocked** · **${m.overridden} overridden** · **${m.neverFired.length} of ${m.universeCount} rules never fired**` + (m.signs.length ? ` · ${m.signs.length} sign${m.signs.length > 1 ? 's' : ''} injected` : ''));
+    if (m.legacy) L.push('- _legacy log: some rows predate the `matched`/`check` events — matched shown as “—”._');
     L.push('');
     if (m.rows.length) {
-      L.push('| rule | ns | evaluated | hits | caught@edit | leaked@commit |');
-      L.push('|---|---|--:|--:|--:|--:|');
-      for (const r of m.rows) L.push(`| ${r.id} | ${r.ns ?? ''} | ${r.fires} | ${r.hits} | ${r.caught} | ${r.leaked} |`);
+      L.push('| rule | pack | when | matched | blocked | overridden | |');
+      L.push('|---|---|---|--:|--:|--:|---|');
+      for (const r of m.rows) {
+        const flags = [r.retired ? 'retired' : '', r.missingGuidance ? '⚠ no message/description' : ''].filter(Boolean).join(' · ');
+        L.push(`| ${r.id} | ${r.ns ?? ''} | ${(r.when || []).join('/')} | ${num(r.matched)} | ${r.blocked} | ${r.overridden} | ${flags} |`);
+      }
     } else L.push('- no rule evaluations recorded this session.');
     L.push('');
+    // Rule detail — verbatim scope / message / description + the per-file trace, for rules that engaged.
+    const engaged = m.rows.filter((r) => (r.matched || r.blocked || r.overridden || r.trace.length));
+    if (engaged.length) {
+      L.push('### Rule detail — verbatim scope · message · description · files seen');
+      for (const r of engaged) {
+        const scope = r.scope ? `${r.scope.kind}: ${r.scope.globs.join(', ')}` : 'everything (no scope declared)';
+        L.push(`- **${r.id}**${r.retired ? ' _(retired)_' : ''} — scope \`${scope}\``);
+        L.push(`    - message: ${r.message ? `"${r.message}"` : '_(none)_'} · description: ${r.description ? `"${r.description}"` : '_(none)_'}${r.missingGuidance ? ' ⚠ **flag: neither a message nor a description**' : ''}`);
+        for (const t of r.trace.slice(0, 12)) L.push(`    - ${t.path} · ${(t.ts || '').slice(11, 19)} · ${t.out}${t.msg ? ` — "${snip(t.msg, 80)}"` : ''}`);
+        if (r.trace.length > 12) L.push(`    - …and ${r.trace.length - 12} more`);
+      }
+      L.push('');
+    }
     L.push(`### Never-fired rules (${m.neverFired.length} — retire candidates, in signposts.yaml but 0 fires across all sessions)`);
     for (const id of m.neverFired) L.push(`- ${id}`);
+    L.push('');
+    L.push('### Signs injected (this session)');
     if (m.signs.length) {
+      L.push('| sign | pack | watches | shown | first-touch | drift |');
+      L.push('|---|---|---|--:|--:|--:|');
+      for (const g of m.signs) L.push(`| ${g.id} | ${g.ns ?? ''} | ${g.watches ?? ''} | ${g.firstTouch + g.drift} | ${g.firstTouch} | ${g.drift} |`);
       L.push('');
-      L.push('### Signs injected (this session)');
-      for (const g of m.signs) L.push(`- ${g.id} · first-touch ×${g.firstTouch} · drift ×${g.drift}`);
-    }
+      for (const g of m.signs) if (g.text) L.push(`- **${g.id}**: "${snip(g.text, 160)}"`);
+    } else L.push('- no signs injected this session.');
     if (m.orientation && m.orientation.bundles) {
       L.push('');
       L.push(`### Composed orientation (session start): ${m.orientation.bundles} bundle${m.orientation.bundles > 1 ? 's' : ''} · ${m.orientation.lines} lines · ${m.orientation.bytes} bytes`);
@@ -455,65 +553,98 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
   for (const r of a.drift.retries.slice(0, 30)) L.push(`- ×${r.count} · \`${snip(r.cmd, 100)}\` · L${r.lines.slice(0, 8).join(', L')}`);
   L.push('');
 
-  L.push('## Signpost gaps — touched files matching no sign (candidate area for a new sign)');
-  for (const f of a.signpostGaps) L.push(`- ${f}`);
+  L.push('## Signpost gaps — files you touched that no rule or sign watched (candidate area for a new sign)');
+  if (a.signpostGaps.length) for (const g of a.signpostGaps) L.push(`- ${g.file} · touched ×${g.touches}`);
+  else L.push('- none — every edited file matched a rule or sign.');
   L.push('');
   L.push(`_justfile: ${tot(s.justCalls)} recipe calls vs ${tot(s.bypasses)} raw-tool bypasses [heuristic] · diff touched ${s.touched.length} files. Numbers above are exact; bypass/correction detection is text-based — triage. Run \`--around <line>\` for a clean view._`);
   return L.join('\n');
 }
 
-// ── render: the HTML report card (self-contained, no JS) ───────────────────
+// ── render: the HTML report card (self-contained, no JS — <details> expanders) ──
 function renderHtml(a, m, meta, weaken = []) {
   const date = (meta.started || new Date().toISOString()).slice(0, 10);
+  const numH = (n) => (n == null ? '—' : String(n));
   const h = numbersHealth(m);
   const healthLine = h.blocked
     ? `<span class="bad">${esc(h.blocked)}</span>`
-    : `<b>${m.caught}</b> caught pre-emptively · <b>${m.leaked}</b> leaked to the commit gate · <b>${m.neverFired.length}</b>/${m.universeCount} rules never fired`
+    : `<b>${m.matched}</b> matched <span class="sub">(a touched file fell in a rule's scope)</span> · <b>${m.blocked}</b> blocked · <b>${m.overridden}</b> overridden · <b>${m.neverFired.length}</b>/${m.universeCount} rules never fired`
       + (m.signs.length ? ` · <b>${m.signs.length}</b> sign${m.signs.length > 1 ? 's' : ''} injected` : '');
-  const warns = (h.warn || []).map((w) => `<p class="warn">${esc(w)}</p>`).join('');
+  const warns = (h.warn || []).map((w) => `<p class="warn">${esc(w)}</p>`).join('')
+    + (m.legacy ? '<p class="warn">legacy log: some rows predate the matched/check events — matched shown as “—”.</p>' : '');
 
-  const ruleRows = m.rows.length
-    ? m.rows.map((r) => `<tr><td><code>${esc(r.id)}</code></td><td>${esc(r.ns ?? '')}</td><td class="n">${r.fires}</td><td class="n">${r.hits}</td><td class="n ${r.caught ? 'good' : ''}">${r.caught}</td><td class="n ${r.leaked ? 'bad' : ''}">${r.leaked}</td></tr>`).join('')
-    : '<tr><td colspan="6" class="mut">no rule evaluations recorded this session</td></tr>';
+  // Rules — each an expander: summary = the row, body = verbatim scope/message/description + per-file trace.
+  const traceRows = (r) => r.trace.length
+    ? `<table class="trace"><thead><tr><th>file</th><th>time</th><th>outcome</th><th>message</th></tr></thead><tbody>`
+      + r.trace.slice(0, 40).map((t) => `<tr><td><code>${esc(t.path ?? '')}</code></td><td class="n">${esc((t.ts || '').slice(11, 19))}</td><td class="${t.out === 'deny' ? 'bad' : t.out === 'override' ? 'gold' : 'good'}">${esc(t.out)}</td><td>${t.msg ? esc(snip(t.msg, 100)) : ''}</td></tr>`).join('')
+      + (r.trace.length > 40 ? `<tr><td colspan="4" class="mut">…and ${r.trace.length - 40} more</td></tr>` : '')
+      + `</tbody></table>`
+    : '<p class="mut">no files seen this session</p>';
+  const ruleCards = m.rows.length
+    ? m.rows.map((r) => {
+        const scope = r.scope ? `${r.scope.kind}: ${r.scope.globs.join(', ')}` : 'everything (no scope declared)';
+        const tags = `${r.retired ? '<span class="tag ret">retired</span>' : ''}${r.missingGuidance ? '<span class="tag flag">⚠ no message/description</span>' : ''}`;
+        return `<details class="rc${r.missingGuidance ? ' isflag' : ''}"><summary>`
+          + `<code class="rid">${esc(r.id)}</code><span class="pack">${esc(r.ns ?? '')}</span><span class="when">${esc((r.when || []).join('/'))}</span>`
+          + `<span class="ms">matched <b>${numH(r.matched)}</b></span><span class="ms ${r.blocked ? 'bad' : ''}">blocked <b>${r.blocked}</b></span><span class="ms ${r.overridden ? 'gold' : ''}">override <b>${r.overridden}</b></span>${tags}`
+          + `</summary><div class="body"><p>scope <code>${esc(scope)}</code></p>`
+          + `<p>message: ${r.message ? esc(`"${r.message}"`) : '<span class="mut">none</span>'} · description: ${r.description ? esc(`"${r.description}"`) : '<span class="mut">none</span>'}${r.missingGuidance ? ' <b class="bad">— flag: neither a message nor a description</b>' : ''}</p>`
+          + traceRows(r) + `</div></details>`;
+      }).join('')
+    : '<p class="mut">no rule evaluations recorded this session</p>';
+
   const neverRows = m.neverFired.length ? m.neverFired.map((id) => `<li><code>${esc(id)}</code></li>`).join('') : '<li class="mut">none — every rule fired at least once</li>';
-  const signRows = m.signs.length
-    ? m.signs.map((g) => `<tr><td><code>${esc(g.id)}</code></td><td class="n">${g.firstTouch}</td><td class="n">${g.drift}</td></tr>`).join('')
-    : '<tr><td colspan="3" class="mut">no signs injected this session</td></tr>';
+  const signCards = m.signs.length
+    ? m.signs.map((g) => `<details class="rc"><summary><code class="rid">${esc(g.id)}</code><span class="pack">${esc(g.ns ?? '')}</span><span class="when">${esc(g.watches ?? '')}</span><span class="ms">shown <b>${g.firstTouch + g.drift}</b></span><span class="ms">first <b>${g.firstTouch}</b></span><span class="ms">drift <b>${g.drift}</b></span></summary><div class="body">${g.text ? esc(g.text) : '<span class="mut">no verbatim text in config</span>'}</div></details>`).join('')
+    : '<p class="mut">no signs injected this session</p>';
+  const gaps = a.signpostGaps.length ? a.signpostGaps.map((g) => `<li><code>${esc(g.file)}</code> <span class="sub">touched ×${g.touches}</span></li>`).join('') : '<li class="mut">none — every edited file matched a rule or sign</li>';
   const turns = a.drift.userTurns.map((t) => `<li><span class="ln">L${t.line}</span> ${esc(t.text)}</li>`).join('') || '<li class="mut">—</li>';
   const corr = a.drift.corrections.length ? a.drift.corrections.map((c) => `<li><span class="ln">L${c.line}</span> ${esc(c.text)}</li>`).join('') : '<li class="mut">none detected</li>';
   const byp = a.drift.bypassSites.length ? a.drift.bypassSites.map((b) => `<li><span class="ln">L${b.line}</span> [${esc(b.tool)}] <code>${esc(b.cmd)}</code></li>`).join('') : '<li class="mut">none detected</li>';
-  const weakenRows = weaken.length
-    ? weaken.map((w) => `<li><span class="ln">L${w.editLine}</span> rule <code>${esc(w.rule)}</code> denied → <code>${esc(w.path)}</code> edited ~${w.gapSec}s later</li>`).join('')
+  const loops = a.drift.editLoops.length ? a.drift.editLoops.map((lp) => `<li><span class="ln">L${lp.fromLine}–${lp.toLine}</span> <code>${esc(lp.file)}</code> ×${lp.count}</li>`).join('') : '<li class="mut">none detected</li>';
+  const rets = a.drift.retries.length ? a.drift.retries.map((r) => `<li>×${r.count} <code>${esc(snip(r.cmd, 100))}</code></li>`).join('') : '<li class="mut">none detected</li>';
+  const orient = m.orientation && m.orientation.bundles
+    ? `<h2>Composed orientation <span class="sub">session start · keep it terse (depth belongs in area signs)</span></h2><div class="health">${m.orientation.bundles} bundle${m.orientation.bundles > 1 ? 's' : ''} · ${m.orientation.lines} lines · ${m.orientation.bytes} bytes</div>`
     : '';
-  const weakenBlock = weaken.length
-    ? `<h2 class="bad">⚠ Rule-weakening flags <span class="sub">[pointer · judge intent — authoring is fine, loosening-to-escape is not]</span></h2><ul>${weakenRows}</ul>`
-    : '';
+  const weakenRows = weaken.length ? weaken.map((w) => `<li><span class="ln">L${w.editLine}</span> rule <code>${esc(w.rule)}</code> denied → <code>${esc(w.path)}</code> edited ~${w.gapSec}s later</li>`).join('') : '';
+  const weakenBlock = weaken.length ? `<h2 class="bad">⚠ Rule-weakening flags <span class="sub">[pointer · judge intent — authoring is fine, loosening-to-escape is not]</span></h2><ul>${weakenRows}</ul>` : '';
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Signposts session report — ${esc(meta.session)}</title><style>
-:root{--ink:#1b2430;--mut:#5d6b7a;--line:#e4e9f0;--bg:#f7f9fc;--card:#fff;--brand:#2a6fb0;--brand-bg:#eaf3fb;--rule:#c8472f;--rule-bg:#fdeee9;--sign:#1f7a8c;--sign-bg:#e8f5f7;--ok:#1f9d57;--ok-bg:#e9f8ef;--gold:#b07d00;--gold-bg:#fbf3df;--maxw:880px;}
+:root{--ink:#1b2430;--mut:#5d6b7a;--line:#e4e9f0;--bg:#f7f9fc;--card:#fff;--brand:#2a6fb0;--brand-bg:#eaf3fb;--rule:#c8472f;--rule-bg:#fdeee9;--sign:#1f7a8c;--sign-bg:#e8f5f7;--ok:#1f9d57;--ok-bg:#e9f8ef;--gold:#b07d00;--gold-bg:#fbf3df;--maxw:900px;}
 *{box-sizing:border-box}body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:var(--ink);background:var(--bg);margin:0}
 main{max-width:var(--maxw);margin:0 auto;padding:2.2rem 1.4rem 4rem}h1{font-size:1.5rem;margin:0 0 .2rem}h2{font-size:1.05rem;margin:2rem 0 .6rem;padding-bottom:.3rem;border-bottom:2px solid var(--line)}
-.sub{color:var(--mut);font-size:.85rem}.health{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:8px;padding:.7rem 1rem;margin:1rem 0}
-.warn{color:var(--gold);background:var(--gold-bg);border-radius:6px;padding:.35rem .6rem;margin:.4rem 0;font-size:.85rem}.bad{color:var(--rule)}.good{color:var(--ok)}
-table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:.88rem}
-th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line)}th{font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);background:var(--bg)}
-td.n{text-align:right;font-variant-numeric:tabular-nums}td.good{color:var(--ok);font-weight:700}td.bad{color:var(--rule);font-weight:700}.mut{color:var(--mut);font-style:italic}
+.sub{color:var(--mut);font-size:.85rem;font-weight:400}.health{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:8px;padding:.7rem 1rem;margin:1rem 0}
+.warn{color:var(--gold);background:var(--gold-bg);border-radius:6px;padding:.35rem .6rem;margin:.4rem 0;font-size:.85rem}.bad{color:var(--rule)}.good{color:var(--ok)}.gold{color:var(--gold)}
+table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:.85rem;margin:.4rem 0}
+th,td{text-align:left;padding:.35rem .55rem;border-bottom:1px solid var(--line)}th{font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);background:var(--bg)}
+td.n{text-align:right;font-variant-numeric:tabular-nums}.mut{color:var(--mut);font-style:italic}
 code{background:#eef1f6;padding:.05rem .3rem;border-radius:4px;font-size:.85em}ul{padding-left:0;list-style:none;margin:.4rem 0}li{padding:.2rem 0;border-bottom:1px solid var(--line)}
 .ln{display:inline-block;min-width:3.2rem;color:var(--brand);font-variant-numeric:tabular-nums;font-size:.8rem}
+details.rc{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:.35rem 0;overflow:hidden}
+details.rc.isflag{border-left:3px solid var(--gold)}
+details.rc>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;padding:.5rem .75rem;list-style:none}
+details.rc>summary::-webkit-details-marker{display:none}details.rc>summary::before{content:"▸";color:var(--mut);font-size:.8rem}details.rc[open]>summary::before{content:"▾"}
+.rid{font-weight:600}.pack{font-size:.72rem;color:var(--sign);background:var(--sign-bg);padding:.05rem .4rem;border-radius:999px}
+.when{font-size:.72rem;color:var(--mut)}.ms{font-size:.8rem;color:var(--mut);margin-left:auto}.ms+.ms{margin-left:0}.ms b{color:var(--ink)}
+.tag{font-size:.68rem;font-weight:700;padding:.05rem .4rem;border-radius:999px}.tag.flag{color:var(--gold);background:var(--gold-bg)}.tag.ret{color:var(--mut);background:var(--bg);border:1px solid var(--line)}
+details.rc .body{padding:.2rem .85rem .7rem;border-top:1px solid var(--line);font-size:.9rem}
+table.trace td.bad{color:var(--rule);font-weight:600}table.trace td.good{color:var(--ok)}table.trace td.gold{color:var(--gold);font-weight:600}
 </style></head><body><main>
 <h1>Signposts session report</h1>
 <p class="sub">session <code>${esc(meta.session)}</code> · ${date} · transcript ${esc(meta.file)} (${meta.lines} lines)</p>
 <div class="health">${healthLine}</div>${warns}
 ${weakenBlock}
-<h2>Per-rule (this session)</h2>
-<table><thead><tr><th>rule</th><th>ns</th><th>evaluated</th><th>hits</th><th>caught@edit</th><th>leaked@commit</th></tr></thead><tbody>${ruleRows}</tbody></table>
-<h2>Never-fired rules — retire candidates</h2><ul>${neverRows}</ul>
-<h2>Signs injected</h2>
-<table><thead><tr><th>sign</th><th>first-touch</th><th>drift</th></tr></thead><tbody>${signRows}</tbody></table>
+<h2>Rules — did they engage? <span class="sub">click a rule to see its scope, message &amp; the files it saw</span></h2>${ruleCards}
+<h2>Signs injected <span class="sub">click to read the verbatim sign</span></h2>${signCards}
+<h2>Never-fired rules <span class="sub">retire candidates — 0 fires across all sessions</span></h2><ul>${neverRows}</ul>
+<h2>Signpost gaps <span class="sub">files you touched that no rule or sign watched</span></h2><ul>${gaps}</ul>
+${orient}
 <h2>Session map — user turns <span class="sub">[transcript · heuristic]</span></h2><ul>${turns}</ul>
 <h2>Course-corrections <span class="sub">[transcript · heuristic]</span></h2><ul>${corr}</ul>
 <h2>justfile bypasses <span class="sub">[transcript · heuristic]</span></h2><ul>${byp}</ul>
+<h2>Edit loops <span class="sub">[transcript · heuristic — same file ≥5×]</span></h2><ul>${loops}</ul>
+<h2>Bash retries <span class="sub">[transcript · heuristic — same command ≥3×]</span></h2><ul>${rets}</ul>
 </main></body></html>`;
 }
 
@@ -586,60 +717,105 @@ function selfTest() {
   eq(flags[0] && flags[0].path, 'signposts.yaml', 'weaken: flag cites the edited guardrail');
   eq(weakenAfterDeny([], wEvents).length, 0, 'weaken: no denies → no flags');
 
-  // ---- log-side (numbers) — synthetic log in a temp root ----
+  // ---- log-side (numbers) — synthetic v2 log in a temp root ----
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-report-'));
   try {
     fs.writeFileSync(path.join(tmp, 'signposts.yaml'),
-      'rules:\n  core:\n    - id: demo\n      use: core/protected-path\n      deny: ["x"]\n    - id: sleepy\n      use: core/protected-path\n      deny: ["y"]\n');
+      'rules:\n  core:\n' +
+      '    - id: demo\n      use: core/protected-path\n      deny: ["x"]\n      message: "no x"\n      description: "blocks x"\n' +
+      '    - id: sleepy\n      use: core/protected-path\n      deny: ["y"]\n' +           // never fired → retire candidate
+      '    - id: bare\n      use: core/protected-path\n      deny: ["z"]\n' +              // no message + no description → flagged
+      '    - id: delguard\n      use: core/protected-path\n      deny: ["d"]\n');           // the overridden one
     const logDir = path.join(tmp, '.signposts', 'log');
     fs.mkdirSync(logDir, { recursive: true });
     const sess = 'sess-abc';
     fs.writeFileSync(path.join(logDir, `${sess}.jsonl`), [
       JSON.stringify({ kind: 'meta', v: 1, session: sess, started: '2026-07-06T00:00:00.000Z' }),
-      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'run', phase: 'edit', files: 1, rules: [{ id: 'demo', evaluated: 3, hits: 1 }] }),
-      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'deny', phase: 'edit', rule: 'demo', ns: 'core', path: 'x', hits: ['nope'] }),
+      // demo evaluated 3 but matched only 1 (the deny-rule poster case); bare + delguard + ghost each match 1.
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'run', phase: 'edit', files: 4, rules: [
+        { id: 'demo', evaluated: 3, matched: 1, hits: 1 }, { id: 'bare', evaluated: 2, matched: 1, hits: 0 },
+        { id: 'delguard', evaluated: 1, matched: 1, hits: 1 }, { id: 'ghost', evaluated: 1, matched: 1, hits: 1 }] }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'check', phase: 'edit', rule: 'demo', ns: 'core', path: 'x', out: 'deny', msg: 'no x' }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'check', phase: 'edit', rule: 'bare', ns: 'core', path: 'z', out: 'allow' }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'check', phase: 'edit', rule: 'delguard', ns: 'core', path: 'd', out: 'override' }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'check', phase: 'edit', rule: 'ghost', ns: 'core', path: 'g', out: 'deny', msg: 'gone' }),   // ghost: in log, gone from config → retired
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'deny', phase: 'edit', rule: 'demo', ns: 'core', path: 'x', hits: ['nope'] }),  // back-compat deny alongside check
       JSON.stringify({ ts: '2026-07-06T00:00:02Z', kind: 'sign', sign: 'rules', reason: 'first-touch' }),
       JSON.stringify({ ts: '2026-07-06T00:00:03Z', kind: 'sign', sign: 'rules', reason: 'drift' }),
       'corrupt {not json',
     ].join('\n') + '\n');
-    // a commit-gate deny AFTER session start → counts as a leak for demo
+    // a commit-gate block AFTER session start (marker-less fallback → commit.jsonl) → demo blocked@commit
     fs.writeFileSync(path.join(logDir, 'commit.jsonl'), [
       JSON.stringify({ kind: 'meta', v: 1, session: 'commit', started: '2026-07-06T00:00:00Z' }),
-      JSON.stringify({ ts: '2026-07-06T00:05:00Z', kind: 'run', phase: 'commit', files: 2, rules: [{ id: 'demo', evaluated: 2, hits: 1 }] }),
-      JSON.stringify({ ts: '2026-07-06T00:05:00Z', kind: 'deny', phase: 'commit', rule: 'demo', ns: 'core', path: 'x', hits: ['leaked'] }),
+      JSON.stringify({ ts: '2026-07-06T00:05:00Z', kind: 'run', phase: 'commit', files: 2, rules: [{ id: 'demo', evaluated: 2, matched: 1, hits: 1 }] }),
+      JSON.stringify({ ts: '2026-07-06T00:05:00Z', kind: 'check', phase: 'commit', rule: 'demo', ns: 'core', path: 'x', out: 'deny', msg: 'no x' }),
     ].join('\n') + '\n');
 
     const m = logMetrics(tmp, sess);
     eq(m.logPresent, true, 'logMetrics: log present');
     eq(m.sessionArmed, true, 'logMetrics: session armed');
     eq(m.badLines, 1, 'logMetrics: counts the corrupt line (fail-loud)');
+    eq(m.legacy, false, 'logMetrics: v2 log is not legacy');
     const demo = m.rows.find((r) => r.id === 'demo');
-    eq(demo.fires, 3, 'logMetrics: demo evaluated 3 (edit run)');
-    eq(demo.caught, 1, 'logMetrics: demo caught 1 at edit');
-    eq(demo.leaked, 1, 'logMetrics: demo leaked 1 at commit (since session start)');
-    eq(m.caught, 1, 'logMetrics: total caught');
-    eq(m.leaked, 1, 'logMetrics: total leaked');
-    // a LATER real session bounds the window: the 00:05 commit deny is no longer THIS session's leak.
+    eq(demo.matched, 2, 'logMetrics: demo matched 1@edit + 1@commit');
+    eq(demo.blocked, 2, 'logMetrics: demo blocked 1@edit + 1@commit');
+    eq(demo.blockedCommit, 1, 'logMetrics: demo blocked@commit attributed via window');
+    eq(demo.overridden, 0, 'logMetrics: demo not overridden');
+    eq([demo.message, demo.description].join('|'), 'no x|blocks x', 'logMetrics: demo joins verbatim message + description');
+    eq(demo.trace.length, 2, 'logMetrics: demo per-file trace = 2 check events');
+    const bare = m.rows.find((r) => r.id === 'bare');
+    eq(bare.matched, 1, 'logMetrics: bare matched 1');
+    eq(bare.blocked, 0, 'logMetrics: bare blocked 0 (allowed)');
+    eq(bare.missingGuidance, true, 'logMetrics: bare flagged (no message + no description)');
+    const delguard = m.rows.find((r) => r.id === 'delguard');
+    eq(delguard.overridden, 1, 'logMetrics: delguard overridden 1');
+    eq(delguard.blocked, 0, 'logMetrics: an override is not a block');
+    const ghost = m.rows.find((r) => r.id === 'ghost');
+    eq(ghost.retired, true, 'logMetrics: ghost is retired (in log, gone from config)');
+    eq(m.matched, 5, 'logMetrics: total matched = demo2 + bare1 + delguard1 + ghost1');
+    eq(m.blocked, 3, 'logMetrics: total blocked = demo2 + ghost1');
+    eq(m.overridden, 1, 'logMetrics: total overridden = delguard1');
+    eq(m.flagged, ['bare', 'delguard'], 'logMetrics: flagged rules (both lack a message + description)');
+    eq(m.retired, ['ghost'], 'logMetrics: retired rules');
+    // a LATER real session bounds the window: the 00:05 commit block is no longer THIS session's.
     fs.writeFileSync(path.join(logDir, 'sess-later.jsonl'), JSON.stringify({ kind: 'meta', v: 1, session: 'sess-later', started: '2026-07-06T00:02:00Z' }) + '\n');
-    eq(logMetrics(tmp, sess).leaked, 0, 'logMetrics: commit leak after the next session start is not attributed');
+    eq(logMetrics(tmp, sess).rows.find((r) => r.id === 'demo').blocked, 1, 'logMetrics: commit block after the next session start is not attributed');
     fs.rmSync(path.join(logDir, 'sess-later.jsonl'));
-    eq(m.neverFired, ['sleepy'], 'logMetrics: sleepy never fired (demo did)');
+    eq(m.neverFired, ['sleepy'], 'logMetrics: sleepy never fired (others did)');
     eq(m.signs.find((s) => s.id === 'rules').firstTouch, 1, 'logMetrics: sign first-touch');
     eq(m.signs.find((s) => s.id === 'rules').drift, 1, 'logMetrics: sign drift');
+
+    // legacy log (no matched, no check events) → matched shown as null, blocked from deny events, flagged legacy.
+    const legRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-legacy-'));
+    fs.mkdirSync(path.join(legRoot, '.signposts', 'log'), { recursive: true });
+    fs.writeFileSync(path.join(legRoot, 'signposts.yaml'), 'rules:\n  core:\n    - id: demo\n      use: core/protected-path\n      deny: ["x"]\n');
+    fs.writeFileSync(path.join(legRoot, '.signposts', 'log', 'leg.jsonl'), [
+      JSON.stringify({ kind: 'meta', v: 1, session: 'leg', started: '2026-07-06T00:00:00Z' }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'run', phase: 'edit', files: 5, rules: [{ id: 'demo', evaluated: 5, hits: 2 }] }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'deny', phase: 'edit', rule: 'demo', ns: 'core', path: 'x', hits: ['nope'] }),
+      JSON.stringify({ ts: '2026-07-06T00:00:02Z', kind: 'deny', phase: 'edit', rule: 'demo', ns: 'core', path: 'x', hits: ['nope'] }),
+    ].join('\n') + '\n');
+    const mLeg = logMetrics(legRoot, 'leg');
+    eq(mLeg.legacy, true, 'logMetrics: legacy log flagged');
+    eq(mLeg.rows.find((r) => r.id === 'demo').matched, null, 'logMetrics: legacy matched is null (unknown)');
+    eq(mLeg.rows.find((r) => r.id === 'demo').blocked, 2, 'logMetrics: legacy blocked from deny events');
+    fs.rmSync(legRoot, { recursive: true, force: true });
 
     // fail-loud distinctions
     const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-empty-'));
     eq(numbersHealth(logMetrics(emptyRoot, 'nope')).blocked ? true : false, true, 'fail-loud: no log → blocked message (not zeros)');
     fs.rmSync(emptyRoot, { recursive: true, force: true });
-    // armed (commit.jsonl present) but this session id absent → a warn, not "blocked", not silent zeros
     const mMiss = logMetrics(tmp, 'ghost-session');
     eq(mMiss.logPresent, true, 'fail-loud: dir present for a ghost session');
     eq(mMiss.sessionArmed, false, 'fail-loud: ghost session not armed');
     eq(numbersHealth(mMiss).warn.some((w) => /session id/.test(w)), true, 'fail-loud: ghost session warns explicitly');
 
-    // renderHtml smoke — non-empty, self-contained, escapes
+    // renderHtml smoke — self-contained, the new headline, expanders, escapes.
     const html = renderHtml(a, m, { session: sess, file: 't.jsonl', lines: 8, started: '2026-07-06T00:00:00Z' });
-    eq(/<!doctype html>/i.test(html) && html.includes('Per-rule') && html.includes('caught pre-emptively'), true, 'renderHtml: self-contained report card');
+    eq(/<!doctype html>/i.test(html) && html.includes('matched') && html.includes('Rules — did they engage') && html.includes('<details'), true, 'renderHtml: self-contained report card with expanders');
+    // renderMarkdown smoke — leads with matched, drops evaluated from the human render.
+    const md = renderMarkdown(a, m, [], { session: sess, file: 't.jsonl', lines: 8 });
+    eq(md.includes('matched') && !/\|\s*evaluated\s*\|/.test(md), true, 'renderMarkdown: matched leads, evaluated dropped from the table');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

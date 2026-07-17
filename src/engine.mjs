@@ -25,7 +25,8 @@ import { spawnSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { matchAny } from './util.mjs';
-import { logEvent } from './log.mjs';
+import { inScope } from './core/pure/scope.mjs';
+import { logEvent, commitSession, readEvents } from './log.mjs';
 import { defaultGetContent, walkFiles } from './core/fs.mjs';
 import { loadRuleEntries, isOff } from './schema.mjs';
 
@@ -141,38 +142,64 @@ function rel(file, root) {
 }
 
 // Per-rule fire tallies for the event log. `evaluated` = times the rule actually
-// ran against a file (post on/ignore filter); `hits` = times it produced a
-// violation. A rule with evaluated===0 across all sessions is a retire candidate.
+// ran against a file (post on/ignore filter) — the coach's is-it-alive signal;
+// `matched` = times a touched file fell within the rule's SCOPE (the human-facing
+// number: did the rule engage with the work); `hits` = times it produced a violation.
+// A rule with evaluated===0 across all sessions is a retire candidate.
 function makeTally() {
   const tally = new Map();
   return {
     tally,
-    record(rule, n) {
+    record(rule, matched, n) {
       let t = tally.get(rule.id);
-      if (!t) { t = { id: rule.id, evaluated: 0, hits: 0 }; tally.set(rule.id, t); }
-      t.evaluated += 1; if (n > 0) t.hits += 1;
+      if (!t) { t = { id: rule.id, evaluated: 0, matched: 0, hits: 0 }; tally.set(rule.id, t); }
+      t.evaluated += 1; if (matched) t.matched += 1; if (n > 0) t.hits += 1;
     },
   };
 }
 
-// Emit one `run` tally + one `deny` per violation, when a logCtx is supplied.
-// Scan passes null (it is itself the report). logEvent never throws.
-function logRun(logCtx, phase, files, tally, violations) {
+// The resolved core script's scope globs, fail-safe (a stumbling scope() never breaks the
+// gate) — for the "matched" metric. null → the rule declares no scope of its own.
+function scopeGlobsOf(s, rule) {
+  try { return s && s.js && typeof s.js.scope === 'function' ? s.js.scope(rule) : null; }
+  catch { return null; }
+}
+
+// One `check` event per MATCHED (rule, file) — the per-file trace the report renders:
+// path · outcome (allow | deny | override) · the block message on a deny. `checks` items
+// are {rule, path, hits}; the outcome is decided by which logger fires (a run allows/denies,
+// an override clears). Volume is bounded by matched files, not every file. logEvent never throws.
+function logChecks(root, session, phase, checks, denyOut) {
+  for (const c of checks || []) {
+    const denied = (c.hits || []).length > 0;
+    const ev = { kind: 'check', phase, rule: c.rule.id, ns: c.rule.namespace || null, path: c.path, out: denied ? denyOut : 'allow' };
+    if (denied && c.rule.message) ev.msg = c.rule.message;
+    logEvent(root, session, ev);
+  }
+}
+
+// Emit one `run` tally + per-file `check` events + one `deny` per violation, when a logCtx is
+// supplied. Scan passes null (it is itself the report). The `deny` events stay for back-compat
+// (old readers) alongside the richer `check` trace. logEvent never throws.
+function logRun(logCtx, phase, files, tally, violations, checks = []) {
   if (!logCtx || !logCtx.root) return;
   const { root, session } = logCtx;
   logEvent(root, session, { kind: 'run', phase, files: Array.isArray(files) ? files.length : 0, rules: [...tally.values()] });
+  logChecks(root, session, phase, checks, 'deny');
   for (const v of violations) {
     logEvent(root, session, { kind: 'deny', phase, rule: v.rule.id, ns: v.rule.namespace || null, path: v.path, hits: (v.hits || []).slice(0, 1) });
   }
 }
 
 // A would-be block cleared by `# signposts-delete-ok`. Emit the `run` tally (so the rule is
-// counted as FIRED — `facts` must not report it "never fired") plus one `override` per cleared
-// violation (so the escape is auditable). logEvent never throws.
-function logOverride(logCtx, phase, files, tally, violations) {
+// counted as FIRED — `facts` must not report it "never fired"), the per-file `check` trace
+// (cleared files carry `out: override`), plus one `override` per cleared violation (so the
+// escape is auditable). logEvent never throws.
+function logOverride(logCtx, phase, files, tally, violations, checks = []) {
   if (!logCtx || !logCtx.root) return;
   const { root, session } = logCtx;
   logEvent(root, session, { kind: 'run', phase, files: Array.isArray(files) ? files.length : 0, rules: [...tally.values()] });
+  logChecks(root, session, phase, checks, 'override');
   for (const v of violations) {
     logEvent(root, session, { kind: 'override', phase, rule: v.rule.id, ns: v.rule.namespace || null, path: v.path, marker: 'signposts-delete-ok' });
   }
@@ -185,6 +212,7 @@ function logOverride(logCtx, phase, files, tally, violations) {
 export async function evaluate({ phase, files, root, getContent, configPath, logCtx = null }) {
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes(phase));
   const violations = [];
+  const checks = [];                                           // matched (rule, file) → the per-file trace
   const { tally, record } = makeTally();
 
   for (const rule of rules) {
@@ -194,21 +222,28 @@ export async function evaluate({ phase, files, root, getContent, configPath, log
     if (s.kind === 'project') {                                // tool-gate: run once for the phase
       if (!s.js) continue;
       // `files` (the staged set at commit / all-tracked at `just gate`) lets a project rule scope
-      // itself — e.g. a tool-gate that only runs when its area changed (rule.changed).
-      try { const hits = await s.js.evaluate(rule, { root, files }); record(rule, hits.length); if (hits.length) violations.push({ rule, path: null, hits }); }
-      catch { /* fail safe */ }
+      // itself — e.g. a tool-gate that only runs when its area changed (rule.changed). A project
+      // rule has no per-file scope; it "matched" the phase when it fired.
+      try {
+        const hits = await s.js.evaluate(rule, { root, files });
+        record(rule, hits.length > 0, hits.length);
+        if (hits.length) { violations.push({ rule, path: null, hits }); checks.push({ rule, path: null, hits }); }
+      } catch { /* fail safe */ }
       continue;
     }
 
+    const scopeGlobs = scopeGlobsOf(s, rule);
     for (const abs of files) {
       const res = await runFileRule(s, rule, abs, root, phase, getContent);
       if (!res) continue;                                      // out of scope (on / ignore / no content)
-      record(rule, res.hits.length);
+      const matched = inScope(res.path, rule.on, scopeGlobs);  // did a touched file fall in the rule's scope
+      record(rule, matched, res.hits.length);
+      if (matched) checks.push({ rule, path: res.path, hits: res.hits });
       if (res.hits.length) violations.push({ rule, path: res.path, hits: res.hits });
     }
   }
 
-  logRun(logCtx, phase, files, tally, violations);
+  logRun(logCtx, phase, files, tally, violations, checks);
   return violations;
 }
 
@@ -276,10 +311,12 @@ export async function evaluateCommand({ command, phase = 'edit', root, configPat
   for (const rule of rules) {
     const s = await resolveScript(rule.use, root);
     if (!s || s.kind !== 'command' || !s.js) continue;
-    try { const hits = await s.js.evaluate(rule, { command, root }); record(rule, hits.length); if (hits.length) out.push({ rule, hits }); }
+    // a command guard has no file scope; it "matched" the command when it fired.
+    try { const hits = await s.js.evaluate(rule, { command, root }); record(rule, hits.length > 0, hits.length); if (hits.length) out.push({ rule, hits }); }
     catch { /* fail safe */ }
   }
-  logRun(logCtx, phase, [], tally, out.map((v) => ({ rule: v.rule, path: null, hits: v.hits })));
+  const checks = out.map((v) => ({ rule: v.rule, path: null, hits: v.hits }));
+  logRun(logCtx, phase, [], tally, checks, checks);
   return out;
 }
 
@@ -322,21 +359,25 @@ export async function evaluateDelete({ command, phase = 'delete', root, configPa
   const rules = loadRules(root, configPath).filter((r) => (r.when || []).includes('delete'));
   const getContent = defaultGetContent(root);
   const out = [];
+  const checks = [];
   const { tally, record } = makeTally();
   for (const rule of rules) {
     const s = await resolveScript(rule.use, root);
     if (!s || s.kind === 'command' || s.kind === 'project') continue;       // per-file rules only
+    const scopeGlobs = scopeGlobsOf(s, rule);
     for (const t of targets) {
       const res = await runFileRule(s, rule, t, root, phase, getContent);
       if (!res) continue;
-      record(rule, res.hits.length);
+      const matched = inScope(res.path, rule.on, scopeGlobs);
+      record(rule, matched, res.hits.length);
+      if (matched) checks.push({ rule, path: res.path, hits: res.hits });
       if (res.hits.length) out.push({ rule, path: res.path, hits: res.hits });
     }
   }
   // A trailing `# signposts-delete-ok` clears the block — but LOG the override so it's auditable
   // and the rule still counts as fired (not the block silently disappearing before any logging).
-  if (out.length && hasDeleteOverride(command)) { logOverride(logCtx, phase, targets, tally, out); return []; }
-  logRun(logCtx, phase, targets, tally, out);
+  if (out.length && hasDeleteOverride(command)) { logOverride(logCtx, phase, targets, tally, out, checks); return []; }
+  logRun(logCtx, phase, targets, tally, out, checks);
   return out;
 }
 
@@ -421,8 +462,9 @@ async function cli(argv) {
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   if (isOff(root)) process.exit(0);                            // off switch: the commit gate is silenced
   const getContent = defaultGetContent(root);
-  // the gate runs outside any Claude session — commit/push events land in commit.jsonl.
-  const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: 'commit' } });
+  // the gate runs outside any Claude session; a fresh session marker (left by the PreToolUse
+  // hook) attributes commit/push events to that session, else they land in commit.jsonl.
+  const violations = await evaluate({ phase, files, root, getContent, configPath, logCtx: { root, session: commitSession(root) } });
   const { blocks, warns } = partitionBySeverity(violations);
   if (warns.length) process.stderr.write('\n⚠ Signposts warnings (not blocking):\n' + warns.map(formatViolation).join('\n\n') + '\n');
   if (blocks.length === 0) process.exit(0);
@@ -453,6 +495,26 @@ async function selfTest() {
     results.push({ name: 'when-routing edit', pass: editV.length === 1 });
     results.push({ name: 'when-routing commit (same rule)', pass: commitV.length === 1 && commitV[0].rule.id === editV[0].rule.id });
     results.push({ name: 'when-routing clean passes', pass: cleanV.length === 0 });
+
+    // 2b. `matched` ≠ `evaluated` for a deny-style rule: it runs against every file (evaluated)
+    // but only MATCHES the ones inside its `deny` scope. This is the report's headline fix.
+    const mroot = mkdtempSync(join(tmpdir(), 'sg-matched-'));
+    try {
+      const mcfg = join(mroot, 'm.yaml');
+      writeFileSync(mcfg, 'rules:\n  local:\n    - id: no-generated\n      use: core/protected-path\n      deny: ["**/*.generated.ts"]\n');
+      // three writes, none in scope → evaluated 3, matched 0
+      await evaluate({ phase: 'edit', files: ['a.ts', 'b.ts', 'c.ts'], root: mroot, getContent: () => '', configPath: mcfg, logCtx: { root: mroot, session: 'm1' } });
+      // one write in scope → matched 1 + a check event out:deny
+      await evaluate({ phase: 'edit', files: ['x.generated.ts'], root: mroot, getContent: () => '', configPath: mcfg, logCtx: { root: mroot, session: 'm1' } });
+      const ev = readEvents(mroot, { session: 'm1' }).events;
+      const runs = ev.filter((e) => e.kind === 'run');
+      const firstTally = runs[0].rules.find((r) => r.id === 'no-generated');
+      const secondTally = runs[1].rules.find((r) => r.id === 'no-generated');
+      results.push({ name: 'matched: unscoped writes evaluate but do not match', pass: firstTally.evaluated === 3 && firstTally.matched === 0 });
+      results.push({ name: 'matched: an in-scope write matches', pass: secondTally.evaluated === 1 && secondTally.matched === 1 });
+      results.push({ name: 'check event: one per matched deny with out:deny', pass: ev.some((e) => e.kind === 'check' && e.path === 'x.generated.ts' && e.out === 'deny') });
+      results.push({ name: 'check event: no allow/deny for out-of-scope files', pass: !ev.some((e) => e.kind === 'check' && ['a.ts', 'b.ts', 'c.ts'].includes(e.path)) });
+    } finally { try { rmSync(mroot, { recursive: true, force: true }); } catch {} }
 
     // 3. the SHELL contract: a self-contained shell rule blocks via the temp-file path.
     // (Self-contained so this proof holds in any scaffolded repo, not just this one.)

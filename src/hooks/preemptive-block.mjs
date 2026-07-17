@@ -23,6 +23,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { evaluate, partitionBySeverity } from '../engine.mjs';
+import { writeSessionMarker } from '../log.mjs';
 import { isOff } from '../schema.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -149,6 +150,10 @@ async function main() {
   trace(`invoked · stdin ${raw.length}B`);
   const input = JSON.parse(raw || '{}');
   const { tool_name, tool_input } = input;
+  // Leave the commit-gate breadcrumb: this live session id, so a later `git commit` (spawned
+  // outside any session) attributes its events here instead of the shared 'commit' file.
+  // Best-effort — never throws, never gates the edit.
+  if (input.session_id) writeSessionMarker(ROOT, input.session_id);
   if (!tool_name || !tool_input) { trace('no tool_name/tool_input → allow'); return; }
 
   const file = reconstruct(tool_name, tool_input);

@@ -9,6 +9,10 @@ import { protectedPathHits } from './pure/protected-path.mjs';
 export default {
   kind: 'path',
   evaluate(rule, ctx) { return protectedPathHits(ctx.path, rule.deny); },
+  // The rule's scope for the "matched" metric: a deny-rule has no `on:`, so its scope IS
+  // its `deny` globs — a file matches when it's one of the protected paths (i.e. the rule
+  // engaged), not on every write. Read by the engine's evaluate loop via `inScope`.
+  scope(rule) { return rule.deny; },
   test() {
     const rule = { deny: ['src/generated/**', 'legacy/**'] };
     const legal = this.evaluate(rule, { path: 'src/app/x.ts' }).length === 0;
