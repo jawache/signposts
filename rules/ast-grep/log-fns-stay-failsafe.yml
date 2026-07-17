@@ -1,0 +1,32 @@
+id: log-fns-stay-failsafe
+description: The event-log write + session-marker functions must never throw — a throw here would break the edit or commit they run inside. Enforce that each keeps a try/catch.
+language: javascript
+severity: error
+files:
+  - src/log.mjs
+message: |
+  This log/marker function must stay fail-safe — wrap its body in try/catch and
+  return false/null on error; never let it throw.
+
+  Why this matters:
+    The event log is a side-channel that runs INSIDE the pre-emptive edit hook and
+    the git pre-commit gate. If logEvent / writeSessionMarker / commitSession throws,
+    it takes the user's edit or their commit down with it. The whole log contract is
+    "NEVER throws" (see the engine-failsafe sign · src/log.mjs). A new code path that
+    can throw un-caught silently breaks that guarantee.
+
+  Fix:
+    Keep the whole body inside `try { … } catch { return false; }` (or `null`).
+
+  Read more: signposts.asim.dev/docs/rules/ast-grep
+
+rule:
+  kind: function_declaration
+  all:
+    - has:
+        field: name
+        regex: '^(logEvent|writeSessionMarker|commitSession)$'
+    - not:
+        has:
+          kind: try_statement
+          stopBy: end

@@ -1,0 +1,31 @@
+# log-fns-stay-failsafe — a named log/marker fn with no try/catch is flagged; one wrapped passes.
+# `path` scopes the samples to src/log.mjs so the rule's `files:` glob matches.
+path: src/log.mjs
+invalid:
+  - |
+    export function logEvent(root, session, event) {
+      const dir = join(root, '.signposts', 'log');
+      writeFileSync(dir, JSON.stringify(event));
+      return true;
+    }
+  - |
+    export function writeSessionMarker(root, session) {
+      writeFileSync(join(root, '.session'), String(session));
+      return true;
+    }
+valid:
+  - |
+    export function logEvent(root, session, event) {
+      try {
+        writeFileSync(join(root, 'x'), JSON.stringify(event));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  - |
+    export function commitSession(root, nowMs = Date.now()) {
+      let marker = null;
+      try { marker = JSON.parse(readFileSync(join(root, '.session'), 'utf8')); } catch { /* fallback */ }
+      return sessionFrom(marker, 'commit', nowMs);
+    }

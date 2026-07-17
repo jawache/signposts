@@ -64,6 +64,15 @@ signposts:
         Anything that runs at commit (a tool-gate, a project-kind rule) executes INSIDE the git pre-commit hook, where git exports GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE. A nested `git` command then reads and writes the REAL index mid-commit instead of your temp dir — silently corrupting the in-progress commit.
         So if your rule shells out (spawnSync/execSync) to anything that might touch git, strip the GIT_* vars from the child env first — reuse hermeticEnv() in src/core/tool-gate.mjs. The rails must stay hermetic and never disturb the commit that's running them.
 
+    - type: sign
+      id: event-log-contract
+      description: The event log is one field-shape contract spread across three files — change one, update the others.
+      at: [touch]
+      on: ["src/log.mjs", "src/engine.mjs", "src/skill/session-report.mjs"]
+      text: |-
+        The event log is ONE contract across three files: engine.mjs EMITS the events (run · check · deny · override · sign), log.mjs DEFINES their shape + the fail-safe append/read, session-report.mjs READS them into the report. Add or rename a field in one and you must update the other two — the failure mode is a reader silently dropping an unknown field (or a run row that never carries `matched`), which the report then mis-reports as zero.
+        Two invariants ride here: a `check` event is emitted once per MATCHED (rule, file), never per file (an unscoped rule × every write is noise at volume); and every reader must tolerate an OLD event that lacks the newer fields (degrade + label, never throw).
+
     - type: rule
       id: rules-have-tests
       description: Every rule file ships a colocated <name>.test.yml the engine runs.

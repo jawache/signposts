@@ -27,6 +27,12 @@ install:
 worktree branch:
     wt switch -x code -c {{branch}}
 
+[doc("Session orientation: current branch (with upstream), short working-tree status, and the diffstat vs main.")]
+git-status:
+    @git branch -vv | head -1
+    @git status -s
+    @git diff main...HEAD --stat
+
 # ── rules / tests ──────────────────────────────────────────────────────────────
 
 [doc("Unit-test the PURE decision layer: src/core/pure/*.mjs, each fn with a colocated .test.mjs (the functional core — no IO, no node builtins, fenced by fcis/pure-core).")]
