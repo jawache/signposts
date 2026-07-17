@@ -62,6 +62,7 @@ Usage:
   npx signposts status                is the project armed or off?
   npx signposts detect                what languages this project uses (file census + stack signals; --json)
   npx signposts languages <list|add|register>   ast-grep grammars (add = prebuilt npm pkg; register = a built .so in sgconfig)
+  npx signposts context               JSON metadata for this worktree (repo key, branch, log dir, live session, this branch's sessions)
   npx signposts facts [...]           session facts (the coach's input)
   npx signposts diff <src>            diff a repo's packs against yours
   npx signposts --help
@@ -116,6 +117,7 @@ try {
   else if (opts.cmd === 'off') setOff(opts.target, true);
   else if (opts.cmd === 'on') setOff(opts.target, false);
   else if (opts.cmd === 'status') printStatus(opts.target);
+  else if (opts.cmd === 'context') passthrough('src/skill/context.mjs', 'context');
   else if (opts.cmd === 'facts') passthrough('src/skill/session-report.mjs', 'facts');
   else if (opts.cmd === 'diff') passthrough('src/skill/pack-diff.mjs', 'diff');
   else if (opts.cmd === 'test') passthrough('src/skill/rule-test.mjs', 'test');

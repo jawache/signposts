@@ -48,33 +48,33 @@ function normaliseRemote(url) {
     .replace(/^[a-z]+:\/\//i, '').replace(/^git@/, '').replace(/^[^@/]+@/, '')   // strip scheme + user@
     .replace(/:/, '/').replace(/\.git$/, '').replace(/\/+$/, '');                // scp-form host:path → host/path
 }
-// A repo identity stable across all its worktrees, or null for a non-git dir. Pure file reads.
-function repoKey(root) {
-  if (keyCache.has(root)) return keyCache.get(root);
-  let key = null;
+// The shared .git dir for a repo root — the SAME for every worktree of the repo (a linked
+// worktree's .git is a FILE pointing at <main>/.git/worktrees/<name>, whose `commondir` →
+// <main>/.git). null for a non-git dir. Pure file reads. Exported for `context`.
+export function gitCommonDir(root) {
   try {
     const dotgit = join(root, '.git');
-    const st = statSync(dotgit);
-    let commonGitDir;
-    if (st.isDirectory()) {
-      commonGitDir = dotgit;                                                    // the main worktree
-    } else {                                                                    // a linked worktree: .git is a file
-      const gd = readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/)?.[1]?.trim();
-      const wtGitDir = gd ? resolve(root, gd) : null;
-      if (wtGitDir) {
-        try { commonGitDir = resolve(wtGitDir, readFileSync(join(wtGitDir, 'commondir'), 'utf8').trim()); }
-        catch { commonGitDir = wtGitDir; }                                      // no commondir file → treat as its own
-      }
-    }
-    if (commonGitDir) {
-      try {                                                                     // prefer the durable remote identity
-        const cfg = readFileSync(join(commonGitDir, 'config'), 'utf8');
-        const m = cfg.match(/\[remote "origin"\][^[]*?\burl\s*=\s*([^\n\r]+)/);
-        if (m) key = normaliseRemote(m[1]);
-      } catch { /* no config / no origin */ }
-      if (!key) key = dirname(commonGitDir);                                    // else the main repo working dir
-    }
-  } catch { /* not a git repo, or unreadable → fall back below */ }
+    if (statSync(dotgit).isDirectory()) return dotgit;                          // the main worktree
+    const gd = readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/)?.[1]?.trim();
+    if (!gd) return null;
+    const wtGitDir = resolve(root, gd);                                         // a linked worktree
+    try { return resolve(wtGitDir, readFileSync(join(wtGitDir, 'commondir'), 'utf8').trim()); }
+    catch { return wtGitDir; }
+  } catch { return null; }
+}
+// A repo identity stable across all its worktrees, or null for a non-git dir. Pure file reads.
+export function repoKey(root) {
+  if (keyCache.has(root)) return keyCache.get(root);
+  let key = null;
+  const commonDir = gitCommonDir(root);
+  if (commonDir) {
+    try {                                                                       // prefer the durable remote identity
+      const cfg = readFileSync(join(commonDir, 'config'), 'utf8');
+      const m = cfg.match(/\[remote "origin"\][^[]*?\burl\s*=\s*([^\n\r]+)/);
+      if (m) key = normaliseRemote(m[1]);
+    } catch { /* no config / no origin */ }
+    if (!key) key = dirname(commonDir);                                         // else the main repo working dir
+  }
   key = key ? key.replace(/[^A-Za-z0-9_.-]/g, '-').replace(/^-+|-+$/g, '') : null;
   keyCache.set(root, key);
   return key;
