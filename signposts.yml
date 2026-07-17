@@ -385,6 +385,44 @@ web:
       message: "A site asset exceeds its byte budget. Compress or resize it, or rename it with `.budget-ok.` and defend it in review."
 
 # ── local — ONLY for developing Signposts itself (this codebase); never installed elsewhere ──
+# ── docs — documentation splits by audience: docs/agent/ vs docs/user/ ──
+docs:
+  title: Docs — agent vs user
+  summary: docs/agent/ is written for agents (whatever format they consume best); docs/user/ is written for humans — HTML only, multimodal, minimum cognitive load.
+  signposts:
+    - type: sign
+      id: docs-shape
+      description: The two-audience docs convention, shown when working in docs/.
+      at: [touch]
+      on: ["docs/**"]
+      text: |-
+        docs/ splits by audience. docs/agent/ is for future agents — markdown or whatever format is cheapest to consume; write it for retrieval, not for reading aloud.
+        docs/user/ is for humans and is HTML-only: use everything HTML offers (toggles that hide depth, SVG diagrams, animation where it earns its keep) to minimise cognitive load. It carries an index.html and stays current — an architecture.html explains how the thing works and is built, not just how to use it. Image assets are fine; markdown is not.
+        (In this repo the published human docs are site/ — docs/user/ is only for anything that shouldn't ship publicly.)
+
+    - type: rule
+      id: user-docs-are-html
+      description: docs/user/ is the human-facing surface — HTML and assets, never markdown.
+      at: [write, commit]
+      use: core/protected-path
+      deny: ["docs/user/**/*.md", "docs/user/**/*.mdx"]
+      message: "docs/user/ is the human-facing docs surface — HTML only; markdown belongs in docs/agent/. Write the .html version (multimodal, low cognitive load) and link it from index.html."
+
+# ── work-journal — vendored from the shop; edit in place, refresh via the from: pin ──
+work-journal:
+  title: Working-docs journal
+  summary: .work/ is the gitignored working-docs journal (specs · plans · handovers · research) — never committed into the code repo.
+  from: ../signposts-shop
+  signposts:
+    - type: sign
+      id: work-journal
+      description: .work/ is the gitignored working-docs journal — don't commit it.
+      at: [touch]
+      on: [".work/**"]
+      text: |-
+        `.work/` is the gitignored working-docs journal — never commit it into the code repo.
+        Status is the `status` field in each task's `.props.yaml`; the folder at tasks/<type>/<area>/<name>/ never moves.
+
 local:
   title: Developing Signposts
   summary: Orientation and guards for working ON the Signposts codebase itself.
@@ -416,15 +454,6 @@ local:
       text: |-
         The website is the canonical docs (signposts.asim.dev), a standalone Astro project in site/ — drive it via `just site-dev` / `just site-build`, never root scripts.
         The design specs (palette, type, motion) live in the task's design.md. British English; no animation libraries (vanilla canvas + CSS + IntersectionObserver), and every animation ships a `prefers-reduced-motion` still.
-
-    - type: sign
-      id: work-journal
-      description: .work/ is the gitignored working-docs journal — don't commit it.
-      at: [touch]
-      on: [".work/**"]
-      text: |-
-        `.work/` is the gitignored working-docs journal — never commit it into the code repo.
-        Status is the `status` field in each task's `.props.yaml`; the folder at tasks/<type>/<area>/<name>/ never moves.
 
     - type: sign
       id: engine-failsafe

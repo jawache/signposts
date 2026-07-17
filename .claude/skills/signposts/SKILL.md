@@ -13,7 +13,7 @@ The unit people adopt and share is the **bundle**: one contiguous block under `b
 
 | Mode | What it does | Its fact-provider |
 |---|---|---|
-| **setup** | onboard a repo: install the right grammars, surface the pack's own bundles, teach check-before-you-script | `npx signposts detect` / `diff` / `languages` |
+| **setup** | onboard a repo: author its **session sign** (the CLAUDE.md replacement), install the right grammars, adopt bundles from the pack + the user's hub | `npx signposts detect` / `diff` / `languages` |
 | **reflect** | read the session, propose new signs/rules, author + test them | `npx signposts facts` (+ `--html` report card; + the `coach` agent) |
 | **install** | cherry-pick a bundle from another repo (git/**local folder**) into this one | `npx signposts diff` |
 | **refresh** | pull upstream fixes for a vendored bundle, keeping your local edits (semantic three-way) | the bundle's `from:` pin |
@@ -31,27 +31,43 @@ how to resolve a clash). Never recount a metric a script gave you; never hard-co
 decision a human should make.
 
 Ground truth for the model (a **sign** steers, a **rule** blocks) and for *how* to write
-each is the `docs/`. Read them; don't restate them.
+each is the site docs — `site/src/content/docs/` locally, signposts.asim.dev/docs published.
+Read them; don't restate them. The mental model in one line: a session sign is the **map**,
+a touch sign is a **street sign**, a rule is a **barrier** (`docs/agent/map-sign-barrier.md`).
 
 ---
 
-## Mode: `setup` — get a project (and the agent) ready
+## Mode: `setup` — author the project's session sign, then enforce it
 
-Run **once, when onboarding a repo onto Signposts** — or when its stack changes. `npx signposts`
-(the scaffold) writes files; **setup makes the project *and you* ready**: the right grammars, the
-pack's own rules surfaced, the check-before-you-script habit. Every onboarding failure Signposts
-was built to stop happened in the gap where setup should have been.
+Run **when onboarding a repo onto Signposts** — or when its stack changes, or to bring an
+old install up to date (every step is re-runnable). `npx signposts` (the scaffold) writes
+files; **setup's product is the project's orientation** — a session sign that replaces the
+fat CLAUDE.md. Sort everything the project knows into map / street sign / barrier, then
+prove the leftover CLAUDE.md can shrink to a stub.
 
 1. **Scaffold if needed.** No `signposts.yml` yet? Run `npx signposts` — the deterministic
-   scaffold (justfile, the commit-gate hook, the Claude hooks, the quick-start tour). Restart the session so the
-   pre-emptive hook loads. (Already set up → skip to detect.)
-2. **Detect the stack.** `npx signposts detect` (`--json` to consume it) — a file census +
-   `package.json` stack signals. It marks each language **native** (free — html/css/js/ts/tsx) or
-   **needs-grammar**, and recommends the non-native ones (*on Neon → SQL is worth a grammar before
-   a `.sql` file even exists*).
-3. **Show the plan; get each grammar in (on consent).** Summarise it ("mostly TS, some Astro, on
-   Neon → needs `astro` + `sql`"). For each non-native grammar, on the user's go — **you're an
-   agent, so do whatever it takes**:
+   scaffold (justfile, the commit-gate hook, the Claude hooks, the quick-start tour). Restart
+   the session so the pre-emptive hook loads. Already scaffolded by an older version? Re-run
+   it (it merges, never clobbers) — then **diff the kept files** (justfile, `.githooks/`)
+   against the current templates and offer the updates; a stale gate is a silent one.
+2. **Ingest what exists.** Read CLAUDE.md / AGENTS.md / README / `docs/` — this is the raw
+   material, not the output. Every paragraph of it gets disposed of in step 6.
+3. **Census the codebase.** `npx signposts detect` (`--json`) — a file census + stack signals,
+   with each language marked **native** (free — html/css/js/ts/tsx) or **needs-grammar**. Then
+   spawn Explore sub-agents for what files actually say: layout (where logic lives vs where the
+   docs claim it lives), naming conventions, test topology (what has tests, what e2e proves).
+4. **Consult the user's hub.** If the user has a hub repo (their global CLAUDE.md declares it;
+   otherwise ask once), `npx signposts diff <hub>` for its bundles — including any
+   `profile-*` bundles: **worked examples** of a real project's session sign, one per
+   archetype, with the usual companion bundles named in the summary. Read the example that
+   matches the detected stack and **derive your questions from it** — everything the example
+   states that you can't yet establish for *this* project is a question for the census or the
+   user. Imitate the shape, never the words. On a blank repo the example is the plan. Also
+   diff **source #1**, the installed pack itself: `npx signposts diff node_modules/signposts`.
+   Don't hand-write what either already carries.
+5. **Get each grammar in (on consent).** For each non-native language worth guarding
+   (*on Neon → SQL is worth a grammar before a `.sql` file even exists*) — **you're an agent,
+   so do whatever it takes**:
    - **Prebuilt first:** `npx signposts languages add <lang>` — installs `@ast-grep/lang-<lang>`
      (published for sql · python · go · rust · …). If it succeeds, done.
    - **No published package?** (astro · vue · svelte have none) — **build the grammar yourself**:
@@ -63,16 +79,42 @@ was built to stop happened in the gap where setup should have been.
    thing; get it built and registered. **Never make a grammar a base dep.** Language rules are
    then plain `rules/<ns>/ast-grep/*.yml` with `language: <lang>`; a misplaced ast-grep yml is
    caught by `signposts test`.
-4. **Surface the pack's own rules.** `npx signposts diff node_modules/signposts` — **source #1**:
-   the installed package *is* a diffable pack. Walk what it ships; offer to adopt what fits (that's
-   `install` mode). Don't hand-write what the pack already carries.
-5. **Teach check-before-you-script.** Leave the habit behind: before writing a script, ask — can
-   `on`/`ignore` + a **core script** express this? does the **pack already ship it**
-   (`signposts diff node_modules/signposts`)? Most "novel" rules aren't.
+6. **Present the decomposition plan.** A table, line by line through everything step 2 found:
+   *this paragraph → the session sign · this one → a touch sign on `site/**` · this one is
+   mechanically checkable → a rule · this command → a justfile recipe · this one is stale →
+   delete.* Get the user's yes before writing anything.
+7. **Interview where the evidence is thin.** Ask the questions the profile example surfaced,
+   plus anything the census contradicted — how they like to work, what the folder structure
+   means, what e2e is for, what must never happen. **Grill; never invent an answer the user
+   should give.** On a blank repo, steps 2–3 are empty and the interview is the whole show.
+8. **Write + enforce.** Write the session sign (shape below, in the example's image) into the
+   project's own bundle; install the chosen bundles (that's `install` mode); wire the rules
+   that enforce what the sign claims. Teach **check-before-you-script**: core script → pack →
+   hub, and an own-script only when none fits. Most "novel" rules aren't.
+9. **The CLAUDE.md finale.** Offer to cut CLAUDE.md / AGENTS.md to a stub — show the
+   recommended shape (a pointer to Signposts plus only what no signpost can carry) — or to
+   delete it outright. **If a fat CLAUDE.md survives setup, the decomposition failed.**
 
-**Prove it:** `npx signposts test` green (the seeded rule's `.test.yml` + ast-grep validation runs
-from `node_modules`), and a bad edit is blocked at the gate. Then `reflect` authors what the
-session earns.
+**Prove it:** `npx signposts test` green, a bad edit blocked at the gate, then restart and
+read the orientation as the agent will see it. Then `reflect` authors what each session earns.
+
+### The session-sign shape (the map)
+
+```yaml
+- type: sign
+  id: dev-orientation
+  at: [session]
+  text: |-
+    <IDENTITY — one or two lines: what this project is, for whom.>
+    Layout: <the folder map as pointers with globs — where each kind of thing lives,
+    its test obligation, what must stay logic-free. The highest-value section.>
+    Shape: <how work proceeds here — the constraints no glob can carry. This section
+    shrinks over time as rules take over enforcing it.>
+    <POINTERS — where deeper truth lives (docs/, the architecture doc); point, never restate.>
+```
+
+Anything area-specific belongs in a **touch sign** behind an `on:` glob; anything checkable
+belongs in a **rule**; never restate either in the session sign.
 
 ---
 
@@ -168,7 +210,7 @@ pin makes drift visible. Refresh is a **semantic three-way**, not a blind overwr
 
 ## Authoring reference — a sign vs a rule
 
-Full detail is in `docs/` (see `07-authoring`); the shape at a glance:
+Full detail is in the site docs — `site/src/content/docs/` (see `authoring`); the shape at a glance:
 
 | Want to… | Author | Where |
 |---|---|---|
