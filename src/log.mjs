@@ -23,12 +23,67 @@
 // log is a side-channel; a broken or unwritable log can never block an edit, a commit, a
 // scan, or a sign injection.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, appendFileSync, writeFileSync, rmSync, mkdtempSync, chmodSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { existsSync, statSync, mkdirSync, readdirSync, readFileSync, appendFileSync, writeFileSync, rmSync, mkdtempSync, chmodSync } from 'node:fs';
+import { join, resolve, dirname, basename } from 'node:path';
+import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-const LOG_DIR = ['.signposts', 'log'];
+// ── where the log lives ─────────────────────────────────────────────────────────
+// The event log is telemetry that must OUTLIVE a single checkout: with git worktrees
+// (a fresh working dir per branch) an in-repo .signposts/log/ FRAGMENTS the history —
+// each worktree accumulates its own, so the cumulative rule-lifetime ledger only ever
+// sees one branch's sessions. So the log lives in the HOME dir, keyed by the repo it
+// belongs to: ~/.signposts/<repo-key>/log/ — one shared log across every worktree.
+//
+// The key is resolved by READING git's own files (never spawning git — that keeps this
+// fail-safe and hermetic at commit-time, where a git subprocess could corrupt the index):
+// the shared config's `remote.origin.url` when there is one (durable — survives a move),
+// else the main repo's path. A non-git dir (or any error) falls back to <root>/.signposts/log,
+// exactly the old behaviour. Reports stay per-worktree; it's only the log that wants sharing.
+const LOG_LEAF = 'log';
+const keyCache = new Map();
+
+function normaliseRemote(url) {
+  return String(url).trim()
+    .replace(/^[a-z]+:\/\//i, '').replace(/^git@/, '').replace(/^[^@/]+@/, '')   // strip scheme + user@
+    .replace(/:/, '/').replace(/\.git$/, '').replace(/\/+$/, '');                // scp-form host:path → host/path
+}
+// A repo identity stable across all its worktrees, or null for a non-git dir. Pure file reads.
+function repoKey(root) {
+  if (keyCache.has(root)) return keyCache.get(root);
+  let key = null;
+  try {
+    const dotgit = join(root, '.git');
+    const st = statSync(dotgit);
+    let commonGitDir;
+    if (st.isDirectory()) {
+      commonGitDir = dotgit;                                                    // the main worktree
+    } else {                                                                    // a linked worktree: .git is a file
+      const gd = readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/)?.[1]?.trim();
+      const wtGitDir = gd ? resolve(root, gd) : null;
+      if (wtGitDir) {
+        try { commonGitDir = resolve(wtGitDir, readFileSync(join(wtGitDir, 'commondir'), 'utf8').trim()); }
+        catch { commonGitDir = wtGitDir; }                                      // no commondir file → treat as its own
+      }
+    }
+    if (commonGitDir) {
+      try {                                                                     // prefer the durable remote identity
+        const cfg = readFileSync(join(commonGitDir, 'config'), 'utf8');
+        const m = cfg.match(/\[remote "origin"\][^[]*?\burl\s*=\s*([^\n\r]+)/);
+        if (m) key = normaliseRemote(m[1]);
+      } catch { /* no config / no origin */ }
+      if (!key) key = dirname(commonGitDir);                                    // else the main repo working dir
+    }
+  } catch { /* not a git repo, or unreadable → fall back below */ }
+  key = key ? key.replace(/[^A-Za-z0-9_.-]/g, '-').replace(/^-+|-+$/g, '') : null;
+  keyCache.set(root, key);
+  return key;
+}
+// The absolute log dir for a repo root: the shared home location, or the in-repo fallback.
+export function logDir(root) {
+  const key = repoKey(root);
+  return key ? join(homedir(), '.signposts', key, LOG_LEAF) : join(root, '.signposts', LOG_LEAF);
+}
 
 // A session id becomes a filename — keep it to a safe charset. The 'nosession'
 // fallback happens HERE, so call sites can pass whatever the host handed them.
@@ -42,7 +97,7 @@ export function sanitise(s) {
 export function logEvent(root, session, event) {
   try {
     if (!root || !event || typeof event !== 'object') return false;
-    const dir = join(root, ...LOG_DIR);
+    const dir = logDir(root);
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${sanitise(session)}.jsonl`);
     if (!existsSync(file)) {
@@ -79,7 +134,7 @@ export function sessionFrom(marker, fallback, nowMs, maxAgeMs = MARKER_MAX_AGE_M
 export function writeSessionMarker(root, session) {
   try {
     if (!root || !session) return false;
-    const dir = join(root, ...LOG_DIR);
+    const dir = logDir(root);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, SESSION_MARKER), JSON.stringify({ session: String(session), ts: new Date().toISOString() }) + '\n');
     return true;
@@ -89,7 +144,7 @@ export function writeSessionMarker(root, session) {
 // Resolve the commit-gate session id: the fresh marker's session, else 'commit'. NEVER throws.
 export function commitSession(root, nowMs = Date.now()) {
   let marker = null;
-  try { marker = JSON.parse(readFileSync(join(root, ...LOG_DIR, SESSION_MARKER), 'utf8')); } catch { /* missing/corrupt → fallback */ }
+  try { marker = JSON.parse(readFileSync(join(logDir(root), SESSION_MARKER), 'utf8')); } catch { /* missing/corrupt → fallback */ }
   return sessionFrom(marker, 'commit', nowMs);
 }
 
@@ -100,7 +155,7 @@ export function commitSession(root, nowMs = Date.now()) {
 export function readEvents(root, { session } = {}) {
   const out = { files: 0, events: [], badLines: 0 };
   try {
-    const dir = join(root, ...LOG_DIR);
+    const dir = logDir(root);
     if (!existsSync(dir)) return out;
     let names;
     if (session) {
@@ -140,10 +195,10 @@ export function selfTest() {
     ok('no bad lines', r1.badLines === 0);
 
     // 2. session id is sanitised into the filename ('/' → '-').
-    ok('session sanitised to a file', existsSync(join(tmp, ...LOG_DIR, 'sess-one.jsonl')));
+    ok('session sanitised to a file', existsSync(join(logDir(tmp), 'sess-one.jsonl')));
 
     // 3. a corrupt line is counted, not thrown on.
-    appendFileSync(join(tmp, ...LOG_DIR, 'sess-one.jsonl'), 'not json {\n');
+    appendFileSync(join(logDir(tmp), 'sess-one.jsonl'), 'not json {\n');
     ok('badLines counts corruption', readEvents(tmp, { session: 'sess/one' }).badLines === 1);
 
     // 3b. a `check` event round-trips like any other kind (readEvents parses any JSONL).
@@ -187,20 +242,57 @@ export function selfTest() {
     const ro = mkdtempSync(join(tmpdir(), 'sg-ro-'));
     logEvent(ro, 'seed', { kind: 'run' });               // create .signposts/log
     try {
-      chmodSync(join(ro, ...LOG_DIR), 0o555);            // read-only dir → a NEW file can't be created
+      chmodSync(logDir(ro), 0o555);            // read-only dir → a NEW file can't be created
       let threw = false, res;
       try { res = logEvent(ro, 'blocked-new-file', { kind: 'run' }); } catch { threw = true; }
       ok('unwritable dir: logEvent never throws', threw === false);              // the headline fail-safe
       ok('unwritable dir: returns a boolean', typeof res === 'boolean');
       // the real contract: if it reported failure, it did NOT leave a partial file behind.
       // (a false escape hatch for the rare FS/uid where the write actually succeeds)
-      ok('unwritable dir: false ⇒ no file written', res === true || !existsSync(join(ro, ...LOG_DIR, 'blocked-new-file.jsonl')));
+      ok('unwritable dir: false ⇒ no file written', res === true || !existsSync(join(logDir(ro), 'blocked-new-file.jsonl')));
     } finally {
-      try { chmodSync(join(ro, ...LOG_DIR), 0o755); } catch {}
+      try { chmodSync(logDir(ro), 0o755); } catch {}
       try { rmSync(ro, { recursive: true, force: true }); } catch {}
     }
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch {}
+  }
+
+  // ── log LOCATION: shared home dir keyed by repo, one log across all worktrees ──
+  const scratch = [];
+  const mk = (p) => { const d = mkdtempSync(join(tmpdir(), p)); scratch.push(d); return d; };
+  try {
+    // 1. a non-git dir → the in-repo fallback (old behaviour, unchanged).
+    const plain = mk('sg-plain-');
+    ok('non-git dir → in-repo fallback', logDir(plain) === join(plain, '.signposts', 'log'));
+
+    // 2. a main repo with an origin remote → home dir keyed by the normalised remote.
+    const main = mk('sg-main-');
+    mkdirSync(join(main, '.git'), { recursive: true });
+    writeFileSync(join(main, '.git', 'config'), '[core]\n\tbare = false\n[remote "origin"]\n\turl = git@github.com:jawache/signposts.git\n');
+    const key = 'github.com-jawache-signposts';
+    ok('git repo → ~/.signposts/<remote-key>/log', logDir(main) === join(homedir(), '.signposts', key, 'log'));
+
+    // 3. a LINKED WORKTREE of that repo → the SAME shared log (the whole point).
+    const wt = mk('sg-wt-');
+    const wtGit = join(main, '.git', 'worktrees', 'wt');
+    mkdirSync(wtGit, { recursive: true });
+    writeFileSync(join(wtGit, 'commondir'), '../..\n');           // → <main>/.git
+    writeFileSync(join(wt, '.git'), `gitdir: ${wtGit}\n`);        // a worktree's .git is a FILE
+    ok('a worktree resolves to its main repo\'s shared log', logDir(wt) === logDir(main));
+
+    // 4. https + scp-form remotes normalise identically.
+    const https = mk('sg-https-');
+    mkdirSync(join(https, '.git'), { recursive: true });
+    writeFileSync(join(https, '.git', 'config'), '[remote "origin"]\n\turl = https://github.com/jawache/signposts.git\n');
+    ok('https + scp remote → same key', logDir(https) === logDir(main));
+
+    // 5. a git repo with NO remote → still in home (keyed by the main repo path), not in-repo.
+    const noremote = mk('sg-noremote-');
+    mkdirSync(join(noremote, '.git'), { recursive: true });
+    ok('git, no remote → home (path-keyed), not in-repo', logDir(noremote).startsWith(join(homedir(), '.signposts')) && logDir(noremote) !== join(noremote, '.signposts', 'log'));
+  } finally {
+    for (const d of scratch) try { rmSync(d, { recursive: true, force: true }); } catch {}
   }
 
   if (fails.length) { console.error('FAIL log:\n  ' + fails.join('\n  ')); process.exit(1); }

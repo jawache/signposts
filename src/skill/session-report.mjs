@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { readEvents, sanitise } from '../log.mjs';
+import { readEvents, sanitise, logDir } from '../log.mjs';
 import { loadRules } from '../engine.mjs';
 import { loadConfig, resolveConfigPath } from '../schema.mjs';
 import { composeOrientation } from '../hooks/session-start.mjs';
@@ -331,7 +331,7 @@ export function buildLedger(sessionLogs, universeIds, nowMs, opts = {}) {
 // still count toward a rule's lifetime totals, just not toward the distinct-session count.
 function allSessionIds(root) {
   try {
-    return fs.readdirSync(path.join(root, '.signposts', 'log'))
+    return fs.readdirSync(logDir(root))
       .filter((f) => f.endsWith('.jsonl')).map((f) => f.slice(0, -6));
   } catch { return []; }
 }
