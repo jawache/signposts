@@ -98,11 +98,32 @@ function migrateLegacyLog(root, homeDir) {
   try {
     const legacy = join(root, '.signposts', LOG_LEAF);
     if (homeDir === legacy || existsSync(homeDir) || !existsSync(legacy)) return;
-    const files = readdirSync(legacy).filter((f) => f.endsWith('.jsonl') || f === SESSION_MARKER);
+    const files = readdirSync(legacy).filter((f) => f.endsWith('.jsonl'));   // logs only — the marker is worktree-local
     if (!files.length) return;
     mkdirSync(homeDir, { recursive: true });
     for (const f of files) { try { copyFileSync(join(legacy, f), join(homeDir, f)); } catch { /* skip one bad file */ } }
   } catch { /* fail-safe: a migration hiccup must never block logging */ }
+}
+
+// The session marker is PER-WORKTREE state (it tells the pre-commit gate which live session
+// THIS worktree's commit belongs to) — so it lives in the worktree, NOT the pooled home log
+// dir. Sharing it would let two worktrees committing at once clobber each other's marker and
+// mis-attribute a commit. Kept out of the log dir on purpose.
+export function markerPath(root) {
+  return join(root, '.signposts', SESSION_MARKER);
+}
+
+// The branch checked out in a worktree, read from its own HEAD (a file read — no git subprocess,
+// so it stays fail-safe and hermetic). A detached HEAD yields the short sha; a non-git dir → null.
+export function branchOf(root) {
+  try {
+    const dotgit = join(root, '.git');
+    const st = statSync(dotgit);
+    const gitdir = st.isDirectory() ? dotgit : resolve(root, readFileSync(dotgit, 'utf8').match(/gitdir:\s*(.+)/)?.[1]?.trim() || '');
+    const head = readFileSync(join(gitdir, 'HEAD'), 'utf8').trim();
+    const m = head.match(/^ref:\s*refs\/heads\/(.+)$/);
+    return m ? m[1] : (head.slice(0, 12) || null);
+  } catch { return null; }
 }
 
 // A session id becomes a filename — keep it to a safe charset. The 'nosession'
@@ -122,8 +143,11 @@ export function logEvent(root, session, event) {
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${sanitise(session)}.jsonl`);
     if (!existsSync(file)) {
-      // first line = the fail-loud "armed" marker (distinct from "no file").
-      writeFileSync(file, JSON.stringify({ kind: 'meta', v: 1, session: String(session ?? 'nosession'), started: new Date().toISOString() }) + '\n');
+      // first line = the fail-loud "armed" marker (distinct from "no file"). It also stamps the
+      // session's branch + worktree, so a pooled log stays worktree-attributable — reflect can
+      // group a work-unit's sessions by branch (compaction splits one task into several), and a
+      // commit can never cross-attribute across worktrees.
+      writeFileSync(file, JSON.stringify({ kind: 'meta', v: 1, session: String(session ?? 'nosession'), started: new Date().toISOString(), branch: branchOf(root), worktree: root }) + '\n');
     }
     appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...event }) + '\n');
     return true;
@@ -155,10 +179,9 @@ export function sessionFrom(marker, fallback, nowMs, maxAgeMs = MARKER_MAX_AGE_M
 export function writeSessionMarker(root, session) {
   try {
     if (!root || !session) return false;
-    const dir = logDir(root);
-    migrateLegacyLog(root, dir);                          // one-time carry-over of any in-repo history
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, SESSION_MARKER), JSON.stringify({ session: String(session), ts: new Date().toISOString() }) + '\n');
+    const mp = markerPath(root);                          // worktree-local, not the pooled log dir
+    mkdirSync(dirname(mp), { recursive: true });
+    writeFileSync(mp, JSON.stringify({ session: String(session), ts: new Date().toISOString() }) + '\n');
     return true;
   } catch { return false; }
 }
@@ -166,7 +189,7 @@ export function writeSessionMarker(root, session) {
 // Resolve the commit-gate session id: the fresh marker's session, else 'commit'. NEVER throws.
 export function commitSession(root, nowMs = Date.now()) {
   let marker = null;
-  try { marker = JSON.parse(readFileSync(join(logDir(root), SESSION_MARKER), 'utf8')); } catch { /* missing/corrupt → fallback */ }
+  try { marker = JSON.parse(readFileSync(markerPath(root), 'utf8')); } catch { /* missing/corrupt → fallback */ }
   return sessionFrom(marker, 'commit', nowMs);
 }
 
@@ -321,17 +344,26 @@ export function selfTest() {
     writeFileSync(join(repo, '.git', 'config'), '[remote "origin"]\n\turl = https://github.com/x/y.git\n');
     mkdirSync(join(repo, '.signposts', 'log'), { recursive: true });               // pre-move in-repo history
     writeFileSync(join(repo, '.signposts', 'log', 'old-sess.jsonl'), JSON.stringify({ kind: 'meta', session: 'old-sess', started: '2026-01-01T00:00:00Z' }) + '\n');
-    writeFileSync(join(repo, '.signposts', 'log', SESSION_MARKER), '{"session":"old-sess","ts":"2026-01-01T00:00:00Z"}\n');
     const prevHome = process.env.SIGNPOSTS_HOME;
     process.env.SIGNPOSTS_HOME = home;
     try {
       ok('first logEvent to a fresh home succeeds', logEvent(repo, 'new-sess', { kind: 'run', phase: 'edit', rules: [] }) === true);
       const hd = logDir(repo);
-      ok('legacy session carried into the shared home', existsSync(join(hd, 'old-sess.jsonl')));
-      ok('legacy marker carried over too', existsSync(join(hd, SESSION_MARKER)));
+      ok('legacy session log carried into the shared home', existsSync(join(hd, 'old-sess.jsonl')));
       ok('the new session is written to home', existsSync(join(hd, 'new-sess.jsonl')));
       logEvent(repo, 'new-sess', { kind: 'run', phase: 'commit', rules: [] });     // second write must NOT re-migrate
       ok('migration is one-time (home exists → skipped, no duplication)', readEvents(repo, { session: 'old-sess' }).events.length === 1);
+
+      // 7. the session marker is WORKTREE-LOCAL — never the pooled log dir (no cross-worktree race).
+      ok('marker path is in the worktree, not the log dir', markerPath(repo) === join(repo, '.signposts', SESSION_MARKER) && !markerPath(repo).startsWith(hd));
+      writeSessionMarker(repo, 'new-sess');
+      ok('marker round-trips from the worktree-local path', commitSession(repo) === 'new-sess');
+      ok('marker is not written into the shared log', !existsSync(join(hd, SESSION_MARKER)));
+
+      // 8. the meta event stamps branch + worktree (branch null for this bare fake repo).
+      const meta = readEvents(repo, { session: 'new-sess' }).events.find((e) => e.kind === 'meta');
+      ok('meta carries the worktree path', meta && meta.worktree === repo);
+      ok('meta carries a branch field', meta && 'branch' in meta);
     } finally { if (prevHome === undefined) delete process.env.SIGNPOSTS_HOME; else process.env.SIGNPOSTS_HOME = prevHome; }
   } finally {
     for (const d of scratch) try { rmSync(d, { recursive: true, force: true }); } catch {}

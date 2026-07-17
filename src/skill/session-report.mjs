@@ -357,8 +357,14 @@ function logMetrics(root, session) {
     const ts = sessionLog.events.map((e) => e.ts).filter(Boolean).sort();
     return ts[0] || null;
   })();
+  // The upper bound on this session's commit-attribution window = the next session's start —
+  // but only a session in the SAME worktree (a concurrent session in another worktree must not
+  // truncate this one's window). Legacy metas without a worktree tag are tolerated (kept in the
+  // bound, the old behaviour) so old logs read unchanged.
+  const thisWorktree = allLog.events.find((e) => e.kind === 'meta' && e.session === session)?.worktree ?? null;
   const nextStart = allLog.events
-    .filter((e) => e.kind === 'meta' && e.started && e.session && e.session !== 'commit' && started && e.started > started)
+    .filter((e) => e.kind === 'meta' && e.started && e.session && e.session !== 'commit' && started && e.started > started
+      && (thisWorktree == null || e.worktree == null || e.worktree === thisWorktree))
     .map((e) => e.started).sort()[0] || null;
   const inWindow = (e) => !started || (e.ts && e.ts >= started && (!nextStart || e.ts < nextStart));
 
@@ -880,6 +886,26 @@ function selfTest() {
     eq(mLeg.rows.find((r) => r.id === 'demo').matched, null, 'logMetrics: legacy matched is null (unknown)');
     eq(mLeg.rows.find((r) => r.id === 'demo').blocked, 2, 'logMetrics: legacy blocked from deny events');
     fs.rmSync(legRoot, { recursive: true, force: true });
+
+    // ---- worktree isolation: another worktree's later session must not truncate this window ----
+    const wtRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-wtiso-'));
+    fs.mkdirSync(path.join(wtRoot, '.signposts', 'log'), { recursive: true });
+    fs.writeFileSync(path.join(wtRoot, 'signposts.yaml'), 'rules:\n  core:\n    - id: demo\n      use: core/protected-path\n      deny: ["x"]\n');
+    const wL = path.join(wtRoot, '.signposts', 'log');
+    fs.writeFileSync(path.join(wL, 'sA.jsonl'), [
+      JSON.stringify({ kind: 'meta', v: 1, session: 'sA', started: '2026-07-06T00:00:00Z', worktree: '/wt/a', branch: 'a' }),
+      JSON.stringify({ ts: '2026-07-06T00:00:01Z', kind: 'run', phase: 'edit', rules: [{ id: 'demo', evaluated: 1, matched: 1, hits: 1 }] }),
+    ].join('\n') + '\n');
+    fs.writeFileSync(path.join(wL, 'commit.jsonl'), [
+      JSON.stringify({ kind: 'meta', v: 1, session: 'commit', started: '2026-07-06T00:00:00Z' }),
+      JSON.stringify({ ts: '2026-07-06T00:05:00Z', kind: 'check', phase: 'commit', rule: 'demo', ns: 'core', path: 'x', out: 'deny' }),
+    ].join('\n') + '\n');
+    fs.writeFileSync(path.join(wL, 'sB.jsonl'), JSON.stringify({ kind: 'meta', v: 1, session: 'sB', started: '2026-07-06T00:02:00Z', worktree: '/wt/b', branch: 'b' }) + '\n');
+    eq(logMetrics(wtRoot, 'sA').rows.find((r) => r.id === 'demo').blocked, 1, 'worktree isolation: a later session in ANOTHER worktree does not truncate the commit window');
+    // contrast: a later session in the SAME worktree DOES bound it (the 00:05 commit falls outside).
+    fs.writeFileSync(path.join(wL, 'sB.jsonl'), JSON.stringify({ kind: 'meta', v: 1, session: 'sB', started: '2026-07-06T00:02:00Z', worktree: '/wt/a', branch: 'a' }) + '\n');
+    eq(logMetrics(wtRoot, 'sA').rows.find((r) => r.id === 'demo').blocked, 0, 'same-worktree later session bounds the window (commit after it is not attributed)');
+    fs.rmSync(wtRoot, { recursive: true, force: true });
 
     // ---- cumulative ledger (multi-run retirement grading) — pure over synthetic session logs ----
     const now = Date.parse('2026-07-17T00:00:00Z');
