@@ -45,11 +45,21 @@ files; **setup's product is the project's orientation** — a session sign that 
 fat CLAUDE.md. Sort everything the project knows into map / street sign / barrier, then
 prove the leftover CLAUDE.md can shrink to a stub.
 
-1. **Scaffold if needed.** No `signposts.yml` yet? Run `npx signposts` — the deterministic
-   scaffold (justfile, the commit-gate hook, the Claude hooks, the quick-start tour). Restart
-   the session so the pre-emptive hook loads. Already scaffolded by an older version? Re-run
-   it (it merges, never clobbers) — then **diff the kept files** (justfile, `.githooks/`)
-   against the current templates and offer the updates; a stale gate is a silent one.
+1. **Scaffold if needed — purging any old install first.** No `signposts.yml` yet? Run
+   `npx signposts` — the deterministic scaffold (justfile, the commit-gate hook, the Claude
+   hooks, the quick-start tour). Restart the session so the pre-emptive hook loads.
+   **Scaffolded by an older version?** Old scaffolds wired the commit gate through
+   **lefthook**; today's gate is `.githooks/pre-commit` + `git config core.hooksPath
+   .githooks`, and stale machinery double-fires — or fires the OLD gate. Sweep for residue
+   and remove it (on consent):
+   - `lefthook.yml` / `.lefthook/`, and the `lefthook` devDependency (`npm uninstall lefthook`);
+   - lefthook-written hook scripts in `.git/hooks/` (`grep -l lefthook .git/hooks/*`) — delete them;
+   - `git config core.hooksPath` unset or wrong → point it at `.githooks`;
+   - a section-first `signposts.yaml` → offer the bundle-first `signposts.yml` migration;
+   - a pinned old `signposts` devDependency → let the scaffold re-run upgrade it.
+   Then re-run `npx signposts` (it merges, never clobbers) and **diff the kept files**
+   (justfile, `.githooks/`, `.claude/settings.json` hooks) against the current templates and
+   offer the updates; a stale gate is a silent one.
 2. **Ingest what exists.** Read CLAUDE.md / AGENTS.md / README / `docs/` — this is the raw
    material, not the output. Every paragraph of it gets disposed of in step 6.
 3. **Census the codebase.** `npx signposts detect` (`--json`) — a file census + stack signals,
