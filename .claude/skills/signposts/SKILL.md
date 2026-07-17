@@ -143,7 +143,9 @@ engage with my work, and did they catch anything* — and turns each keeper into
    conversation** — standalone reflect assumes no `.work` and no review skill, so the chat is
    where the person who ran it reads the result — and **cite the HTML card path** it wrote to
    `.signposts/reports/` as the durable, shareable artefact. `--around <line>` opens any cited
-   spot. (Numbers deterministic; narrative heuristic — labelled.)
+   spot. (Numbers deterministic; narrative heuristic — labelled.) **Facts defaults to the
+   branch work-unit** — it aggregates every session on the current branch, because a compaction
+   splits one task across several session ids; `--session <id>` narrows to a single session.
 2. **Spawn `coach`** (Task) with the full facts output. It reads the cited lines and returns
    candidate **rules** + **signs** — each a place the machinery let the agent go wrong.
    Coach writes nothing.
