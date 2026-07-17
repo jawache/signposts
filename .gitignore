@@ -22,3 +22,4 @@ site/.astro/
 # editor / OS
 .vscode/
 .DS_Store
+signposts.code-workspace
