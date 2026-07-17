@@ -90,7 +90,7 @@ Backwards-compatible sugar: `global: true` reads as `at: session`; the old `when
 
 ## The engine keeps its own event log
 
-Every evaluation appends one line to a local, **gitignored** log at `.signposts/log/<session>.jsonl`: a `run` with per-rule tallies, a `deny` per violation, and a `sign` per injection. It's the deterministic ground truth behind `npx signposts facts` and its HTML report card — per-rule fires, **edit-catches vs commit-leaks**, rules that never fired, plus the composed-orientation size so it can't creep silently. Writing it is fail-safe: an unwritable log can never block an edit.
+Every evaluation appends one line to a **shared, gitignored** log at `~/.signposts/<repo-key>/log/<session>.jsonl` — keyed by repo identity, so a repo's git worktrees share one ledger (a repo-local `.signposts/log/` is the fallback for non-git dirs): a `run` with per-rule tallies, a `check` per matched file, a `deny` per violation, and a `sign` per injection. It's the deterministic ground truth behind `npx signposts facts` and its HTML report card — per-rule **matched vs blocked**, rules that never fired, plus the composed-orientation size so it can't creep silently. Writing it is fail-safe: an unwritable log can never block an edit.
 
 ## Two things that always hold
 

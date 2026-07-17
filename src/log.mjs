@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// src/log.mjs — the engine's own event log. Append-only, per-session JSONL under
-// .signposts/log/ (gitignored), plus a reader. This is the DETERMINISTIC ground
+// src/log.mjs — the engine's own event log. Append-only, per-session JSONL in a shared
+// per-repo home dir (~/.signposts/<repo-key>/log/, resolved by logDir), plus a reader. This is the DETERMINISTIC ground
 // truth the session report card and coach read for hard numbers; the transcript
 // stays the source for narrative only.
 //
@@ -15,7 +15,7 @@
 //   deny  — one per violation: phase, rule id, namespace, path, first hit (kept for back-compat).
 //   sign  — one per sign injection: sign id, reason (first-touch|drift).
 //
-// Also a non-.jsonl SESSION MARKER (.signposts/log/.session): the PreToolUse hook writes the
+// Also a non-.jsonl SESSION MARKER (.signposts/.session, worktree-local): the PreToolUse hook writes the
 // live Claude session id here so the commit gate (spawned by git, outside any session) can
 // attribute its run/deny events to that session instead of the shared 'commit' file.
 //
@@ -133,7 +133,7 @@ export function sanitise(s) {
   return String(s || 'nosession').replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
-// Append one event to .signposts/log/<session>.jsonl. NEVER throws → true on
+// Append one event to <logDir>/<session>.jsonl (the shared per-repo home dir). NEVER throws → true on
 // success, false on any error (bad root, missing perms, non-object event).
 export function logEvent(root, session, event) {
   try {

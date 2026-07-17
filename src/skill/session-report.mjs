@@ -4,7 +4,8 @@
  * /signposts reflect loop (run by `npx signposts facts`, chained from /review's wrap-up).
  *
  * Two sources, kept strictly apart (this is the whole point of the rebuild):
- *   • NUMBERS come from the engine's own event log (.signposts/log/<session>.jsonl) —
+ *   • NUMBERS come from the engine's own event log (~/.signposts/<repo-key>/log/<session>.jsonl,
+ *     resolved by src/log.mjs logDir; a repo-local fallback for non-git dirs) —
  *     deterministic ground truth. Per-rule fires, edit-catches vs commit-leaks, rules
  *     that never fired, sign injections. This replaces the old approach of scraping
  *     the git hook's emoji output out of the transcript, which silently reported
@@ -36,6 +37,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { readEvents, sanitise, logDir, branchOf } from '../log.mjs';
+import { buildLedger } from '../core/pure/build-ledger.mjs';
 import { loadRules } from '../engine.mjs';
 import { loadConfig, resolveConfigPath } from '../schema.mjs';
 import { composeOrientation } from '../hooks/session-start.mjs';
@@ -276,56 +278,9 @@ function signUniverse(root) {
   return out;
 }
 
-// ── cumulative rule lifetime — the ledger across ALL sessions ───────────────
-// Retirement is a MULTI-run call, never a one-run one: a rule quiet this session may just be
-// watching an area you didn't touch. This sums every session's log into a per-rule lifetime —
-// evaluated / matched / fired, sessions-seen, first-seen, last-fired — and grades a
-// never-fired rule by how much OPPORTUNITY it had: ample history + 0 evaluations ⇒ retire
-// candidate; thin history ⇒ "unproven, too soon". Pure (session logs + now injected → testable).
-const DAY_MS = 86_400_000;
-const minTs = (a, b) => (!a ? b : !b ? a : a < b ? a : b);
-const maxTs = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
-export function buildLedger(sessionLogs, universeIds, nowMs, opts = {}) {
-  const minSessions = opts.minSessions ?? 15;
-  const minDays = opts.minDays ?? 30;
-  const rules = {};
-  const ensure = (id) => (rules[id] ||= { id, evaluated: 0, matched: 0, fired: 0, sessions: 0, firstSeen: null, lastEvaluated: null, lastFired: null });
-  let firstLog = null, lastLog = null, totalSessions = 0;
-  for (const { session, events } of sessionLogs) {
-    const seen = new Set();
-    let sessionHasRun = false;
-    for (const e of events || []) {
-      if (e.ts) { firstLog = minTs(firstLog, e.ts); lastLog = maxTs(lastLog, e.ts); }
-      if (e.kind === 'run') {
-        sessionHasRun = true;
-        for (const r of e.rules || []) {
-          const t = ensure(r.id); seen.add(r.id);
-          t.evaluated += r.evaluated || 0;
-          t.matched += r.matched || 0;                       // legacy runs lack `matched` → contribute 0
-          t.fired += r.hits || 0;
-          if (e.ts) { t.firstSeen = minTs(t.firstSeen, e.ts); t.lastEvaluated = maxTs(t.lastEvaluated, e.ts); if ((r.hits || 0) > 0) t.lastFired = maxTs(t.lastFired, e.ts); }
-        }
-      } else if (e.kind === 'check' && (e.out === 'deny' || e.out === 'override')) {
-        if (e.ts) ensure(e.rule).lastFired = maxTs(ensure(e.rule).lastFired, e.ts);
-      } else if (e.kind === 'deny') {
-        if (e.ts) ensure(e.rule).lastFired = maxTs(ensure(e.rule).lastFired, e.ts);   // legacy back-compat
-      }
-    }
-    for (const id of seen) rules[id].sessions += 1;
-    if (session !== 'commit' && sessionHasRun) totalSessions += 1;   // 'commit' is a shared file, not a session
-  }
-  const spanDays = firstLog && lastLog ? Math.round((Date.parse(lastLog) - Date.parse(firstLog)) / DAY_MS) : 0;
-  const ample = totalSessions >= minSessions || spanDays >= minDays;   // enough opportunity to trust a "never ran"
-  const retire = [], unproven = [], wentQuiet = [];
-  for (const id of universeIds) {
-    const t = rules[id];
-    if (!t || t.evaluated === 0) { (ample ? retire : unproven).push(id); continue; }   // never RAN anywhere
-    if (t.fired === 0) continue;                                       // ran but never caught — a working deterrent, keep
-    const daysSince = t.lastFired ? Math.round((nowMs - Date.parse(t.lastFired)) / DAY_MS) : null;
-    if (ample && daysSince != null && daysSince > minDays) wentQuiet.push({ id, lastFired: t.lastFired, daysSince });
-  }
-  return { totalSessions, spanDays, firstLog, lastLog, ample, minSessions, minDays, rules, retire: retire.sort(), unproven: unproven.sort(), wentQuiet: wentQuiet.sort((a, b) => b.daysSince - a.daysSince) };
-}
+// The cumulative rule-lifetime ledger — the multi-run retirement grader — is the pure decision
+// `buildLedger` in src/core/pure/build-ledger.mjs (imported above). This file reads the logs and
+// hands them to it.
 
 // The session ids that have a log file (filename stem). 'commit' is included — its events
 // still count toward a rule's lifetime totals, just not toward the distinct-session count.
@@ -531,7 +486,7 @@ function analyze({ events, cwd, base, tools }) {
 // ── fail-loud header for the numbers section ───────────────────────────────
 function numbersHealth(m) {
   const warn = [];
-  if (!m.logPresent) return { blocked: 'event log: NOT ARMED (no .signposts/log — hooks have not run here, so no numbers). This is not "zero drift".' };
+  if (!m.logPresent) return { blocked: 'event log: NOT ARMED (no event log dir — hooks have not run here, so no numbers). This is not "zero drift".' };
   if (!m.sessionArmed) warn.push('no events for THIS session id (commit-gate log present, but the edit hooks did not record — session id mismatch or edits-free session).');
   else if (m.realEvents === 0) warn.push('event log armed but 0 events recorded this session.');
   if (m.badLines > 0) warn.push(`⚠ ${m.badLines} unparseable log line(s) — the log may be corrupt (numbers below may undercount).`);
