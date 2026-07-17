@@ -276,13 +276,74 @@ function signUniverse(root) {
   return out;
 }
 
+// ── cumulative rule lifetime — the ledger across ALL sessions ───────────────
+// Retirement is a MULTI-run call, never a one-run one: a rule quiet this session may just be
+// watching an area you didn't touch. This sums every session's log into a per-rule lifetime —
+// evaluated / matched / fired, sessions-seen, first-seen, last-fired — and grades a
+// never-fired rule by how much OPPORTUNITY it had: ample history + 0 evaluations ⇒ retire
+// candidate; thin history ⇒ "unproven, too soon". Pure (session logs + now injected → testable).
+const DAY_MS = 86_400_000;
+const minTs = (a, b) => (!a ? b : !b ? a : a < b ? a : b);
+const maxTs = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
+export function buildLedger(sessionLogs, universeIds, nowMs, opts = {}) {
+  const minSessions = opts.minSessions ?? 15;
+  const minDays = opts.minDays ?? 30;
+  const rules = {};
+  const ensure = (id) => (rules[id] ||= { id, evaluated: 0, matched: 0, fired: 0, sessions: 0, firstSeen: null, lastEvaluated: null, lastFired: null });
+  let firstLog = null, lastLog = null, totalSessions = 0;
+  for (const { session, events } of sessionLogs) {
+    const seen = new Set();
+    let sessionHasRun = false;
+    for (const e of events || []) {
+      if (e.ts) { firstLog = minTs(firstLog, e.ts); lastLog = maxTs(lastLog, e.ts); }
+      if (e.kind === 'run') {
+        sessionHasRun = true;
+        for (const r of e.rules || []) {
+          const t = ensure(r.id); seen.add(r.id);
+          t.evaluated += r.evaluated || 0;
+          t.matched += r.matched || 0;                       // legacy runs lack `matched` → contribute 0
+          t.fired += r.hits || 0;
+          if (e.ts) { t.firstSeen = minTs(t.firstSeen, e.ts); t.lastEvaluated = maxTs(t.lastEvaluated, e.ts); if ((r.hits || 0) > 0) t.lastFired = maxTs(t.lastFired, e.ts); }
+        }
+      } else if (e.kind === 'check' && (e.out === 'deny' || e.out === 'override')) {
+        if (e.ts) ensure(e.rule).lastFired = maxTs(ensure(e.rule).lastFired, e.ts);
+      } else if (e.kind === 'deny') {
+        if (e.ts) ensure(e.rule).lastFired = maxTs(ensure(e.rule).lastFired, e.ts);   // legacy back-compat
+      }
+    }
+    for (const id of seen) rules[id].sessions += 1;
+    if (session !== 'commit' && sessionHasRun) totalSessions += 1;   // 'commit' is a shared file, not a session
+  }
+  const spanDays = firstLog && lastLog ? Math.round((Date.parse(lastLog) - Date.parse(firstLog)) / DAY_MS) : 0;
+  const ample = totalSessions >= minSessions || spanDays >= minDays;   // enough opportunity to trust a "never ran"
+  const retire = [], unproven = [], wentQuiet = [];
+  for (const id of universeIds) {
+    const t = rules[id];
+    if (!t || t.evaluated === 0) { (ample ? retire : unproven).push(id); continue; }   // never RAN anywhere
+    if (t.fired === 0) continue;                                       // ran but never caught — a working deterrent, keep
+    const daysSince = t.lastFired ? Math.round((nowMs - Date.parse(t.lastFired)) / DAY_MS) : null;
+    if (ample && daysSince != null && daysSince > minDays) wentQuiet.push({ id, lastFired: t.lastFired, daysSince });
+  }
+  return { totalSessions, spanDays, firstLog, lastLog, ample, minSessions, minDays, rules, retire: retire.sort(), unproven: unproven.sort(), wentQuiet: wentQuiet.sort((a, b) => b.daysSince - a.daysSince) };
+}
+
+// The session ids that have a log file (filename stem). 'commit' is included — its events
+// still count toward a rule's lifetime totals, just not toward the distinct-session count.
+function allSessionIds(root) {
+  try {
+    return fs.readdirSync(path.join(root, '.signposts', 'log'))
+      .filter((f) => f.endsWith('.jsonl')).map((f) => f.slice(0, -6));
+  } catch { return []; }
+}
+
 // ── the hard numbers, from the event log ───────────────────────────────────
 // session = the Claude session id (transcript basename). Per-rule the report answers "did this
 // rule ENGAGE with my work, and did it catch anything?" via `matched` (a touched file fell in
 // the rule's scope) and `blocked`/`overridden` (from the per-file `check` trace). Commit-phase
 // events attribute to the live session when the marker worked, else to commit.jsonl in this
 // session's window [started, nextStart). Legacy logs (no `matched`, no `check`) degrade to the
-// old evaluated/deny counts, flagged. never-fired spans ALL sessions (a retire candidate).
+// old evaluated/deny counts, flagged. A cumulative `lifetime` ledger (all sessions) grades
+// retirement — never-fired this session is not never-fired ever.
 function logMetrics(root, session) {
   const universe = ruleUniverse(root);
   const cfgById = Object.fromEntries(universe.map((u) => [u.id, u]));
@@ -350,6 +411,12 @@ function logMetrics(root, session) {
   for (const e of allLog.events) if (e.kind === 'run') for (const r of e.rules || []) firesAll[r.id] = (firesAll[r.id] || 0) + (r.evaluated || 0);
   const neverFired = universe.filter((u) => !(firesAll[u.id] > 0)).map((u) => u.id).sort();
 
+  // Cumulative lifetime across every session log — the multi-run view that grades retirement.
+  const lcfg = (() => { try { return loadConfig(root).config || {}; } catch { return {}; } })();
+  const ledgerOpts = { minSessions: Number(lcfg.retire_min_sessions) || 15, minDays: Number(lcfg.retire_min_days) || 30 };
+  const sessionLogs = allSessionIds(root).map((id) => ({ session: id, events: readEvents(root, { session: id }).events }));
+  const lifetime = buildLedger(sessionLogs, universe.map((u) => u.id), Date.now(), ledgerOpts);
+
   const signs = {};
   for (const e of sessionLog.events) if (e.kind === 'sign') {
     const c = signsCfg[e.sign] || {};
@@ -372,7 +439,7 @@ function logMetrics(root, session) {
     matched: sum((r) => r.matched), blocked: sum((r) => r.blocked), overridden: sum((r) => r.overridden),
     flagged: rows.filter((r) => r.missingGuidance).map((r) => r.id),
     retired: rows.filter((r) => r.retired).map((r) => r.id),
-    universeCount: universe.length, orientation,
+    universeCount: universe.length, orientation, lifetime,
   };
 }
 
@@ -506,8 +573,13 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
       }
       L.push('');
     }
-    L.push(`### Never-fired rules (${m.neverFired.length} — retire candidates, in signposts.yaml but 0 fires across all sessions)`);
-    for (const id of m.neverFired) L.push(`- ${id}`);
+    const lt = m.lifetime || { totalSessions: 0, spanDays: 0, ample: false, retire: [], unproven: [], wentQuiet: [], rules: {} };
+    L.push('### Rule lifetime — cumulative across all sessions (retirement is a multi-run call)');
+    L.push(`- history: **${lt.totalSessions} session${lt.totalSessions === 1 ? '' : 's'}** over **${lt.spanDays} day${lt.spanDays === 1 ? '' : 's'}**` + (lt.ample ? '' : ` — thin sample (need ≥${lt.minSessions} sessions or ≥${lt.minDays} days before a "never ran" means "retire")`));
+    if (lt.retire.length) { L.push(`- **Retire candidates** (never ran anywhere, ample opportunity): ${lt.retire.map((id) => `\`${id}\``).join(', ')}`); }
+    if (lt.unproven.length) { L.push(`- **Unproven** (never ran this history, too soon to judge — revisit as sessions accrue): ${lt.unproven.map((id) => `\`${id}\``).join(', ')}`); }
+    if (lt.wentQuiet.length) { L.push(`- **Went quiet** (fired before, silent >${lt.minDays}d): ${lt.wentQuiet.map((w) => `\`${w.id}\` (${w.daysSince}d ago)`).join(', ')}`); }
+    if (!lt.retire.length && !lt.unproven.length && !lt.wentQuiet.length) L.push('- every rule has fired within the window — nothing to retire.');
     L.push('');
     L.push('### Signs injected (this session)');
     if (m.signs.length) {
@@ -593,7 +665,15 @@ function renderHtml(a, m, meta, weaken = []) {
       }).join('')
     : '<p class="mut">no rule evaluations recorded this session</p>';
 
-  const neverRows = m.neverFired.length ? m.neverFired.map((id) => `<li><code>${esc(id)}</code></li>`).join('') : '<li class="mut">none — every rule fired at least once</li>';
+  const lt = m.lifetime || { totalSessions: 0, spanDays: 0, ample: false, retire: [], unproven: [], wentQuiet: [], minSessions: 15, minDays: 30 };
+  const idList = (ids) => ids.map((id) => `<code>${esc(id)}</code>`).join(' ');
+  const lifetimeRows = [
+    `<li><b>${lt.totalSessions}</b> session${lt.totalSessions === 1 ? '' : 's'} over <b>${lt.spanDays}</b> day${lt.spanDays === 1 ? '' : 's'} of history${lt.ample ? '' : ` <span class="sub">— thin sample; a "never ran" needs ≥${lt.minSessions} sessions or ≥${lt.minDays} days to mean "retire"</span>`}</li>`,
+    lt.retire.length ? `<li><b class="bad">Retire candidates</b> <span class="sub">(never ran anywhere, ample opportunity)</span>: ${idList(lt.retire)}</li>` : '',
+    lt.unproven.length ? `<li><b class="gold">Unproven</b> <span class="sub">(never ran this history — too soon; revisit as sessions accrue)</span>: ${idList(lt.unproven)}</li>` : '',
+    lt.wentQuiet.length ? `<li><b class="gold">Went quiet</b> <span class="sub">(fired before, silent &gt;${lt.minDays}d)</span>: ${lt.wentQuiet.map((w) => `<code>${esc(w.id)}</code> <span class="sub">${w.daysSince}d ago</span>`).join(' ')}</li>` : '',
+    (!lt.retire.length && !lt.unproven.length && !lt.wentQuiet.length) ? '<li class="mut">every rule has fired within the window — nothing to retire</li>' : '',
+  ].filter(Boolean).join('');
   const signCards = m.signs.length
     ? m.signs.map((g) => `<details class="rc"><summary><code class="rid">${esc(g.id)}</code><span class="pack">${esc(g.ns ?? '')}</span><span class="when">${esc(g.watches ?? '')}</span><span class="ms">shown <b>${g.firstTouch + g.drift}</b></span><span class="ms">first <b>${g.firstTouch}</b></span><span class="ms">drift <b>${g.drift}</b></span></summary><div class="body">${g.text ? esc(g.text) : '<span class="mut">no verbatim text in config</span>'}</div></details>`).join('')
     : '<p class="mut">no signs injected this session</p>';
@@ -637,7 +717,7 @@ table.trace td.bad{color:var(--rule);font-weight:600}table.trace td.good{color:v
 ${weakenBlock}
 <h2>Rules — did they engage? <span class="sub">click a rule to see its scope, message &amp; the files it saw</span></h2>${ruleCards}
 <h2>Signs injected <span class="sub">click to read the verbatim sign</span></h2>${signCards}
-<h2>Never-fired rules <span class="sub">retire candidates — 0 fires across all sessions</span></h2><ul>${neverRows}</ul>
+<h2>Rule lifetime <span class="sub">cumulative across all sessions — retirement is a multi-run call</span></h2><ul>${lifetimeRows}</ul>
 <h2>Signpost gaps <span class="sub">files you touched that no rule or sign watched</span></h2><ul>${gaps}</ul>
 ${orient}
 <h2>Session map — user turns <span class="sub">[transcript · heuristic]</span></h2><ul>${turns}</ul>
@@ -800,6 +880,33 @@ function selfTest() {
     eq(mLeg.rows.find((r) => r.id === 'demo').matched, null, 'logMetrics: legacy matched is null (unknown)');
     eq(mLeg.rows.find((r) => r.id === 'demo').blocked, 2, 'logMetrics: legacy blocked from deny events');
     fs.rmSync(legRoot, { recursive: true, force: true });
+
+    // ---- cumulative ledger (multi-run retirement grading) — pure over synthetic session logs ----
+    const now = Date.parse('2026-07-17T00:00:00Z');
+    const mkLog = (sess, started, ruleTallies) => ({ session: sess, events: [
+      { kind: 'meta', session: sess, started }, { ts: started, kind: 'run', phase: 'edit', rules: ruleTallies } ] });
+    const logs = [
+      mkLog('s1', '2026-05-01T00:00:00Z', [{ id: 'active', evaluated: 5, matched: 2, hits: 1 }, { id: 'ranquiet', evaluated: 3, matched: 1, hits: 1 }]),
+      mkLog('s2', '2026-06-01T00:00:00Z', [{ id: 'active', evaluated: 4, matched: 1, hits: 1 }]),
+      mkLog('s3', '2026-07-15T00:00:00Z', [{ id: 'active', evaluated: 2, matched: 1, hits: 1 }]),
+    ];
+    const led = buildLedger(logs, ['active', 'ranquiet', 'dormant'], now, { minSessions: 2, minDays: 10 });
+    eq(led.totalSessions, 3, 'ledger: 3 distinct sessions');
+    eq(led.rules.active.evaluated, 11, 'ledger: active evaluated summed across sessions');
+    eq(led.rules.active.fired, 3, 'ledger: active fired (hits) summed');
+    eq(led.rules.active.sessions, 3, 'ledger: active seen in 3 sessions');
+    eq(led.ample, true, 'ledger: ample sample (≥2 sessions)');
+    eq(led.retire, ['dormant'], 'ledger: a rule that never ran anywhere → retire (ample opportunity)');
+    eq(led.wentQuiet.map((w) => w.id), ['ranquiet'], 'ledger: fired long ago, silent since → went quiet');
+    // thin sample: same logs, high thresholds → nothing retired, dormant is "unproven" instead.
+    const thin = buildLedger(logs, ['active', 'dormant'], now, { minSessions: 50, minDays: 365 });
+    eq(thin.ample, false, 'ledger: thin sample is not ample');
+    eq(thin.unproven, ['dormant'], 'ledger: never-ran rule is UNPROVEN (not retired) on a thin sample');
+    eq(thin.retire, [], 'ledger: a one/two-run history retires nothing (the whole point)');
+    // the shared 'commit' file adds to totals but is not a distinct session.
+    const withCommit = buildLedger([...logs, mkLog('commit', '2026-07-16T00:00:00Z', [{ id: 'active', evaluated: 1, matched: 0, hits: 0 }])], ['active'], now, { minSessions: 2, minDays: 10 });
+    eq(withCommit.totalSessions, 3, "ledger: the 'commit' file is not counted as a distinct session");
+    eq(withCommit.rules.active.evaluated, 12, 'ledger: commit-file events still add to a rule\'s lifetime totals');
 
     // fail-loud distinctions
     const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-empty-'));
