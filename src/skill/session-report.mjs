@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { readEvents, sanitise, logDir } from '../log.mjs';
+import { readEvents, sanitise, logDir, branchOf } from '../log.mjs';
 import { loadRules } from '../engine.mjs';
 import { loadConfig, resolveConfigPath } from '../schema.mjs';
 import { composeOrientation } from '../hooks/session-start.mjs';
@@ -543,9 +543,13 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
   const L = [];
   const tot = (o) => Object.values(o).reduce((s, n) => s + n, 0);
   const s = a.stats;
+  const multi = (meta.sessions?.length || 1) > 1;                    // reflecting across a branch work-unit
+  const sid = (x) => (x ? String(x).slice(0, 8) : '');
+  const stag = (e) => (multi && e.session) ? `[${sid(e.session)}] ` : '';
   L.push('# Signposts facts + drift pointers (numbers deterministic · narrative heuristic — for coach)');
   L.push(`Transcript: ${meta.file} (${meta.lines} lines). NUMBERS from the event log; NARRATIVE (session map, drift) from the transcript.`);
-  L.push('Investigate any spot with: `npx signposts facts --around <line>`');
+  if (multi) L.push(`Reflecting across **${meta.sessions.length} sessions on branch \`${meta.branch}\`** (a compaction splits one task): ${meta.sessions.map(sid).join(', ')}. Numbers are summed; drift is tagged by session.`);
+  L.push('Investigate any spot with: `npx signposts facts --around <line>` (add `--session <id>` for another session).');
   L.push('');
 
   L.push('## Event log — did the guardrails engage? (deterministic)');
@@ -610,25 +614,29 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
   }
 
   const cap = (arr, n, label) => arr.length > n ? `${label} (showing ${n} of ${arr.length})` : `${label} — ${arr.length}`;
-  const ctx = (line) => contextAround(events, line, 2).map((c) => `      ${c}`).join('\n');
+  // ctx: the current session's transcript is in-hand for a clean local view; entries from another
+  // branch session point at their own transcript instead (`--session <id> --around <line>`).
+  const ctx = (e) => (!e.session || e.session === meta.session)
+    ? contextAround(events, e.line, 2).map((c) => `      ${c}`).join('\n')
+    : `      (→ npx signposts facts --session ${sid(e.session)} --around ${e.line})`;
 
-  L.push('## Session map — the user turns (chapters) [transcript · heuristic]');
-  for (const t of a.drift.userTurns) L.push(`- L${t.line} · "${t.text}"`);
+  L.push(`## Session map — the ${multi ? 'work-unit chapters (per session)' : 'user turns (chapters)'} [transcript · heuristic]`);
+  for (const t of a.drift.userTurns) L.push(`- ${stag(t)}L${t.line} · "${t.text}"`);
   L.push('');
 
   L.push('## DRIFT SITES — read these, then judge for yourself [transcript · heuristic]');
   L.push('');
   L.push(`### ${cap(a.drift.corrections, 40, 'Course-corrections (the human pushed back — richest signal)')}`);
-  for (const c of a.drift.corrections.slice(0, 40)) { L.push(`- L${c.line} · "${c.text}"`); L.push(ctx(c.line)); }
+  for (const c of a.drift.corrections.slice(0, 40)) { L.push(`- ${stag(c)}L${c.line} · "${c.text}"`); L.push(ctx(c)); }
   L.push('');
   L.push(`### ${cap(a.drift.bypassSites, 40, 'justfile bypasses (raw tool run instead of a recipe — name the missing recipe)')}`);
-  for (const b of a.drift.bypassSites.slice(0, 40)) L.push(`- L${b.line} · [${b.tool}] \`${b.cmd}\``);
+  for (const b of a.drift.bypassSites.slice(0, 40)) L.push(`- ${stag(b)}L${b.line} · [${b.tool}] \`${b.cmd}\``);
   L.push('');
   L.push(`### ${cap(a.drift.editLoops, 30, 'Edit loops (same file ≥5 in a row — where the agent flailed)')}`);
-  for (const lp of a.drift.editLoops.slice(0, 30)) L.push(`- L${lp.fromLine}–${lp.toLine} · ${lp.file} ×${lp.count}`);
+  for (const lp of a.drift.editLoops.slice(0, 30)) L.push(`- ${stag(lp)}L${lp.fromLine}–${lp.toLine} · ${lp.file} ×${lp.count}`);
   L.push('');
   L.push(`### ${cap(a.drift.retries, 30, 'Bash retries (same command ≥3×)')}`);
-  for (const r of a.drift.retries.slice(0, 30)) L.push(`- ×${r.count} · \`${snip(r.cmd, 100)}\` · L${r.lines.slice(0, 8).join(', L')}`);
+  for (const r of a.drift.retries.slice(0, 30)) L.push(`- ${stag(r)}×${r.count} · \`${snip(r.cmd, 100)}\` · L${r.lines.slice(0, 8).join(', L')}`);
   L.push('');
 
   L.push('## Signpost gaps — files you touched that no rule or sign watched (candidate area for a new sign)');
@@ -643,6 +651,9 @@ function renderMarkdown(a, m, events, meta, weaken = []) {
 function renderHtml(a, m, meta, weaken = []) {
   const date = (meta.started || new Date().toISOString()).slice(0, 10);
   const numH = (n) => (n == null ? '—' : String(n));
+  const multi = (meta.sessions?.length || 1) > 1;
+  const sid = (x) => (x ? String(x).slice(0, 8) : '');
+  const stag = (e) => (multi && e.session) ? `<span class="pack">${esc(sid(e.session))}</span> ` : '';
   const h = numbersHealth(m);
   const healthLine = h.blocked
     ? `<span class="bad">${esc(h.blocked)}</span>`
@@ -684,11 +695,11 @@ function renderHtml(a, m, meta, weaken = []) {
     ? m.signs.map((g) => `<details class="rc"><summary><code class="rid">${esc(g.id)}</code><span class="pack">${esc(g.ns ?? '')}</span><span class="when">${esc(g.watches ?? '')}</span><span class="ms">shown <b>${g.firstTouch + g.drift}</b></span><span class="ms">first <b>${g.firstTouch}</b></span><span class="ms">drift <b>${g.drift}</b></span></summary><div class="body">${g.text ? esc(g.text) : '<span class="mut">no verbatim text in config</span>'}</div></details>`).join('')
     : '<p class="mut">no signs injected this session</p>';
   const gaps = a.signpostGaps.length ? a.signpostGaps.map((g) => `<li><code>${esc(g.file)}</code> <span class="sub">touched ×${g.touches}</span></li>`).join('') : '<li class="mut">none — every edited file matched a rule or sign</li>';
-  const turns = a.drift.userTurns.map((t) => `<li><span class="ln">L${t.line}</span> ${esc(t.text)}</li>`).join('') || '<li class="mut">—</li>';
-  const corr = a.drift.corrections.length ? a.drift.corrections.map((c) => `<li><span class="ln">L${c.line}</span> ${esc(c.text)}</li>`).join('') : '<li class="mut">none detected</li>';
-  const byp = a.drift.bypassSites.length ? a.drift.bypassSites.map((b) => `<li><span class="ln">L${b.line}</span> [${esc(b.tool)}] <code>${esc(b.cmd)}</code></li>`).join('') : '<li class="mut">none detected</li>';
-  const loops = a.drift.editLoops.length ? a.drift.editLoops.map((lp) => `<li><span class="ln">L${lp.fromLine}–${lp.toLine}</span> <code>${esc(lp.file)}</code> ×${lp.count}</li>`).join('') : '<li class="mut">none detected</li>';
-  const rets = a.drift.retries.length ? a.drift.retries.map((r) => `<li>×${r.count} <code>${esc(snip(r.cmd, 100))}</code></li>`).join('') : '<li class="mut">none detected</li>';
+  const turns = a.drift.userTurns.map((t) => `<li>${stag(t)}<span class="ln">L${t.line}</span> ${esc(t.text)}</li>`).join('') || '<li class="mut">—</li>';
+  const corr = a.drift.corrections.length ? a.drift.corrections.map((c) => `<li>${stag(c)}<span class="ln">L${c.line}</span> ${esc(c.text)}</li>`).join('') : '<li class="mut">none detected</li>';
+  const byp = a.drift.bypassSites.length ? a.drift.bypassSites.map((b) => `<li>${stag(b)}<span class="ln">L${b.line}</span> [${esc(b.tool)}] <code>${esc(b.cmd)}</code></li>`).join('') : '<li class="mut">none detected</li>';
+  const loops = a.drift.editLoops.length ? a.drift.editLoops.map((lp) => `<li>${stag(lp)}<span class="ln">L${lp.fromLine}–${lp.toLine}</span> <code>${esc(lp.file)}</code> ×${lp.count}</li>`).join('') : '<li class="mut">none detected</li>';
+  const rets = a.drift.retries.length ? a.drift.retries.map((r) => `<li>${stag(r)}×${r.count} <code>${esc(snip(r.cmd, 100))}</code></li>`).join('') : '<li class="mut">none detected</li>';
   const orient = m.orientation && m.orientation.bundles
     ? `<h2>Composed orientation <span class="sub">session start · keep it terse (depth belongs in area signs)</span></h2><div class="health">${m.orientation.bundles} bundle${m.orientation.bundles > 1 ? 's' : ''} · ${m.orientation.lines} lines · ${m.orientation.bytes} bytes</div>`
     : '';
@@ -719,6 +730,7 @@ table.trace td.bad{color:var(--rule);font-weight:600}table.trace td.good{color:v
 </style></head><body><main>
 <h1>Signposts session report</h1>
 <p class="sub">session <code>${esc(meta.session)}</code> · ${date} · transcript ${esc(meta.file)} (${meta.lines} lines)</p>
+${multi ? `<p class="sub">reflecting across <b>${meta.sessions.length} sessions</b> on branch <code>${esc(meta.branch)}</code> — a compaction splits one task; numbers summed, drift tagged by session.</p>` : ''}
 <div class="health">${healthLine}</div>${warns}
 ${weakenBlock}
 <h2>Rules — did they engage? <span class="sub">click a rule to see its scope, message &amp; the files it saw</span></h2>${ruleCards}
@@ -934,6 +946,25 @@ function selfTest() {
     eq(withCommit.totalSessions, 3, "ledger: the 'commit' file is not counted as a distinct session");
     eq(withCommit.rules.active.evaluated, 12, 'ledger: commit-file events still add to a rule\'s lifetime totals');
 
+    // ---- branch-scoped merge: a work-unit's numbers sum across its sessions ----
+    const mkM = (rows, signs = []) => ({ logPresent: true, sessionArmed: true, realEvents: 5, badLines: 0, legacy: false, rows, neverFired: ['z'], signs, matched: 0, blocked: 0, overridden: 0, flagged: [], retired: [], universeCount: 3, orientation: { bundles: 1 }, lifetime: { totalSessions: 2 } });
+    const row = (id, o) => ({ id, ns: 'core', when: ['edit'], message: 'm', description: 'd', scope: null, retired: false, evaluated: 0, matched: 0, hits: 0, blockedEdit: 0, blockedCommit: 0, overridden: 0, blocked: 0, missingGuidance: false, trace: [], ...o });
+    const mA = mkM([row('r1', { matched: 2, blocked: 1, blockedEdit: 1, hits: 1, trace: [{ path: 'a', ts: 't1', out: 'deny' }] })], [{ id: 's1', firstTouch: 1, drift: 0 }]);
+    const mB = mkM([row('r1', { matched: 3, blocked: 2, blockedCommit: 2, hits: 2, trace: [{ path: 'b', ts: 't2', out: 'deny' }] }), row('r2', { matched: 1 })], [{ id: 's1', firstTouch: 0, drift: 1 }]);
+    const merged = mergeMetrics([mA, mB]);
+    eq(merged.rows.find((r) => r.id === 'r1').matched, 5, 'merge: r1 matched summed across sessions');
+    eq(merged.rows.find((r) => r.id === 'r1').blocked, 3, 'merge: r1 blocked summed');
+    eq(merged.rows.find((r) => r.id === 'r1').trace.length, 2, 'merge: r1 per-file traces concatenated');
+    eq(merged.rows.find((r) => r.id === 'r2').matched, 1, 'merge: a rule seen in only one session is carried');
+    eq(merged.matched, 6, 'merge: total matched summed (5 + 1)');
+    eq(merged.signs.find((s) => s.id === 's1').firstTouch + merged.signs.find((s) => s.id === 's1').drift, 2, 'merge: sign shown-counts summed across sessions');
+    eq(mergeMetrics([mA]) === mA, true, 'merge: a single session is returned unchanged (no regression)');
+    // drift merge tags every entry with its session (which chapter the pushback came from).
+    const aOf = (corr) => ({ stats: { edits: 1, writes: 0, commits: 0, justCalls: {}, bypasses: {}, reads: {}, coverage: { covered: [], uncovered: [] }, touched: ['f'] }, drift: { userTurns: [], corrections: corr, bypassSites: [], editLoops: [], retries: [] }, signpostGaps: [] });
+    const mrg = mergeAnalyses([{ session: 'sess-aaaa', a: aOf([{ line: 5, text: 'no' }]) }, { session: 'sess-bbbb', a: aOf([{ line: 9, text: 'wrong' }]) }]);
+    eq(mrg.drift.corrections.length, 2, 'mergeAnalyses: corrections concatenated across sessions');
+    eq(mrg.drift.corrections.every((c) => c.session), true, 'mergeAnalyses: each drift entry tagged with its session');
+
     // fail-loud distinctions
     const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-empty-'));
     eq(numbersHealth(logMetrics(emptyRoot, 'nope')).blocked ? true : false, true, 'fail-loud: no log → blocked message (not zeros)');
@@ -957,49 +988,139 @@ function selfTest() {
   console.log(`session-report self-test: PASS (${asserted} assertions)`);
 }
 
+// ── branch-scoped reflect — a work-unit is all the sessions on a branch ─────
+// A compaction starts a NEW session id (new transcript + new log), so one task spans several
+// sessions. Reflect defaults to the whole work-unit: the sessions whose log meta is tagged with
+// this branch, plus the current one (its meta may predate branch-tagging). `--session <id>`
+// narrows to one; `--branch <name>` overrides the branch.
+const transcriptFor = (cwd, session) => path.join(projectDir(cwd), `${session}.jsonl`);
+function collectBranchSessions(cwd, currentSession, branchOverride) {
+  const branch = branchOverride || branchOf(cwd);
+  const metaOf = (id) => { try { return readEvents(cwd, { session: id }).events.find((e) => e.kind === 'meta') || null; } catch { return null; } };
+  const found = new Map();                                           // id → started
+  found.set(currentSession, metaOf(currentSession)?.started || null); // the current session is always in-scope
+  if (branch) {
+    for (const id of allSessionIds(cwd)) {
+      if (id === 'commit' || found.has(id)) continue;
+      const meta = metaOf(id);
+      if (meta && meta.branch === branch) found.set(id, meta.started || null);
+    }
+  }
+  return { branch: branch || null, sessions: [...found.entries()].map(([session, started]) => ({ session, started })).sort((a, b) => String(a.started).localeCompare(String(b.started))) };
+}
+
+// Merge per-session metric objects into one work-unit view. Repo-wide fields (neverFired,
+// lifetime, orientation, universeCount) are identical across sessions → taken from the first.
+function mergeMetrics(list) {
+  if (list.length === 1) return list[0];
+  const byId = new Map();
+  for (const m of list) for (const r of m.rows) {
+    const t = byId.get(r.id);
+    if (!t) { byId.set(r.id, { ...r, trace: [...r.trace] }); continue; }
+    t.evaluated += r.evaluated; t.hits += r.hits;
+    t.blockedEdit += r.blockedEdit; t.blockedCommit += r.blockedCommit; t.blocked += r.blocked; t.overridden += r.overridden;
+    if (r.matched != null) t.matched = (t.matched == null ? 0 : t.matched) + r.matched;
+    t.trace = t.trace.concat(r.trace);
+  }
+  const rows = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const signById = new Map();
+  for (const m of list) for (const g of m.signs) {
+    const t = signById.get(g.id);
+    if (!t) signById.set(g.id, { ...g }); else { t.firstTouch += g.firstTouch; t.drift += g.drift; }
+  }
+  const sum = (f) => rows.reduce((s, r) => s + (f(r) || 0), 0);
+  return {
+    ...list[0], rows, signs: [...signById.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    logPresent: list.some((m) => m.logPresent), sessionArmed: list.some((m) => m.sessionArmed),
+    realEvents: list.reduce((s, m) => s + m.realEvents, 0), badLines: list.reduce((s, m) => s + m.badLines, 0),
+    legacy: list.some((m) => m.legacy),
+    matched: sum((r) => r.matched), blocked: sum((r) => r.blocked), overridden: sum((r) => r.overridden),
+    flagged: rows.filter((r) => r.missingGuidance).map((r) => r.id), retired: rows.filter((r) => r.retired).map((r) => r.id),
+  };
+}
+
+// Merge per-session transcript analyses, tagging every drift entry with its session so the
+// report shows which session (chapter) each pushback/bypass came from.
+function mergeAnalyses(perSession) {
+  const tag = (arr, session) => (arr || []).map((e) => ({ ...e, session }));
+  const drift = { userTurns: [], corrections: [], bypassSites: [], editLoops: [], retries: [] };
+  const gaps = new Map();
+  let justCalls = {}, bypasses = {}, edits = 0, writes = 0, commits = 0, touched = [];
+  for (const { session, a } of perSession) {
+    for (const k of Object.keys(drift)) drift[k].push(...tag(a.drift[k], session));
+    for (const g of a.signpostGaps) gaps.set(g.file, { ...g, touches: Math.max(gaps.get(g.file)?.touches || 0, g.touches) });
+    const s = a.stats;
+    edits += s.edits; writes += s.writes; commits += s.commits; touched = s.touched;   // touched (git diff) is branch-wide, same
+    for (const [k, v] of Object.entries(s.justCalls)) justCalls[k] = (justCalls[k] || 0) + v;
+    for (const [k, v] of Object.entries(s.bypasses)) bypasses[k] = (bypasses[k] || 0) + v;
+  }
+  return { stats: { edits, writes, commits, justCalls, bypasses, reads: {}, coverage: { covered: [], uncovered: [] }, touched },
+    drift, signpostGaps: [...gaps.values()].sort((a, b) => a.file.localeCompare(b.file)) };
+}
+
 // ── main ──────────────────────────────────────────────────────────────────
 function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--test')) return selfTest();
   const getArg = (flag) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : null; };
   const cwd = process.cwd();
-  const transcript = getArg('--transcript') || newestTranscript(cwd);
-  if (!transcript || !fs.existsSync(transcript)) {
-    console.error(`No transcript found (looked in ${projectDir(cwd)}). Pass --transcript <path>.`);
-    process.exit(1);
-  }
-  let jsonl;
-  try { jsonl = fs.readFileSync(transcript, 'utf8'); }
-  catch (e) { console.error(`Transcript unreadable (${transcript}): ${e.message}`); process.exit(1); }  // fail loud
-  const events = parseEvents(jsonl, cwd);
+  const sessionArg = getArg('--session');
+  const transcriptArg = getArg('--transcript');
+  const currentTranscript = transcriptArg || newestTranscript(cwd);
+  const currentSession = sessionArg || (currentTranscript ? path.basename(currentTranscript, '.jsonl') : null);
 
+  // --around <line> [--session <id>]: a clean tool-use view of one spot in one transcript.
   const around = getArg('--around');
   if (around) {
     const radius = parseInt(getArg('--radius') || '8', 10);
-    console.log(`# Tool-use context around L${around} (±${radius}) in ${path.basename(transcript)}`);
-    console.log(contextAround(events, parseInt(around, 10), radius).join('\n'));
+    const t = sessionArg ? transcriptFor(cwd, sessionArg) : currentTranscript;
+    if (!t || !fs.existsSync(t)) { console.error(`No transcript for --around (${t}).`); process.exit(1); }
+    const ev = parseEvents(fs.readFileSync(t, 'utf8'), cwd);
+    console.log(`# Tool-use context around L${around} (±${radius}) in ${path.basename(t)}`);
+    console.log(contextAround(ev, parseInt(around, 10), radius).join('\n'));
     return;
   }
+  if (!currentSession) { console.error(`No session/transcript found (looked in ${projectDir(cwd)}). Pass --transcript <path>.`); process.exit(1); }
 
-  const session = path.basename(transcript, '.jsonl');
+  // scope: one session (--session) or the whole branch work-unit (default — spans compaction splits).
+  const scope = sessionArg
+    ? { branch: null, sessions: [{ session: sessionArg, started: null }] }
+    : collectBranchSessions(cwd, currentSession, getArg('--branch'));
+
   const base = detectBase(getArg('--base'));
-  const a = analyze({ events, cwd, base, tools: recipeTools(cwd) });
-  const m = logMetrics(cwd, session);
-  const logEv = readEvents(cwd, { session }).events;
-  const weaken = weakenAfterDeny(logEv, events);
-  const meta = { session, file: path.basename(transcript), lines: jsonl.split('\n').length,
-    started: logEv.find((e) => e.kind === 'meta')?.started };
+  const tools = recipeTools(cwd);
+  const metricsList = [];
+  const perSession = [];
+  let currentEvents = [], currentLines = 0;
+  for (const { session } of scope.sessions) {
+    metricsList.push(logMetrics(cwd, session));
+    const tpath = (session === currentSession && transcriptArg) ? transcriptArg : transcriptFor(cwd, session);
+    let events = [];
+    try { if (tpath && fs.existsSync(tpath)) { const raw = fs.readFileSync(tpath, 'utf8'); events = parseEvents(raw, cwd); if (session === currentSession) currentLines = raw.split('\n').length; } } catch { /* transcript gone → numbers only */ }
+    if (session === currentSession) currentEvents = events;
+    perSession.push({ session, events, a: analyze({ events, cwd, base, tools }) });
+  }
+  const m = mergeMetrics(metricsList);
+  const a = scope.sessions.length === 1 ? perSession[0].a : mergeAnalyses(perSession);
+  const weaken = [];
+  for (const { session, events } of perSession) for (const w of weakenAfterDeny(readEvents(cwd, { session }).events, events)) weaken.push({ ...w, session });
 
-  if (argv.includes('--json')) { console.log(JSON.stringify({ stats: a.stats, drift: a.drift, signpostGaps: a.signpostGaps, metrics: m, weakenFlags: weaken }, null, 2)); return; }
+  const meta = {
+    session: currentSession, sessions: scope.sessions.map((s) => s.session), branch: scope.branch,
+    file: currentTranscript ? path.basename(currentTranscript) : `${currentSession}.jsonl`, lines: currentLines,
+    started: scope.sessions.find((s) => s.session === currentSession)?.started || null,
+  };
+
+  if (argv.includes('--json')) { console.log(JSON.stringify({ stats: a.stats, drift: a.drift, signpostGaps: a.signpostGaps, metrics: m, weakenFlags: weaken, scope: { branch: meta.branch, sessions: meta.sessions } }, null, 2)); return; }
   if (argv.includes('--html')) {
     const dir = path.join(cwd, '.signposts', 'reports');
     fs.mkdirSync(dir, { recursive: true });
-    const out = path.join(dir, `${sanitise(session)}.html`);
+    const out = path.join(dir, `${sanitise(currentSession)}.html`);
     fs.writeFileSync(out, renderHtml(a, m, meta, weaken));
     console.log(out);
     return;
   }
-  console.log(renderMarkdown(a, m, events, meta, weaken));
+  console.log(renderMarkdown(a, m, currentEvents, meta, weaken));
 }
 
 main();
