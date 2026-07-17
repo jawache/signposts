@@ -23,7 +23,7 @@
 // log is a side-channel; a broken or unwritable log can never block an edit, a commit, a
 // scan, or a sign injection.
 
-import { existsSync, statSync, mkdirSync, readdirSync, readFileSync, appendFileSync, writeFileSync, rmSync, mkdtempSync, chmodSync } from 'node:fs';
+import { existsSync, statSync, mkdirSync, readdirSync, readFileSync, appendFileSync, writeFileSync, copyFileSync, rmSync, mkdtempSync, chmodSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -80,9 +80,29 @@ function repoKey(root) {
   return key;
 }
 // The absolute log dir for a repo root: the shared home location, or the in-repo fallback.
+// SIGNPOSTS_HOME overrides the home base (an escape hatch; used by the self-tests so they
+// never touch the real ~/.signposts).
 export function logDir(root) {
   const key = repoKey(root);
-  return key ? join(homedir(), '.signposts', key, LOG_LEAF) : join(root, '.signposts', LOG_LEAF);
+  const base = process.env.SIGNPOSTS_HOME || homedir();
+  return key ? join(base, '.signposts', key, LOG_LEAF) : join(root, '.signposts', LOG_LEAF);
+}
+
+// One-time, best-effort: when a repo FIRST logs to the shared home location, carry over any
+// pre-existing in-repo log (from before the log moved out of the working tree) so the
+// cumulative ledger keeps its history. Guarded to run once — skipped the moment the home dir
+// exists — and only for THIS worktree's legacy dir (a repo already spread across several
+// worktrees wants a deliberate all-worktree merge instead). NEVER throws: migration is a
+// convenience, never a gate.
+function migrateLegacyLog(root, homeDir) {
+  try {
+    const legacy = join(root, '.signposts', LOG_LEAF);
+    if (homeDir === legacy || existsSync(homeDir) || !existsSync(legacy)) return;
+    const files = readdirSync(legacy).filter((f) => f.endsWith('.jsonl') || f === SESSION_MARKER);
+    if (!files.length) return;
+    mkdirSync(homeDir, { recursive: true });
+    for (const f of files) { try { copyFileSync(join(legacy, f), join(homeDir, f)); } catch { /* skip one bad file */ } }
+  } catch { /* fail-safe: a migration hiccup must never block logging */ }
 }
 
 // A session id becomes a filename — keep it to a safe charset. The 'nosession'
@@ -98,6 +118,7 @@ export function logEvent(root, session, event) {
   try {
     if (!root || !event || typeof event !== 'object') return false;
     const dir = logDir(root);
+    migrateLegacyLog(root, dir);                          // one-time carry-over of any in-repo history
     mkdirSync(dir, { recursive: true });
     const file = join(dir, `${sanitise(session)}.jsonl`);
     if (!existsSync(file)) {
@@ -135,6 +156,7 @@ export function writeSessionMarker(root, session) {
   try {
     if (!root || !session) return false;
     const dir = logDir(root);
+    migrateLegacyLog(root, dir);                          // one-time carry-over of any in-repo history
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, SESSION_MARKER), JSON.stringify({ session: String(session), ts: new Date().toISOString() }) + '\n');
     return true;
@@ -291,6 +313,26 @@ export function selfTest() {
     const noremote = mk('sg-noremote-');
     mkdirSync(join(noremote, '.git'), { recursive: true });
     ok('git, no remote → home (path-keyed), not in-repo', logDir(noremote).startsWith(join(homedir(), '.signposts')) && logDir(noremote) !== join(noremote, '.signposts', 'log'));
+
+    // 6. AUTO-MIGRATION: the first log to a fresh home carries over the in-repo history, once.
+    const home = mk('sg-home-');
+    const repo = mk('sg-mig-');
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    writeFileSync(join(repo, '.git', 'config'), '[remote "origin"]\n\turl = https://github.com/x/y.git\n');
+    mkdirSync(join(repo, '.signposts', 'log'), { recursive: true });               // pre-move in-repo history
+    writeFileSync(join(repo, '.signposts', 'log', 'old-sess.jsonl'), JSON.stringify({ kind: 'meta', session: 'old-sess', started: '2026-01-01T00:00:00Z' }) + '\n');
+    writeFileSync(join(repo, '.signposts', 'log', SESSION_MARKER), '{"session":"old-sess","ts":"2026-01-01T00:00:00Z"}\n');
+    const prevHome = process.env.SIGNPOSTS_HOME;
+    process.env.SIGNPOSTS_HOME = home;
+    try {
+      ok('first logEvent to a fresh home succeeds', logEvent(repo, 'new-sess', { kind: 'run', phase: 'edit', rules: [] }) === true);
+      const hd = logDir(repo);
+      ok('legacy session carried into the shared home', existsSync(join(hd, 'old-sess.jsonl')));
+      ok('legacy marker carried over too', existsSync(join(hd, SESSION_MARKER)));
+      ok('the new session is written to home', existsSync(join(hd, 'new-sess.jsonl')));
+      logEvent(repo, 'new-sess', { kind: 'run', phase: 'commit', rules: [] });     // second write must NOT re-migrate
+      ok('migration is one-time (home exists → skipped, no duplication)', readEvents(repo, { session: 'old-sess' }).events.length === 1);
+    } finally { if (prevHome === undefined) delete process.env.SIGNPOSTS_HOME; else process.env.SIGNPOSTS_HOME = prevHome; }
   } finally {
     for (const d of scratch) try { rmSync(d, { recursive: true, force: true }); } catch {}
   }
