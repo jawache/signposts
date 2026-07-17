@@ -10,17 +10,20 @@ order: 8
 
 ## 1 · A rule from a core script — config only
 
-Add an entry under a bundle's `rules:` list, naming a [core script](/docs/rules) with `use:` and its config. No code.
+Add a `type: rule` entry to a bundle's `signposts:` list, naming a [core script](/docs/rules) with `use:` and its config. No code.
 
 ```yaml
-bundles:
-  local:
-    rules:
-      - id: domain-has-test
-        use: core/sibling-exists
-        on: "src/domain/**/*.ts"
-        sibling: "{dir}/{name}.test.ts"
-        message: "Every domain file needs a sibling test."
+local:
+  title: Local guardrails
+  summary: Ad-hoc rules for this repo.
+  signposts:
+    - type: rule
+      id: domain-has-test
+      at: [write, commit]
+      use: core/sibling-exists
+      on: "src/domain/**/*.ts"
+      sibling: "{dir}/{name}.test.ts"
+      message: "Every domain file needs a sibling test."
 ```
 
 The whole entry is handed to `core/sibling-exists` **verbatim** — it reads `sibling`, `core/ast-grep` reads `rule`, and so on. `use:` is just a script; there's no registry and no glue.
@@ -30,13 +33,16 @@ The whole entry is handed to `core/sibling-exists` **verbatim** — it reads `si
 Point `use:` at a script you write. It lives in *your* bundle's folder — `rules/<bundle>/` (core scripts live in `rules/core/`). It can be JavaScript or a shell script.
 
 ```yaml
-bundles:
-  neon:
-    rules:
-      - id: no-raw-pool
-        use: neon/no-raw-pool        # → rules/neon/no-raw-pool.mjs
-        on: "src/**/*.ts"
-        forbid: "new Pool("          # ← your own config, whatever you like
+neon:
+  title: Neon
+  summary: Guards for Neon/Postgres usage.
+  signposts:
+    - type: rule
+      id: no-raw-pool
+      at: [write, commit]
+      use: neon/no-raw-pool        # → rules/neon/no-raw-pool.mjs
+      on: "src/**/*.ts"
+      forbid: "new Pool("          # ← your own config, whatever you like
 ```
 
 ### What your script is handed

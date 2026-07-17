@@ -43,7 +43,7 @@ npx signposts
 ```
 
 That drops the core stack into your repo — the engine, the git hook, one config file
-(`signposts.yaml`) and a starter set of signs and rules — then runs `npm install`, which *arms*
+(`signposts.yml`) and a starter set of signs and rules — then runs `npm install`, which *arms*
 the gate (copying alone enforces nothing). **Restart your agent session** so the pre-emptive block
 loads.
 

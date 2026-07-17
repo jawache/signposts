@@ -13,7 +13,7 @@ Two things make it different from a skills repository:
   nobody else ships.
 
 A **signpost** steers the agent one of two ways: **enforced** (a `rules/` check that blocks at
-edit and commit — "you can't do this") or **advisory** (a path-glob note in `signposts.yaml` —
+edit and commit — "you can't do this") or **advisory** (a path-glob note in `signposts.yml` —
 "mind the shape here").
 
 The `/signposts` skill (and the `coach` agent it spawns) operate the machinery — they aren't the

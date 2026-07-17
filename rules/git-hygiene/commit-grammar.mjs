@@ -46,9 +46,12 @@ export function commitMessage(command) {
   return null;
 }
 
-// Pure: does the header line satisfy Conventional Commits for the given type set?
+// Pure: does the header line satisfy Conventional Commits for the given type set? The types come
+// from config, so escape their regex metacharacters before building the alternation (a stray `.`
+// or `|` would otherwise widen or break the check).
 export function isConventional(header, types) {
-  const re = new RegExp(`^(${types.join('|')})(\\([^)]+\\))?!?: .+`);
+  const alt = [].concat(types).map((t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(`^(${alt})(\\([^)]+\\))?!?: .+`);
   return re.test(String(header).split('\n')[0]);
 }
 
@@ -76,6 +79,9 @@ function selfTest() {
   let ok = true;
   for (const [cmd, want] of cases) { const got = ev(cmd).length; if (got !== want) { ok = false; console.error(`  mismatch: ${cmd} want ${want} got ${got}`); } }
   if (commitMessage('git commit --message="feat: x"') !== 'feat: x') { ok = false; console.error('  --message= not extracted'); }
+  // regex metacharacters in a configured type are escaped (a `.` must not match any char)
+  if (isConventional('feat: x', ['fe.t']) !== false) { ok = false; console.error('  type metachar not escaped'); }
+  if (isConventional('feat: x', ['feat']) !== true) { ok = false; console.error('  literal type stopped matching'); }
   console.log(ok ? 'PASS git-hygiene/commit-grammar' : 'FAIL git-hygiene/commit-grammar');
   process.exit(ok ? 0 : 1);
 }

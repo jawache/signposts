@@ -7,7 +7,7 @@
 // phase `edit`. On a violation it returns a PreToolUse `deny` whose reason is fed
 // back to Claude, which self-corrects BEFORE the write — the headline capability.
 //
-//   • Rules + dispatch live in rules/_engine.mjs (ast-grep A, plus B–E/P instances).
+//   • Rules + dispatch live in src/engine.mjs (ast-grep A, plus B–E/P instances).
 //   • This file owns only the edit-time concern: reconstruct, then ask the engine.
 //   • Reconstruct covers Edit (old→new), MultiEdit (fold edits), Write (full content).
 //

@@ -42,7 +42,7 @@ Run **once, when onboarding a repo onto Signposts** — or when its stack change
 pack's own rules surfaced, the check-before-you-script habit. Every onboarding failure Signposts
 was built to stop happened in the gap where setup should have been.
 
-1. **Scaffold if needed.** No `signposts.yaml` yet? Run `npx signposts` — the deterministic
+1. **Scaffold if needed.** No `signposts.yml` yet? Run `npx signposts` — the deterministic
    scaffold (justfile, the commit-gate hook, the Claude hooks, the quick-start tour). Restart the session so the
    pre-emptive hook loads. (Already set up → skip to detect.)
 2. **Detect the stack.** `npx signposts detect` (`--json` to consume it) — a file census +
@@ -113,10 +113,10 @@ guardrails born in real work bubble up to be shared.
 2. **Genericise.** Strip what was specific to this project — a hard-coded path, a repo
    name, a private detail — so it lands usable. This is judgement; do it deliberately.
 3. **Choose the bundle** it belongs to in the target (e.g. `fcis`, or the user's hub bundle).
-   A bundle *is* the unit — one block under `bundles:` (its `signs:` / `rules:` / `settings`)
-   plus the scripts in `rules/<bundle>/`.
+   A bundle *is* the unit — one top-level block (a `title`, a `summary`, its `signposts:` list,
+   and optional `settings`) plus the scripts in `rules/<bundle>/`.
 4. **Apply.** Into the target repo: copy the script(s) into `rules/<bundle>/`, and merge the
-   entry into that bundle's `signs:` / `rules:` list in its `signposts.yaml` via `editYaml`
+   entry into that bundle's `signposts:` list in its `signposts.yml` via `editYaml`
    (create the bundle block if absent, comments preserved). Keep the `--test`.
 5. **Ship** — for your hub, `git add/commit/push`; for upstream, open a PR (`gh pr create`)
    with a one-line why. **Sending is outward-facing — confirm before you push or open a PR.**
@@ -141,8 +141,8 @@ folder. Copying a bundle is copying that block plus that folder — nothing scat
    **entries**. Show what each is and, for a vendored bundle, where it came from.
 3. **Resolve collisions in conversation** — judgement beats a rigid rule. For each COLLIDE, show
    both versions and ask: keep mine, take theirs, or merge. Never silently clobber.
-4. **Apply the bundle.** Copy the source bundle's block into this repo's `bundles:` (via
-   `editYaml`, comments preserved) and its `rules/<bundle>/**` folder across; merge any
+4. **Apply the bundle.** Copy the source bundle's block into this repo's config as a top-level
+   bundle key (via `editYaml`, comments preserved) and its `rules/<bundle>/**` folder across; merge any
    host-permissions the bundle's `settings` carries into `.claude/settings.json` (deny-only is
    auto-applied — an `allow` widens autonomy, so surface it for the user to add by hand);
    aggregate any rule-level `needs:` deps; write a `from:` pin recording the source + version.
@@ -172,8 +172,8 @@ Full detail is in `docs/` (see `07-authoring`); the shape at a glance:
 
 | Want to… | Author | Where |
 |---|---|---|
-| **steer** an area (shape, judgement, a constraint no check can make) | a **sign** | a `signs:` entry (`id` + `globs` + `text`) in its bundle's block; `at: session` for orientation |
-| **block** a mechanically-checkable mistake | a **rule** | a `rules:` entry naming a script via `use:` (core or your own) in its bundle's block |
+| **steer** an area (shape, judgement, a constraint no check can make) | a **sign** | a signpost with `type: sign` (`id` + `on` + `text`) in its bundle's `signposts:` list; `at: [session]` for orientation |
+| **block** a mechanically-checkable mistake | a **rule** | a signpost with `type: rule` naming a script via `use:` (core or your own) in its bundle's `signposts:` list |
 | ban/require a **code shape** (TS/TSX) | a rule | drop a `rules/ast-grep/<name>.yml` — zero code |
 | something **novel** | a rule | a small own-script `rules/<ns>/<name>.{mjs,sh}` with a `--test` |
 

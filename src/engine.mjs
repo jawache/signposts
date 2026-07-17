@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// rules/_engine.mjs — the engine. ONE evaluator, TWO trigger paths, no registry.
+// src/engine.mjs — the engine. ONE evaluator, TWO trigger paths, no registry.
 //
 //   • edit   — the PreToolUse hook reconstructs the would-be file and calls
 //              evaluate({phase:'edit', …}) → a `deny` before the write lands.

@@ -11,14 +11,23 @@ order: 9
 A bundle is self-contained — copying it is copying its block plus its `rules/<bundle>/` folder, nothing scattered:
 
 ```yaml
-bundles:
-  neon:
-    signs:
-      - { id: migrations, globs: ["src/db/migrations/**"], text: "Migrations are append-only." }
-    rules:
-      - { id: no-raw-pool, use: neon/no-raw-pool, on: "src/**/*.ts" }   # + rules/neon/no-raw-pool.mjs
-    settings:
-      permissions: { deny: ["Read(.env.keys)"] }
+neon:
+  title: Neon
+  summary: Guards for Neon/Postgres usage.
+  signposts:
+    - type: sign
+      id: migrations
+      at: [touch]
+      on: ["src/db/migrations/**"]
+      text: "Migrations are append-only."
+    - type: rule
+      id: no-raw-pool
+      at: [write, commit]
+      use: neon/no-raw-pool          # + rules/neon/no-raw-pool.mjs
+      on: "src/**/*.ts"
+  settings:
+    permissions:
+      deny: ["Read(.env.keys)"]
 ```
 
 A bundle **owns** `rules/<bundle>/**` — that ownership convention is the manifest, so there's nothing extra to write and nothing to drift. (This mirrors how Claude Code plugins are just a repo you point at.)
@@ -37,7 +46,7 @@ npx signposts install github:you/your-project  neon     # take the neon namespac
 npx signposts install ../my-hub  neon                   # …or from a sibling folder on disk
 ```
 
-It copies `rules/neon/` and merges the `neon` group from both `signs:` and `rules:` — the whole pack, in one move. Comments in your `signposts.yml` are preserved (the merge edits the document in place, it doesn't re-serialise from scratch). To remove a pack later: `npx signposts uninstall --pack neon` — it drops the namespace's yaml groups, its `rules/neon/`, and any permissions it added, leaving your own config untouched.
+It copies `rules/neon/` and merges the `neon` bundle's `signposts:` list — the whole pack, in one move. Comments in your `signposts.yml` are preserved (the merge edits the document in place, it doesn't re-serialise from scratch). To remove a pack later: `npx signposts uninstall --pack neon` — it drops the namespace's yaml groups, its `rules/neon/`, and any permissions it added, leaving your own config untouched.
 
 <Note>
 **Install reads the current layout only.** An older repo (flat `signs:`/`rules:` lists, or the legacy `advisory:` key) is refused with a clear message — open it with `/signposts install` (the skill) and cherry-pick by hand. No silent half-install.

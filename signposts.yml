@@ -55,6 +55,15 @@ signposts:
         Check the cheaper shapes before writing an own-script: a code pattern is a rules/<bundle>/ast-grep/<name>.yml; an import boundary is a core/depcruise fence; a path/shape invariant is a core script + config.
         Ship a colocated <name>.test.yml (a valid + an invalid sample) — rules-have-tests blocks an untested rule.
 
+    - type: sign
+      id: commit-gate-hermetic
+      description: Why anything that shells out at commit must scrub git's env vars first.
+      at: [touch]
+      on: ["src/core/**", "rules/**/*.mjs"]
+      text: |-
+        Anything that runs at commit (a tool-gate, a project-kind rule) executes INSIDE the git pre-commit hook, where git exports GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE. A nested `git` command then reads and writes the REAL index mid-commit instead of your temp dir — silently corrupting the in-progress commit.
+        So if your rule shells out (spawnSync/execSync) to anything that might touch git, strip the GIT_* vars from the child env first — reuse hermeticEnv() in src/core/tool-gate.mjs. The rails must stay hermetic and never disturb the commit that's running them.
+
     - type: rule
       id: rules-have-tests
       description: Every rule file ships a colocated <name>.test.yml the engine runs.
