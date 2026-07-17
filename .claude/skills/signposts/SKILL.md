@@ -130,16 +130,21 @@ belongs in a **rule**; never restate either in the session sign.
 
 ## Mode: `reflect` — the coach loop
 
-Run at the **end of a session**. Surfaces where the machinery let drift slip through, and
-turns each keeper into a sign or a rule.
+Run at the **end of a session**. Leaves a report a human can judge — *did the guardrails
+engage with my work, and did they catch anything* — and turns each keeper into a sign or rule.
 
-1. **Gather facts.** `npx signposts facts` from the repo root — **hard numbers from the
-   engine's event log** (per-rule catches@edit vs leaks@commit, never-fired rules, signs
-   injected, any rule-weakening flags) plus a navigable drift index from the transcript
-   (justfile bypasses, sign-coverage gaps, course-corrections), each with a transcript line.
-   `--around <line>` opens any cited spot; `--html` writes a shareable report card to
-   `.signposts/reports/`. (Numbers are deterministic; narrative is heuristic — labelled.)
-2. **Spawn `coach`** (Task) with that report. It reads the cited lines and returns
+1. **Gather + surface the report.** `npx signposts facts` from the repo root, then
+   `npx signposts facts --html`. Facts gives **hard numbers from the engine's event log** —
+   per-rule **matched** (a touched file fell in the rule's scope — the metric that says the
+   rule engaged, not `evaluated`) vs **blocked** / **overridden**, each rule and sign shown
+   with its verbatim scope/message/text, never-fired rules, any rule-weakening flags — plus a
+   navigable drift index from the transcript (justfile bypasses, signpost gaps,
+   course-corrections), each with a transcript line. **Relay the markdown report into the
+   conversation** — standalone reflect assumes no `.work` and no review skill, so the chat is
+   where the person who ran it reads the result — and **cite the HTML card path** it wrote to
+   `.signposts/reports/` as the durable, shareable artefact. `--around <line>` opens any cited
+   spot. (Numbers deterministic; narrative heuristic — labelled.)
+2. **Spawn `coach`** (Task) with the full facts output. It reads the cited lines and returns
    candidate **rules** + **signs** — each a place the machinery let the agent go wrong.
    Coach writes nothing.
 3. **Dispose each candidate** via the authoring reference below — prefer a **rule** when

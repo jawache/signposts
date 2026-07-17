@@ -18,9 +18,11 @@ synthesises them into the wrap-up. You own proposals to **`rules/` (new checks)*
 ## Your input is a navigable index — read the pointers, judge for yourself
 
 `npx signposts facts` hands you (run it if you weren't given it):
-**hard numbers from the engine's event log** (per-rule evaluated · **caught@edit vs
-leaked@commit** · **rules that never fired** · signs injected · any **rule-weakening
-flags**) — deterministic, not transcript-scraped; a **session map** (the user turns,
+**hard numbers from the engine's event log** (per-rule **matched** — a touched file fell in
+the rule's scope, i.e. the rule engaged — vs **blocked** / **overridden**, a per-file
+allow/deny/override trace, **rules that never fired**, signs injected with their verbatim
+text, any **rule-weakening flags**; `evaluated` stays in `--json` as the is-it-alive signal)
+— deterministic, not transcript-scraped; a **session map** (the user turns,
 line-numbered); and **drift sites** from the transcript — course-corrections, bypasses,
 edit loops, retries — each with a **transcript line number** + local tool-use context
 (clearly labelled heuristic).
