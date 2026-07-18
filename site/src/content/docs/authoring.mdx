@@ -8,6 +8,10 @@ order: 8
 
 (Authoring a <Chip kind="sign">sign</Chip> is separate and much simpler — it's just a note on an area. See [writing signs](/docs/signs).)
 
+<Note>
+**A rule is absolute — it blocks, or it doesn't exist.** There is no warn tier (`severity: warn` is a false green — it reads as enforced but stops nothing) and no per-instance escape hatch (a `# skip-me` marker or an `exempt:` name-list is rubber-stampable by the very agent the rule guards). If a check needs a bypass, or can't be scoped so that *every* hit is a true violation, it isn't a rule — make it a [sign](/docs/signs). Rules block; signs steer; nothing sits in between.
+</Note>
+
 ## 1 · A rule from a core script — config only
 
 Add a `type: rule` entry to a bundle's `signposts:` list, naming a [core script](/docs/rules) with `use:` and its config. No code.

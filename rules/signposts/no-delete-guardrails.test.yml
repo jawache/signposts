@@ -10,5 +10,3 @@ cases:
     expect: block
   - delete: "rm src/index.ts"
     expect: pass
-  - delete: "rm signposts.yaml # signposts-delete-ok"
-    expect: pass

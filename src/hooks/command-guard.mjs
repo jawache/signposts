@@ -12,7 +12,7 @@
 // FAILS SAFE: any error → exit 0, so a hook bug never wedges a command.
 
 import { readFileSync } from 'node:fs';
-import { evaluateCommand, evaluateDelete, partitionBySeverity, formatViolation } from '../engine.mjs';
+import { evaluateCommand, evaluateDelete, formatViolation } from '../engine.mjs';
 import { isOff } from '../schema.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -34,14 +34,9 @@ async function main() {
   ];
   if (!hits.length) return;
 
-  const { blocks, warns } = partitionBySeverity(hits);
-  if (blocks.length) {                                          // block → exit 2, stderr fed back
-    process.stderr.write('\nSignposts — command blocked (before it ran):\n\n' + blocks.map(formatViolation).join('\n\n') + '\n\nAdjust the command, then retry.\n');
-    process.exit(2);
-  }
-  if (warns.length) {                                           // warn → inform, never block
-    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: 'Signposts warning (not blocking):\n\n' + warns.map(formatViolation).join('\n\n') } }));
-  }
+  // A rule blocks — there is no warn tier. exit 2, stderr fed back to the agent.
+  process.stderr.write('\nSignposts — command blocked (before it ran):\n\n' + hits.map(formatViolation).join('\n\n') + '\n\nAdjust the command, then retry.\n');
+  process.exit(2);
 }
 
 main().catch(() => process.exit(0));

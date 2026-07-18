@@ -93,10 +93,10 @@ bundles:
   mystyle:
     from: github:you/signposts-mystyle#v1     # provenance — the base refresh diffs against
     rules:
-      - { id: house-style, use: mystyle/house-style, severity: warn }   # ← a deliberate local edit
+      - { id: house-style, use: mystyle/house-style, ignore: ["src/legacy/**"] }   # ← a deliberate local edit
 ```
 
-`/signposts refresh` (agent-driven — see [the skill](/docs/skills)) does a **semantic three-way** against the pin: "upstream fixed this regex" merges cleanly under "you deliberately downgraded this severity"; only upstream changed → take theirs; only you changed → keep + flag yours; *both* diverged → surface it. A conflicting script drops a `<file>.upstream` sidecar beside yours — never conflict markers in a live rule. A local improvement worth sharing gets offered back via [propagate](/docs/skills). That's what makes "install, then tune it locally" safe to combine with "stay current".
+`/signposts refresh` (agent-driven — see [the skill](/docs/skills)) does a **semantic three-way** against the pin: "upstream fixed this regex" merges cleanly under "you deliberately narrowed this rule's scope"; only upstream changed → take theirs; only you changed → keep + flag yours; *both* diverged → surface it. A conflicting script drops a `<file>.upstream` sidecar beside yours — never conflict markers in a live rule. A local improvement worth sharing gets offered back via [propagate](/docs/skills). That's what makes "install, then tune it locally" safe to combine with "stay current".
 
 <Note>
 **Lifecycle is agent-driven.** install · refresh · propagate · uninstall are flows of the [`/signposts` skill](/docs/skills): an agent reads the bundle block and orchestrates the deterministic primitives (source resolution, comment-preserving edits, the three-way merge). For one release the `npx signposts install|refresh|uninstall` commands still run, behind a pointer to the skill.

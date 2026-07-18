@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
-import { selectPayloads, matchTarget, tokensFromTranscript, renderAvoid } from './signs-core.mjs'
+import { selectPayloads, matchTarget, tokensFromTranscript } from './signs-core.mjs'
 import { loadSigns, isOff } from '../schema.mjs'
 import { logEvent } from '../log.mjs'
 
@@ -53,8 +53,7 @@ try {
   const injected = []
   for (const p of picks) {
     const entry = signs.find((e) => e.id === p.id)
-    const base = entry?.text ?? readRepoFile(entry?.file) ?? ''
-    const body = [base, renderAvoid(entry?.avoid)].filter(Boolean).join('\n\n') // note + its avoid-list
+    const body = entry?.text ?? readRepoFile(entry?.file) ?? ''
     if (!body) continue
     blocks.push(`# signpost: ${p.id} (${p.reason})\n${body}`)
     injected.push(p)

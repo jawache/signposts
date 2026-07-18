@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml, stringify as yamlStringify } from 'yaml';
-import { evaluate, evaluateCommand, evaluateDelete, loadRules, formatViolation, partitionBySeverity } from '../engine.mjs';
+import { evaluate, evaluateCommand, evaluateDelete, loadRules, formatViolation } from '../engine.mjs';
 import { astGrepHits } from '../core/ast-grep.mjs';
 import { walkFiles, defaultGetContent } from '../core/fs.mjs';
 
@@ -58,18 +58,16 @@ function writeInto(root, rel, content) {
 }
 function stripRe(s) { const m = /^\/(.*)\/([a-z]*)$/.exec(String(s)); return m ? new RegExp(m[1], m[2]) : new RegExp(String(s)); }
 
-// Judge a set of violations against the expected RESPONSE — the same block/warn split the gate
-// uses (partitionBySeverity), so a `severity: warn` rule is asserted as `warn`, not `block`. A
-// warn-rule that a test claims BLOCKS is caught here, instead of passing on "any violation".
-//   expect ∈ 'block' | 'warn' | 'pass'   (+ optional message match on a block/warn).
+// Judge a set of violations against the expected RESPONSE. A rule either blocks or it passes —
+// there is no warn tier — so any violation is a block.
+//   expect ∈ 'block' | 'pass'   (+ optional message match on a block).
 function judge(violations, expect, message) {
-  const { blocks, warns } = partitionBySeverity(violations);
-  const got = blocks.length ? 'block' : warns.length ? 'warn' : 'pass';
+  const got = violations.length ? 'block' : 'pass';
   if (got !== expect) {
     if (expect === 'pass') return `expected PASS, got ${got}: ${violations.map((v) => (v.hits || []).join('; ')).join(' | ')}`;
     return `expected ${expect.toUpperCase()}, got ${got.toUpperCase()}`;
   }
-  if ((expect === 'block' || expect === 'warn') && message) {
+  if (expect === 'block' && message) {
     const text = violations.map(formatViolation).join('\n');
     if (!stripRe(message).test(text)) return `matched ${expect}, but message did not match ${message}`;
   }
@@ -130,8 +128,7 @@ async function runOne(root, rules, testPath) {
   const out = [];
   if (Array.isArray(spec.invalid) || Array.isArray(spec.valid)) {
     const path = spec.path || 'probe.ts';
-    const onHit = rule.severity === 'warn' ? 'warn' : 'block';   // an invalid sample of a warn-rule WARNS, it doesn't block
-    for (const [kind, list, expect] of [['invalid', spec.invalid, onHit], ['valid', spec.valid, 'pass']]) {
+    for (const [kind, list, expect] of [['invalid', spec.invalid, 'block'], ['valid', spec.valid, 'pass']]) {
       for (let i = 0; i < (Array.isArray(list) ? list.length : 0); i++) {
         const err = await evalContent(rule, path, String(list[i]), expect, kind === 'invalid' ? spec.message : null);
         out.push({ name: `${rel} › ${kind}[${i}]`, ok: !err, err });
@@ -181,9 +178,6 @@ async function selfTest() {
     ['a WRONG valid claim is caught', (await evalContent(rule, 'bad.txt', 'x', 'pass')) !== null],
     ['a WRONG invalid claim is caught', (await evalContent(rule, 'fine.txt', 'x', 'block')) !== null],
     ['message mismatch is caught', (await evalContent(rule, 'bad.txt', 'x', 'block', '/totally different/')) !== null],
-    // a warn-rule INFORMS, it doesn't block — the runner must judge on the response axis, not "any violation".
-    ['a warn-rule is judged as warn, not block', (await evalContent({ ...rule, severity: 'warn' }, 'bad.txt', 'x', 'warn')) === null],
-    ['a warn-rule wrongly claimed to block is caught', (await evalContent({ ...rule, severity: 'warn' }, 'bad.txt', 'x', 'block')) !== null],
   ];
   const fail = checks.filter(([, ok]) => !ok).map(([n]) => n);
   if (fail.length) { console.error('FAIL rule-test:\n  ' + fail.join('\n  ')); process.exit(1); }

@@ -13,8 +13,8 @@
 // Scope is deliberately narrow (prefer false negatives over blocking real
 // work): only the `--` pathspec form of checkout (branch switching passes) and
 // `git restore` forms that touch the working tree (`--staged`-only passes).
-// A literal `# discard-ok` comment in the command lets a deliberate discard
-// through.
+// There is no escape hatch: the safe path for a deliberate discard is `git
+// stash` (reversible), so the block stands absolute.
 //
 // Usage:  hook mode (default): reads PreToolUse JSON on stdin   (exit 2 blocks)
 //         node rules/check-git-discard.mjs --test               (self-test)
@@ -96,10 +96,8 @@ function restoreWorktreePaths(args) {
   return paths;
 }
 
-// Pure: the working-tree paths a command would discard, or [] if it's safe to
-// run (including via the `# discard-ok` override).
+// Pure: the working-tree paths a command would discard, or [] if it's safe to run.
 export function discardPaths(cmd) {
-  if (cmd.includes('# discard-ok')) return [];
   const tokens = tokenize(cmd);
   if (!tokens) return [];
   const paths = [];
@@ -160,7 +158,7 @@ export default {
     const targets = discardPaths(ctx.command);
     if (!targets.length) return [];
     const dirty = dirtyTargets(targets, ctx.root);
-    return dirty.map((f) => `would discard uncommitted edits to ${f} (stash first, or append \`# discard-ok\`)`);
+    return dirty.map((f) => `would discard uncommitted edits to ${f} (stash first — \`git stash\` is the reversible path)`);
   },
 };
 
@@ -185,7 +183,6 @@ function selfTest() {
     ['git restore -S a.ts', []],
     ['echo "git checkout -- a.ts"', []],
     ['git log -- a.ts', []],
-    ['git checkout -- a.ts # discard-ok', []],
   ];
   let ok = true;
   for (const [cmd, want] of cases) {

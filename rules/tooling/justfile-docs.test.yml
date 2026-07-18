@@ -11,3 +11,7 @@ valid:
     [doc("build the thing")]
     build:
         echo building
+  - |
+    [private]
+    _prep:
+        echo prepping

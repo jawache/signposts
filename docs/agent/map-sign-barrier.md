@@ -31,6 +31,24 @@ Two corollaries:
    to Signposts plus whatever no signpost can carry. If a fat CLAUDE.md survives setup, the
    decomposition failed.
 
+## A barrier is absolute — or it's a street sign
+
+There is no middle instrument, and this is deliberate. A barrier either blocks or it doesn't
+exist:
+
+- **No `severity: warn`.** A warn reads as enforced but isn't — a *false green*. The dashboard
+  shows the rule engaged; nothing was actually stopped.
+- **No per-instance escape hatch.** A `# skip-me` marker or an `exempt:` name-list is
+  rubber-stampable — and the thing most likely to stamp it is the very agent the barrier
+  guards, optimising to clear the block. The barrier then reads as enforced but is bypassable
+  on demand: the same false green.
+
+So if a check needs a bypass, or can't be scoped so that *every* hit is a true violation, it is
+not a barrier. Make it a **street sign** — an honest nudge that never claimed to stop anything.
+(Where a legitimate exception is a deliberate *human* act outside the agent — deleting a
+guardrail, discarding uncommitted work — the safe path is taken by hand, not marked in a
+comment the automation appends.) Barriers block; signs steer; nothing sits in between.
+
 ## Why three instruments
 
 One channel can't do the job. Everything-at-session-start is the CLAUDE.md failure mode: the

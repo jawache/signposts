@@ -5,8 +5,6 @@ cases:
     expect: pass
   - command: "git checkout main"          # branch switch, not a pathspec discard
     expect: pass
-  - command: "git checkout -- tracked.ts  # discard-ok"   # explicit opt-out
-    expect: pass
   - command: "git checkout -- tracked.ts"
     files: { "tracked.ts": "v1\n" }        # committed base
     git: true                              # init + commit the files above

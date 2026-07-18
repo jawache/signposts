@@ -13,7 +13,7 @@
 // holds the turn open and feeds the reason back. FAILS SAFE: any error → exit 0 (turn proceeds).
 
 import { readFileSync } from 'node:fs';
-import { evaluate, partitionBySeverity, formatViolation } from '../engine.mjs';
+import { evaluate, formatViolation } from '../engine.mjs';
 import { isOff } from '../schema.mjs';
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -37,15 +37,11 @@ async function main() {
   });
   if (!violations.length) return;
 
-  const { blocks, warns } = partitionBySeverity(violations);
-  if (blocks.length) {
-    process.stdout.write(JSON.stringify({
-      decision: 'block',
-      reason: 'Signposts — turn held open:\n\n' + blocks.map(formatViolation).join('\n\n') + '\n\nDo the above, then end your turn.',
-    }));
-    return;                                                    // exit 0: the JSON decision does the blocking
-  }
-  if (warns.length) process.stderr.write('\n⚠ Signposts turn warning (not blocking):\n' + warns.map(formatViolation).join('\n\n') + '\n');
+  // A rule blocks — there is no warn tier. The JSON decision holds the turn open.
+  process.stdout.write(JSON.stringify({
+    decision: 'block',
+    reason: 'Signposts — turn held open:\n\n' + violations.map(formatViolation).join('\n\n') + '\n\nDo the above, then end your turn.',
+  }));
 }
 
 main().catch(() => process.exit(0));

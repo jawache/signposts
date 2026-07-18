@@ -54,6 +54,7 @@ signposts:
         A rule names a script with `use:` (core/<name> or <bundle>/<name>) and carries its config inline.
         Check the cheaper shapes before writing an own-script: a code pattern is a rules/<bundle>/ast-grep/<name>.yml; an import boundary is a core/depcruise fence; a path/shape invariant is a core script + config.
         Ship a colocated <name>.test.yml (a valid + an invalid sample) — rules-have-tests blocks an untested rule.
+        A rule is ABSOLUTE: it blocks or it doesn't exist. No `severity: warn` (a warn is a false green — it reads as enforced but isn't), and no per-instance escape hatch (a `# skip-me` marker or an exempt name-list is rubber-stampable by the very agent the rule guards). If a check needs a bypass, or can't be scoped so every hit is a true violation, it's not a rule — make it a sign (a nudge). Rules block; signs steer; nothing sits in between.
 
     - type: sign
       id: commit-gate-hermetic
@@ -114,11 +115,11 @@ signposts:
 
     - type: rule
       id: no-delete-guardrails
-      description: Stops a command from deleting the config or a rule file (opt out with a marker).
+      description: Stops a command from deleting the config or a rule file.
       at: [delete]
       use: core/protected-path
       deny: ["signposts.yml", "signposts.yaml", "rules/**"]
-      message: "That command would delete a guardrail (signposts.yml / rules/**). If you truly mean it, append `# signposts-delete-ok`."
+      message: "That command would delete a guardrail (signposts.yml / rules/**). Deleting a guardrail is a deliberate human action — do it outside the agent, not through this command."
 
     - type: rule
       id: signposts-well-formed
@@ -161,12 +162,11 @@ tooling:
 
     - type: rule
       id: justfile-docs
-      description: Every justfile recipe carries an explicit doc string for the just --list help screen.
+      description: Every listed justfile recipe carries an explicit doc string for the just --list help screen.
       at: [write, commit]
       on: "justfile"
       use: tooling/justfile-docs
-      exempt: []
-      message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen."
+      message: "Every justfile recipe needs an explicit [doc(\"…\")] — `just --list` is the command catalogue's help screen. A recipe that legitimately needs no doc is marked [private] (hidden from the list)."
 
 # ── git-hygiene — how commits are made here (installable, opt-in) ──
 git-hygiene:
@@ -180,7 +180,7 @@ git-hygiene:
       text: |-
         Commits, PRs and issues carry NO Claude/Anthropic attribution — no Co-Authored-By line, no "Generated with Claude", no mention. Author them as your own.
         Commit headers speak Conventional Commits — `type(scope)!: description` (feat/fix/docs/refactor/… + release). The type is your judgement; the grammar is enforced.
-        A `git checkout` / `git restore` that would silently wipe uncommitted work is blocked — stash first, or append `# discard-ok` if you truly mean it.
+        A `git checkout` / `git restore` that would silently wipe uncommitted work is blocked — `git stash` is the reversible path when you mean to set changes aside.
 
     - type: rule
       id: no-ai-attribution-in-commits
@@ -199,10 +199,10 @@ git-hygiene:
 
     - type: rule
       id: no-git-discard
-      description: Blocks a git checkout/restore that would wipe uncommitted work; opt out with a trailing # discard-ok.
+      description: Blocks a git checkout/restore that would wipe uncommitted work — git stash is the reversible path.
       at: [command]
       use: git-hygiene/no-git-discard
-      message: "This git command would discard uncommitted edits with no undo — stash first, or append `# discard-ok`."
+      message: "This git command would discard uncommitted edits with no undo — `git stash` first (it's reversible)."
 
     - type: rule
       id: commit-grammar
@@ -376,22 +376,13 @@ web:
       text: |-
         Core Web Vitals (LCP, INP, CLS) are field metrics — measure them, don't lint them. Edit-time rules of thumb: never lazy-load the largest above-the-fold image, and new assets respect the byte budget (a budget you don't enforce is a wish).
 
-    - type: rule
+    - type: sign
       id: asset-budget
-      description: Committed site assets respect a byte budget.
-      at: [commit]
-      use: core/max-size
+      description: The byte budgets to keep in mind when adding site assets.
+      at: [touch]
       on: ["site/public/**", "site/src/assets/**"]
-      budgets:
-        - glob: "**/*.{png,jpg,jpeg,gif}"
-          max: 300KB
-          hint: "convert to webp/avif or resize"
-        - glob: "**/*.{webp,avif,svg,woff2}"
-          max: 300KB
-        - glob: "**/*"
-          max: 500KB
-      allow_marker: ".budget-ok."
-      message: "A site asset exceeds its byte budget. Compress or resize it, or rename it with `.budget-ok.` and defend it in review."
+      text: |-
+        Committed site assets have byte budgets — but a size threshold is a judgement call (a hero image may earn its weight), so this steers, it doesn't block. Aim for ≤300KB on images (png/jpg/gif) and next-gen/vector (webp/avif/svg/woff2), ≤500KB on anything else. Over budget? Convert to webp/avif or resize before committing; if a heavy asset is genuinely justified, defend it in review.
 
 # ── local — ONLY for developing Signposts itself (this codebase); never installed elsewhere ──
 # ── docs — documentation splits by audience: docs/agent/ vs docs/user/ ──

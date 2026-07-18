@@ -9,8 +9,13 @@
 // multi-line comment blocks is a mid-sentence fragment. An explicit [doc("…")]
 // makes the help declared, not inferred — this keeps that true for every recipe.
 //
+// A recipe that legitimately needs no doc is marked [private] (or named with a
+// leading `_`) — just hides those from `just --list`, so there's no help line to
+// get wrong. That is the precise, code-visible exemption; there is no config
+// escape hatch (no exempt name-list to rubber-stamp).
+//
 // Contract: kind 'content' → evaluate(rule, ctx={ path, content, root, … }); the
-// whole rule entry (incl. `exempt:`) arrives verbatim as `rule`.
+// whole rule entry arrives verbatim as `rule`.
 //
 // Usage:  node rules/tooling/justfile-docs.mjs <justfile> [...]   (exit 2)
 //         node rules/tooling/justfile-docs.mjs --test             (self-test)
@@ -21,9 +26,9 @@ import { readFileSync } from 'node:fs';
 const RESERVED = new Set(['set', 'alias', 'export', 'import', 'mod', 'unexport']);
 
 // Pure: returns recipes with no [doc(…)] attribute, as { name, line } (1-based).
-// `exempt` (from signposts.yaml) is a list of recipe names that don't need a doc.
-export function undocumentedRecipes(text, exempt = []) {
-  const ex = new Set(exempt);
+// A recipe hidden from `just --list` is exempt — it has no help line to get wrong —
+// and `just` hides two kinds: an `_`-prefixed name, and a recipe carrying [private].
+export function undocumentedRecipes(text) {
   const lines = text.split('\n');
   const bad = [];
   for (let i = 0; i < lines.length; i++) {
@@ -31,17 +36,18 @@ export function undocumentedRecipes(text, exempt = []) {
     const m = line.match(/^(@?[A-Za-z_][A-Za-z0-9_-]*)(\s|:)/);
     if (!m) continue; // indented (body), comment, attribute, blank
     const name = m[1].replace(/^@/, '');
-    if (RESERVED.has(name) || ex.has(name)) continue;
+    if (RESERVED.has(name)) continue;
     const colon = line.indexOf(':');
     if (colon === -1 || line[colon + 1] === '=') continue; // not a recipe / an assignment
+    if (name.startsWith('_')) continue;                    // `_`-prefixed → hidden from `just --list`
     // Walk up over the recipe's contiguous attribute lines ([private], [doc(…)], …).
-    let documented = false;
+    let exempt = false;
     for (let j = i - 1; j >= 0; j--) {
       const above = lines[j];
       if (!/^\[.*\]\s*$/.test(above)) break;
-      if (/\bdoc\(/.test(above)) { documented = true; break; }
+      if (/\bdoc\(/.test(above) || /\bprivate\b/.test(above)) { exempt = true; break; }  // documented, or hidden
     }
-    if (!documented) bad.push({ name, line: i + 1 });
+    if (!exempt) bad.push({ name, line: i + 1 });
   }
   return bad;
 }
@@ -85,26 +91,29 @@ function selfTest() {
     found[0].name === 'build' && found[0].line === 2 &&
     found[1].name === 'bare-recipe' && found[1].line === 9;
 
-  // config-driven exempt (the signposts.yaml `justfile-docs.exempt` slice):
-  // exempting both undocumented recipes clears the sample; exempting one leaves one.
-  const exemptAllOk = undocumentedRecipes(illegal, ['build', 'bare-recipe']).length === 0;
-  const exemptOneOk = (() => {
-    const f = undocumentedRecipes(illegal, ['build']);
-    return f.length === 1 && f[0].name === 'bare-recipe';
-  })();
+  // the code-visible exemptions: a [private] recipe and an `_`-prefixed name are
+  // both hidden from `just --list`, so neither needs a doc.
+  const hiddenOk = undocumentedRecipes([
+    '[private]',
+    'secret:',
+    '    echo hi',
+    '',
+    '_helper arg:',
+    '    echo {{arg}}',
+  ].join('\n')).length === 0;
 
-  const ok = legalOk && illegalOk && exemptAllOk && exemptOneOk;
+  const ok = legalOk && illegalOk && hiddenOk;
   console.log(ok ? 'PASS tooling/justfile-docs' : 'FAIL tooling/justfile-docs');
   process.exit(ok ? 0 : 1);
 }
 
-// The rule object the engine loads via `use: tooling/justfile-docs` — config (incl.
-// `exempt`) arrives verbatim as `rule`; ctx.content is the reconstructed justfile.
+// The rule object the engine loads via `use: tooling/justfile-docs`; ctx.content is
+// the reconstructed justfile.
 export default {
   kind: 'content',
   evaluate(rule, ctx) {
-    return undocumentedRecipes(ctx.content, rule.exempt || [])
-      .map((r) => `recipe '${r.name}' (line ${r.line}) has no [doc("…")] attribute`);
+    return undocumentedRecipes(ctx.content)
+      .map((r) => `recipe '${r.name}' (line ${r.line}) has no [doc("…")] attribute (or mark it [private] if it should stay off \`just --list\`)`);
   },
 };
 

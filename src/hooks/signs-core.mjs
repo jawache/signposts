@@ -110,70 +110,6 @@ export function selectPayloads({ target, entries, tokensSoFar, lastShown = {}, t
   return out
 }
 
-// ── avoid-rules: declarative banned patterns a sign carries (proactive + reactive) ──
-// A sign may hold `avoid: [{ what, regex|literal, use, flags?, globs? }]`. ONE source
-// drives both surfaces: renderAvoid() for the proactive nudge here, scanText() +
-// avoidRulesFor() for the reactive gate (rules/check-signposts.mjs).
-
-// Escape a literal string so it can sit inside a RegExp.
-export function escapeRe(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-// Compile one avoid-rule (regex OR literal) to { what, use, re }. `re` is always
-// global so a line yields every hit. Throws on a malformed regex.
-export function compileRule(rule) {
-  const src = rule.regex != null ? String(rule.regex) : escapeRe(rule.literal)
-  const flags = String(rule.flags || '')
-  return { what: rule.what, use: rule.use, re: new RegExp(src, flags.includes('g') ? flags : flags + 'g') }
-}
-
-// The compiled avoid-rules that apply to `path`: each sign's avoid[] entry whose
-// effective globs (rule.globs ?? sign.globs) match. A rule with neither regex nor
-// literal, or a bad regex, is skipped — the gate must never crash on a YAML typo.
-export function avoidRulesFor(signs, path) {
-  const out = []
-  for (const sign of signs || []) {
-    for (const rule of sign.avoid || []) {
-      if (rule.regex == null && rule.literal == null) continue
-      const globs = rule.globs || sign.globs || []
-      if (!globs.some((g) => globMatch(g, path))) continue
-      try { out.push(compileRule(rule)) } catch { /* malformed regex → skip */ }
-    }
-  }
-  return out
-}
-
-// Pure: every avoid hit in `text`, as { line, col, what, use } (1-based). Skips
-// fenced code blocks + inline `code` spans, and any line bearing the escape marker
-// (default `avoid-ok`, written as an HTML comment). The marker is deliberately
-// never echoed where a violation is reported.
-export function scanText(text, rules, { marker = 'avoid-ok' } = {}) {
-  if (!rules || !rules.length) return []
-  const out = []
-  let inFence = false
-  const lines = String(text).split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]
-    if (/^\s*(```|~~~)/.test(raw)) { inFence = !inFence; continue } // fence delimiter
-    if (inFence) continue
-    if (raw.includes(marker)) continue
-    const scan = raw.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length)) // blank inline code, keep cols
-    for (const rule of rules) {
-      for (const m of scan.matchAll(rule.re)) {
-        out.push({ line: i + 1, col: m.index + 1, what: rule.what, use: rule.use })
-      }
-    }
-  }
-  return out
-}
-
-// Proactive render of a sign's raw avoid[] — the don't-list shown when the area is
-// touched, single-sourced with the gate (same what/use it reports). '' if none.
-export function renderAvoid(avoid) {
-  if (!avoid || !avoid.length) return ''
-  return 'Avoid here:\n' + avoid.map((r) => `• ${r.what}${r.use ? ` → ${r.use}` : ''}`).join('\n')
-}
 
 function selfTest() {
   const E = [
@@ -247,22 +183,6 @@ function selfTest() {
   check('glob **/ matches a deep file', String(globMatch('src/content/**/*.md', 'src/content/a/b/c.md')), 'true')
   check('glob still anchors the extension', String(globMatch('src/content/**/*.md', 'src/content/a/c.mdx')), 'false')
   check('trailing ** matches anything under', String(globMatch('src/lib/**', 'src/lib/x/y.ts')), 'true')
-
-  // avoid-rules: scope + scan + proactive render
-  const EM = '—'
-  const A = [{ id: 'content', globs: ['src/content/**'], avoid: [
-    { what: 'em dash', regex: EM, use: 'ellipsis', globs: ['src/content/**/*.md', 'src/content/**/*.mdx'] },
-    { what: 'filler', literal: 'fast-paced', flags: 'i', use: 'cut it' },
-  ] }]
-  check('avoidRulesFor: md gets both rules', String(avoidRulesFor(A, 'src/content/w/a.md').length), '2')
-  check('avoidRulesFor: json gets only the un-narrowed rule', String(avoidRulesFor(A, 'src/content/books.json').length), '1')
-  const mdRules = avoidRulesFor(A, 'src/content/w/a.md')
-  const sample = ['A pause… fine', 'Bad ' + EM + ' here', '`code ' + EM + '` exempt', '```', EM, '```', 'q ' + EM + ' <!-- avoid-ok -->', 'In a FAST-PACED day'].join('\n')
-  check('scanText: em-dash L2 + filler L8; code/fence/marker exempt',
-    scanText(sample, mdRules).map((v) => v.line + ':' + v.what).join(','), '2:em dash,8:filler')
-  check('renderAvoid lists what → use', renderAvoid(A[0].avoid), 'Avoid here:\n• em dash → ellipsis\n• filler → cut it')
-  check('renderAvoid empty → ""', renderAvoid([]), '')
-  check('compileRule escapes a literal', String(compileRule({ literal: 'a.b' }).re.test('axb')), 'false')
 
   let pass = 0
   for (const [name, ok, got, want] of cases) {

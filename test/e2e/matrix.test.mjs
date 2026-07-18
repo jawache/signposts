@@ -1,6 +1,6 @@
-// test/e2e/matrix.test.mjs — D: the event × response matrix, driven through the real HOOKS
-// as-installed. Delete (rm/git rm/mv via Bash) is guarded at PreToolUse; `severity: warn`
-// informs without blocking, on both edit and commit.
+// test/e2e/matrix.test.mjs — D: the delete + block matrix, driven through the real HOOKS
+// as-installed. Delete (rm/git rm/mv via Bash) is guarded at PreToolUse. A rule is ABSOLUTE:
+// it blocks or it doesn't exist — there is no warn tier and no per-command escape hatch.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { makeProject, runCli, runEngine, write } from './harness.mjs';
 
-// A minimal project with one delete-guard (block) and one warn rule.
+// A minimal project with a delete-guard and a content rule — both block, nothing warns.
 function ready() {
   const dir = makeProject();
   assert.equal(runCli(dir, ['--no-activate']).status, 0);
@@ -20,11 +20,10 @@ function ready() {
     '      deny: ["secret/**"]',
     '      when: [delete]',
     '      message: "protected path — do not delete"',
-    '    - id: warn-todo',
+    '    - id: no-todo',
     '      use: core/text-ban',
     '      on: ["**/*.md"]',
     '      ban: ["TODO"]',
-    '      severity: warn',
     '      message: "leftover TODO"',
     '',
   ].join('\n'));
@@ -43,25 +42,26 @@ test('delete × block: rm of a protected path is blocked at PreToolUse', () => {
   assert.match(r.stderr, /protected path/, 'cites the rule message');
 });
 
-test('delete: an unprotected path, and the # signposts-delete-ok override, both pass', () => {
+test('delete: an unprotected path passes; a trailing comment does NOT bypass the block', () => {
   const dir = ready();
   assert.equal(runHook(dir, 'command-guard.mjs', bash('rm build/output.js')).status, 0, 'unprotected path passes');
-  assert.equal(runHook(dir, 'command-guard.mjs', bash('rm secret/creds.ts # signposts-delete-ok')).status, 0, 'override passes');
+  // The delete-guard is absolute — there is no `# signposts-delete-ok` escape hatch any more.
+  assert.equal(runHook(dir, 'command-guard.mjs', bash('rm secret/creds.ts # signposts-delete-ok')).status, 2,
+    'a protected delete still blocks — no marker can clear it');
 });
 
-test('edit × warn: a warn rule INFORMS without blocking (additionalContext, not deny)', () => {
+test('edit × block: a content rule DENIES the write (permissionDecision deny)', () => {
   const dir = ready();
   const r = runHook(dir, 'preemptive-block.mjs', { tool_name: 'Write', tool_input: { file_path: 'notes.md', content: 'a TODO here\n' } });
-  assert.equal(r.status, 0, 'warn must never block the edit');
-  assert.match(r.stdout, /additionalContext/, 'informs via additionalContext');
-  assert.doesNotMatch(r.stdout, /"permissionDecision":\s*"deny"/, 'a warn is NOT a deny');
-  assert.match(r.stdout, /leftover TODO|warning/, 'surfaces the warning');
+  assert.equal(r.status, 0, 'the PreToolUse hook denies via JSON, not an exit code');
+  assert.match(r.stdout, /"permissionDecision":\s*"deny"/, 'a rule denies the edit — there is no inform-only tier');
+  assert.match(r.stdout, /leftover TODO/, 'surfaces the message');
 });
 
-test('commit × warn: a warn rule prints a warning but the commit passes (exit 0)', () => {
+test('commit × block: a content rule fails the commit gate (exit 2)', () => {
   const dir = ready();
   write(dir, 'notes.md', 'a TODO here\n');
   const r = runEngine(dir, ['--phase', 'commit', 'notes.md']);
-  assert.equal(r.status, 0, 'a warn rule must not fail the commit gate');
-  assert.match(r.stderr, /warning|leftover TODO/i, 'the warning is surfaced');
+  assert.equal(r.status, 2, 'a rule blocks the commit gate');
+  assert.match(r.stderr, /leftover TODO/, 'surfaces the message');
 });
